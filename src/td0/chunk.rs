@@ -1,0 +1,537 @@
+use crate::td0::result::{TD0Error, TD0Result};
+use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
+use std::collections::HashMap;
+use std::convert::{From, Infallible, TryInto};
+use std::fmt;
+use std::ops::Mul;
+use std::str::FromStr;
+use zerocopy::{FromBytes, LittleEndian, U32};
+use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
+
+const SZ_HDR_EXTRA_DATA: usize = 4;
+// Constants for fields.
+const VOLUME_MIN : Decimal = Decimal::from_parts(60, 0, 0, true, 0);
+const VOLUME_MAX : Decimal = Decimal::from_parts(6, 0, 0, false, 0);
+const VOLUME_MINUS_INF : Decimal = Decimal::from_parts(601, 0, 0, true, 1);
+const VOLUME_MINUS_INF_DISPLAY : &str = "-Infinity";
+
+
+#[derive(Debug, Default)]
+pub struct Chunk {
+    pub pos: usize,
+    pub first_item_pos: usize,
+    pub num_items: usize,
+    pub sz_item: usize,
+}
+
+impl Chunk {
+    pub fn item_pos(&self, item_index: usize) -> Option<usize> {
+        if item_index >= self.num_items {
+            return None;
+        }
+
+        Some(self.first_item_pos + (self.sz_item * item_index))
+    }
+
+    pub fn item_pos_relative(&self, item_index: usize) -> Option<usize> {
+        // Return the item pos relative to the start of the chunk header.
+        if item_index >= self.num_items {
+            return None;
+        }
+        Some(self.first_item_pos - self.pos + self.sz_item * item_index)
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct IntEncodedDecimal(Decimal);
+
+impl fmt::Display for IntEncodedDecimal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl FromStr for IntEncodedDecimal {
+    type Err = <Decimal as FromStr>::Err;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self {0:  Decimal::from_str(s)? })
+    }
+}
+
+impl TryFrom<u16> for IntEncodedDecimal {
+    type Error = Infallible;
+    fn try_from(value: u16) -> Result<Self, Infallible> {
+        Ok(Self {
+            0: Decimal::from(value / 10),
+        })
+    }
+}
+
+impl TryInto<u16> for IntEncodedDecimal {
+    type Error = <Decimal as TryInto<u16>>::Error;
+
+    fn try_into(self) -> Result<u16, Self::Error> {
+        let myval: Decimal = self.0.mul(Decimal::from(10)).round();
+        let converted: u16 = myval.try_into()?;
+        Ok(converted)
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct Volume(Decimal);
+impl fmt::Display for Volume {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.eq(&VOLUME_MINUS_INF) {
+            write!(f, "{}", VOLUME_MINUS_INF_DISPLAY)
+        } else {
+            write!(f, "{:.1}", self.0)
+        }
+    }
+}
+
+impl Volume {
+    fn validate_impl_range(val: &Decimal) -> Result<(), TD0Error> {
+        if val.lt(&VOLUME_MINUS_INF) || val.gt(&VOLUME_MAX) {
+            Err(TD0Error::ConvertRangeError { min: VOLUME_MIN.as_i128(), max: VOLUME_MAX.as_i128() })
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate(&self) -> Result<(), TD0Error> {
+        Self::validate_impl_range(&self.0)
+    }
+}
+
+impl FromStr for Volume {
+    type Err = TD0Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case(VOLUME_MINUS_INF_DISPLAY) {
+            Ok(Self {0: VOLUME_MINUS_INF.clone()})
+        } else {
+            let selfobj = Self{0: Decimal::from_str(s).map_err(
+                |_| TD0Error::ConvertFromStringError { type_name: "Volume".to_string(), value: s.to_string() }
+            )?.round_dp(1)};
+            selfobj.validate()?;
+            Ok( selfobj )
+        }
+    }
+}
+
+impl TryFrom<i16> for Volume {
+    type Error = TD0Error;
+    fn try_from(value: i16) -> Result<Self, Self::Error> {
+        let selfobj = Self {
+            0: Decimal::from_f64(f64::from(value) / 10.0f64)
+                .ok_or(TD0Error::ConvertToNativeTypeError { 
+                    field: "Unknown".to_string(),
+                    reason: "Can't convert to Decimal from i16.".to_string() 
+                })?
+                .round_dp(1)
+        };
+        selfobj.validate()?;
+        Ok(selfobj)
+    }
+}
+
+impl TryInto<u16> for Volume {
+    type Error = <Decimal as TryInto<u16>>::Error;
+
+    fn try_into(self) -> Result<u16, Self::Error> {
+        let myval: Decimal = self.0.mul(Decimal::from(10)).round();
+        let converted: u16 = myval.try_into()?;
+        Ok(converted)
+    }
+}
+
+
+#[derive(Debug, PartialEq)]
+pub enum ChunkItemValue {
+    TD0Decimal(IntEncodedDecimal),
+    EnumStr(&'static str),
+    Text(String),
+    U16(u16),
+    I16(i16),
+    U8(u8),
+    Volume(Volume),
+}
+
+impl ChunkItemValue {
+    pub fn text_from_u8_array(source: &[u8], pad_val: &u8) -> Self {
+        let rpos = source.iter().rposition(|p| p != pad_val ).unwrap_or(0);
+        Self::Text(String::from_utf8_lossy(&source[0..rpos]).to_string())
+    }
+}
+
+pub enum ChunkItemValueRaw {
+    U8(u8),
+    U16(u16),
+    I16(i16),
+    Text(String),
+    Slice(Box<[u8]>),
+}
+
+impl fmt::Display for ChunkItemValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let repr: String = match self {
+            ChunkItemValue::TD0Decimal(val) => val.to_string(),
+            ChunkItemValue::U16(val) => val.to_string(),
+            ChunkItemValue::I16(val) => val.to_string(),
+            ChunkItemValue::U8(val) => val.to_string(),
+            ChunkItemValue::Text(val) => val.to_string(),
+            ChunkItemValue::EnumStr(val) => val.to_string(),
+            ChunkItemValue::Volume(val) => val.to_string(),
+        };
+
+        write!(f, "{}", repr)
+    }
+}
+
+pub trait ChunkItem : std::fmt::Debug {
+    fn get_value(&self, field: &str) -> Option<ChunkItemValue>;
+    fn get_value_raw(&self, field: &str) -> Option<ChunkItemValueRaw>;
+    fn set_value(&mut self, field: &str, value: &ChunkItemValue) -> TD0Result<()>;
+    fn set_value_raw(&mut self, field: &str, value: &ChunkItemValueRaw) -> TD0Result<()>;
+
+    fn from_bytes(bytes: &[u8], chunk_name: Option<&str>) -> TD0Result<Self>
+    where
+        Self: FromBytes + Sized,
+    {
+        let selfobj = Self::read_from_bytes(&bytes[..size_of::<Self>()]).map_err(|_| {
+            TD0Error::InvalidChunkError {
+                chunk_name: chunk_name.unwrap_or("Unknown").to_string(),
+            }
+        })?;
+        Ok(selfobj)
+    }
+
+    fn copy_from_bytes(bytes: &[u8], chunk_name: Option<&str>) -> TD0Result<Self>
+    where
+        Self: Clone + FromBytes + Sized,
+    {
+        let selfobj = Self::read_from_bytes(&bytes[..size_of::<Self>()]).map_err(|_| {
+            TD0Error::InvalidChunkError {
+                chunk_name: chunk_name.unwrap_or("Unknown").to_string(),
+            }
+        })?;
+        Ok(selfobj.clone())
+    }
+
+    fn get_values(&self) -> HashMap<String, ChunkItemValue> 
+    {
+        let mut values: HashMap<String, ChunkItemValue> = HashMap::new();
+
+        for fld in self.get_fields().iter() {
+            values.insert(
+                String::from(*fld),
+                self.get_value(*fld)
+                    .unwrap_or(ChunkItemValue::Text("Unknown".to_string())),
+            );
+        }
+        values
+    }
+
+    fn get_fields(&self) -> &'static [&'static str];
+}
+
+#[derive(FromBytes, IntoBytes, KnownLayout)]
+#[repr(C, packed)]
+pub struct ChunkHeader {
+    pub num_items: U32<LittleEndian>,
+    pub item_size: U32<LittleEndian>,
+    pub first_item_offset: U32<LittleEndian>,
+    unknown_header_data: [u8; SZ_HDR_EXTRA_DATA],
+}
+
+impl ChunkHeader {
+    pub fn get_num_items(&self) -> u32 {
+        return self.num_items.get();
+    }
+
+    pub fn get_item_size(&self) -> u32 {
+        return self.item_size.get();
+    }
+
+    pub fn get_first_item_offset(&self) -> u32 {
+        return self.first_item_offset.get();
+    }
+
+    pub fn get_unknown_header_data(&self) -> &[u8; SZ_HDR_EXTRA_DATA] {
+        &self.unknown_header_data
+    }
+
+    pub fn get_unknown_header_data_mut(&mut self) -> &[u8; SZ_HDR_EXTRA_DATA] {
+        &mut self.unknown_header_data
+    }
+}
+
+impl fmt::Display for ChunkHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "num_items: {} : item_size: {}  first_item_offset: {}  unknown_header_data: {:?}",
+            self.num_items, self.item_size, self.first_item_offset, self.unknown_header_data,
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, FromBytes, IntoBytes, KnownLayout)]
+#[repr(C, packed)]
+pub struct HDRaItem {
+    tag: [u8; 8],
+    data: [u8; 8],
+    name: [u8; 16],
+    firmware: [u8; 4],
+    build: [u8; 4],
+    device_serial: [u8; 8],
+    suffix: [u8; 16],
+}
+
+pub fn copy_ascii_str_to_native(
+    src: &String,
+    dest: &mut [u8],
+    dest_name: &str,
+    pad_byte: u8,
+) -> TD0Result<()> {
+    if src.len() > dest.len() {
+        return Err(TD0Error::ConvertToNativeTypeError {
+            field: dest_name.to_string(),
+            reason: "Source String too long.".to_string(),
+        });
+    }
+    if !src.is_ascii() {
+        return Err(TD0Error::ConvertToNativeTypeError {
+            field: dest_name.to_string(),
+            reason: "Source String is not ascii-only.".to_string(),
+        });
+    }
+
+    let dest_len = dest.len();
+    let src_bytes = src.as_bytes();
+    dest[..src_bytes.len()].copy_from_slice(&src_bytes);
+    dest[..dest_len - src_bytes.len()].fill(pad_byte);
+    Ok(())
+}
+
+pub fn copy_slice_to_native(src: &[u8], dest: &mut [u8], dest_name: &str) -> TD0Result<()> {
+    if src.len() != dest.len() {
+        return Err(TD0Error::ConvertToNativeTypeError {
+            field: dest_name.to_string(),
+            reason: "Length Mismatch".to_string(),
+        });
+    }
+    dest.clone_from_slice(src);
+    Ok(())
+}
+
+const FIELDS_HDR_A_ITEM: [&str; 7] = [
+    "tag",
+    "data",
+    "name",
+    "firmware",
+    "build",
+    "device_serial",
+    "suffix",
+];
+
+impl ChunkItem for HDRaItem {
+    fn get_value(&self, field: &str) -> Option<ChunkItemValue> {
+        return match field {
+            "tag" => Some(ChunkItemValue::Text(
+                String::from_utf8_lossy(&self.tag).to_string(),
+            )),
+            "data" => Some(ChunkItemValue::Text(format!("{:?}", self.data))),
+            "name" => Some(ChunkItemValue::Text(
+                String::from_utf8_lossy(&self.name).to_string(),
+            )),
+            "firmware" => Some(ChunkItemValue::Text(
+                String::from_utf8_lossy(&self.firmware).to_string(),
+            )),
+            "build" => Some(ChunkItemValue::Text(
+                String::from_utf8_lossy(&self.build).to_string(),
+            )),
+            "device_serial" => Some(ChunkItemValue::Text(
+                String::from_utf8_lossy(&self.device_serial).to_string(),
+            )),
+            "suffix" => Some(ChunkItemValue::Text(format!("{:?}", self.suffix))),
+            _ => None,
+        };
+    }
+    fn get_value_raw(&self, field: &str) -> Option<ChunkItemValueRaw> {
+        return match field {
+            "tag" => Some(ChunkItemValueRaw::Slice(Box::new(self.tag.clone()))),
+            "data" => Some(ChunkItemValueRaw::Slice(Box::new(self.data.clone()))),
+            "name" => Some(ChunkItemValueRaw::Slice(Box::new(self.name.clone()))),
+            "firmware" => Some(ChunkItemValueRaw::Slice(Box::new(self.firmware.clone()))),
+            "build" => Some(ChunkItemValueRaw::Slice(Box::new(self.build.clone()))),
+            "device_serial" => Some(ChunkItemValueRaw::Slice(Box::new(
+                self.device_serial.clone(),
+            ))),
+            "suffix" => Some(ChunkItemValueRaw::Slice(Box::new(self.suffix.clone()))),
+            _ => None,
+        };
+    }
+    fn set_value(&mut self, field: &str, value: &ChunkItemValue) -> TD0Result<()> {
+        match (field, value) {
+            ("tag", ChunkItemValue::Text(val)) => {
+                copy_ascii_str_to_native(val, &mut self.tag, field, 0)?;
+            }
+            ("data", ..) => {
+                return Err(TD0Error::ConvertToNativeTypeError {
+                    field: field.to_string(),
+                    reason: "Field may not be set.".to_string(),
+                });
+            }
+            ("name", ChunkItemValue::Text(val)) => {
+                copy_ascii_str_to_native(val, &mut self.name, field, 0)?;
+            }
+            ("firmware", ChunkItemValue::Text(val)) => {
+                copy_ascii_str_to_native(val, &mut self.firmware, field, 0)?;
+            }
+            ("build", ChunkItemValue::Text(val)) => {
+                copy_ascii_str_to_native(val, &mut self.build, field, 0)?;
+            }
+            ("device_serial", ChunkItemValue::Text(val)) => {
+                copy_ascii_str_to_native(val, &mut self.device_serial, field, 0)?;
+            }
+            ("suffix", ..) => {
+                return Err(TD0Error::ConvertToNativeTypeError {
+                    field: field.to_string(),
+                    reason: "Field may not be set.".to_string(),
+                });
+            }
+            _ => {
+                return Err(TD0Error::ConvertToNativeTypeError {
+                    field: field.to_string(),
+                    reason: "Unknown field or improper value type.".to_string(),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn set_value_raw(&mut self, field: &str, value: &ChunkItemValueRaw) -> TD0Result<()> {
+        match (field, value) {
+            ("tag", ChunkItemValueRaw::Slice(val)) => {
+                copy_slice_to_native(val, &mut self.tag, field)?;
+            }
+            ("data", ChunkItemValueRaw::Slice(val)) => {
+                copy_slice_to_native(val, &mut self.data, field)?;
+            }
+            ("name", ChunkItemValueRaw::Slice(val)) => {
+                copy_slice_to_native(val, &mut self.name, field)?;
+            }
+            ("firmware", ChunkItemValueRaw::Slice(val)) => {
+                copy_slice_to_native(val, &mut self.firmware, field)?;
+            }
+            ("build", ChunkItemValueRaw::Slice(val)) => {
+                copy_slice_to_native(val, &mut self.build, field)?;
+            }
+            ("device_serial", ChunkItemValueRaw::Slice(val)) => {
+                copy_slice_to_native(val, &mut self.device_serial, field)?;
+            }
+            ("suffix", ..) => {
+                return Err(TD0Error::ConvertToNativeTypeError {
+                    field: field.to_string(),
+                    reason: "Field may not be set.".to_string(),
+                });
+            }
+            _ => {
+                return Err(TD0Error::ConvertToNativeTypeError {
+                    field: field.to_string(),
+                    reason: "Unknown field or improper value type.".to_string(),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn get_fields(&self) -> &'static [&'static str] { &FIELDS_HDR_A_ITEM }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::debug_assert_matches;
+
+    use super::*;
+
+    #[test]
+    fn test_volume_from_i16() {
+        let actual = Volume::try_from(12i16).expect("Can't create Volume");
+        let expected = Volume(rust_decimal::Decimal::from_str("1.2").expect("Broken test"));
+        assert_eq!(actual, expected);
+    }
+    
+    #[test]
+    fn test_volume_max_from_i16() {
+        let max_as_i16 : i16 = VOLUME_MAX.mul(Decimal::from(10)).try_into().expect("Can't convert VOLUME_MAX to i16.");
+        let actual = Volume::try_from(max_as_i16).expect("Can't create Volume");
+        let expected = Volume(VOLUME_MAX);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_volume_min_from_i16() {
+        let min_as_i16 : i16 = VOLUME_MIN.mul(Decimal::from(10)).try_into().expect("Can't convert VOLUME_MIN to i16.");
+        let actual = Volume::try_from(min_as_i16).expect("Can't create Volume");
+        let expected = Volume(VOLUME_MIN);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_volume_minus_inf_from_i16() {
+        let minus_inf_as_i16 : i16 = VOLUME_MINUS_INF.mul(Decimal::from(10)).try_into().expect("Can't convert VOLUME_MINUS_INF to i16.");
+        let actual = Volume::try_from(minus_inf_as_i16).expect("Can't create Volume");
+        let expected = Volume(VOLUME_MINUS_INF);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_volume_to_string() {
+        let v1 = Volume(VOLUME_MINUS_INF);
+        assert_eq!(v1.to_string().as_str(), VOLUME_MINUS_INF_DISPLAY, "Test {} Volume to string.", VOLUME_MINUS_INF_DISPLAY);
+
+        let v2 = Volume(Decimal::from_str_exact("-25").expect("Test broken."));
+        assert_eq!(v2.to_string().as_str(), "-25.0", "Test a negative Volume value.");
+
+        let v3 = Volume(Decimal::from_str_exact("4.5").expect("Test broken."));
+        assert_eq!(v3.to_string().as_str(), "4.5", "Test a positive Volume value.");
+    }
+
+    #[test]
+    fn test_volume_from_i16_out_of_range() {
+        let actual = Volume::try_from(-602i16);
+        debug_assert_matches!(actual, Err(TD0Error::ConvertRangeError {..}), "Test proper Err from > VOLUME_MAX");
+
+        let actual = Volume::try_from(61i16);
+        debug_assert_matches!(actual, Err(TD0Error::ConvertRangeError {..}), "Test proper Err from > VOLUME_MAX");
+    }
+    #[test]
+    fn test_volume_from_str() {
+        let actual = Volume::from_str("-60.2");
+        debug_assert_matches!(actual, Err(TD0Error::ConvertRangeError {..}), "Test proper Err from < VOLUME_MIN");
+
+        let actual = Volume::from_str(VOLUME_MIN.to_string().as_str()).expect("Test broken.");
+        assert_eq!(actual, Volume(VOLUME_MIN), "Test proper conversion for VOLUME_MIN.");
+
+        let actual = Volume::from_str("6.1");
+        debug_assert_matches!(actual, Err(TD0Error::ConvertRangeError {..}), "Test proper Err from > VOLUME_MAX");
+
+        let actual = Volume::from_str(VOLUME_MAX.to_string().as_str()).expect("Test broken.");
+        assert_eq!(actual, Volume(VOLUME_MAX), "Test proper conversion for VOLUME_MAX.");
+
+        let actual = Volume::from_str(VOLUME_MINUS_INF_DISPLAY).expect("Test broken.");
+        assert_eq!(actual, Volume(VOLUME_MINUS_INF), "Test proper conversion for -Infinity");
+    }
+
+    #[test]
+    fn test_chunk_item_val_from_u8_array() {
+
+        let val = ChunkItemValue::text_from_u8_array(&[32, 78, 48, 99, 128, 0, 0, 0, 0], &0);
+        assert_eq!(val, ChunkItemValue::Text(" N0c".to_string()));
+    }
+
+}

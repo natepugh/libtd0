@@ -1,0 +1,2368 @@
+
+name: Expr::Call {
+    attrs: [],
+    func: Expr::Path {
+        attrs: [],
+        qself: None,
+        path: Path {
+            leading_colon: None,
+            segments: [
+                PathSegment {
+                    ident: Ident {
+                        ident: "Some",
+                        span: #792 bytes(34719..34731),
+                    },
+                    arguments: PathArguments::None,
+                },
+            ],
+        },
+    },
+    paren_token: Paren,
+    args: [
+        Expr::Call {
+            attrs: [],
+            func: Expr::Path {
+                attrs: [],
+                qself: None,
+                path: Path {
+                    leading_colon: None,
+                    segments: [
+                        PathSegment {
+                            ident: Ident {
+                                ident: "ChunkItemValue",
+                                span: #792 bytes(34719..34731),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                        Token![::],
+                        PathSegment {
+                            ident: Ident {
+                                ident: "text_from_u8_array",
+                                span: #792 bytes(34719..34731),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                    ],
+                },
+            },
+            paren_token: Paren,
+            args: [
+                Expr::Reference {
+                    attrs: [],
+                    and_token: Token![&],
+                    mutability: None,
+                    expr: Expr::Field {
+                        attrs: [],
+                        base: Expr::Path {
+                            attrs: [],
+                            qself: None,
+                            path: Path {
+                                leading_colon: None,
+                                segments: [
+                                    PathSegment {
+                                        ident: Ident {
+                                            ident: "self",
+                                            span: #792 bytes(34719..34731),
+                                        },
+                                        arguments: PathArguments::None,
+                                    },
+                                ],
+                            },
+                        },
+                        dot_token: Token![.],
+                        member: Member::Named(
+                            Ident {
+                                ident: "name",
+                                span: #0 bytes(34834..34838),
+                            },
+                        ),
+                    },
+                },
+                Token![,],
+                Expr::Reference {
+                    attrs: [],
+                    and_token: Token![&],
+                    mutability: None,
+                    expr: Expr::Lit {
+                        attrs: [],
+                        lit: Lit::Int {
+                            token: 0u8,
+                        },
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+memo: Expr::Call {
+    attrs: [],
+    func: Expr::Path {
+        attrs: [],
+        qself: None,
+        path: Path {
+            leading_colon: None,
+            segments: [
+                PathSegment {
+                    ident: Ident {
+                        ident: "Some",
+                        span: #792 bytes(34719..34731),
+                    },
+                    arguments: PathArguments::None,
+                },
+            ],
+        },
+    },
+    paren_token: Paren,
+    args: [
+        Expr::Call {
+            attrs: [],
+            func: Expr::Path {
+                attrs: [],
+                qself: None,
+                path: Path {
+                    leading_colon: None,
+                    segments: [
+                        PathSegment {
+                            ident: Ident {
+                                ident: "ChunkItemValue",
+                                span: #792 bytes(34719..34731),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                        Token![::],
+                        PathSegment {
+                            ident: Ident {
+                                ident: "text_from_u8_array",
+                                span: #792 bytes(34719..34731),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                    ],
+                },
+            },
+            paren_token: Paren,
+            args: [
+                Expr::Reference {
+                    attrs: [],
+                    and_token: Token![&],
+                    mutability: None,
+                    expr: Expr::Field {
+                        attrs: [],
+                        base: Expr::Path {
+                            attrs: [],
+                            qself: None,
+                            path: Path {
+                                leading_colon: None,
+                                segments: [
+                                    PathSegment {
+                                        ident: Ident {
+                                            ident: "self",
+                                            span: #792 bytes(34719..34731),
+                                        },
+                                        arguments: PathArguments::None,
+                                    },
+                                ],
+                            },
+                        },
+                        dot_token: Token![.],
+                        member: Member::Named(
+                            Ident {
+                                ident: "memo",
+                                span: #0 bytes(34909..34913),
+                            },
+                        ),
+                    },
+                },
+                Token![,],
+                Expr::Reference {
+                    attrs: [],
+                    and_token: Token![&],
+                    mutability: None,
+                    expr: Expr::Lit {
+                        attrs: [],
+                        lit: Lit::Int {
+                            token: 0u8,
+                        },
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+volume: Expr::Call {
+    attrs: [],
+    func: Expr::Path {
+        attrs: [],
+        qself: None,
+        path: Path {
+            leading_colon: None,
+            segments: [
+                PathSegment {
+                    ident: Ident {
+                        ident: "Some",
+                        span: #792 bytes(34719..34731),
+                    },
+                    arguments: PathArguments::None,
+                },
+            ],
+        },
+    },
+    paren_token: Paren,
+    args: [
+        Expr::Call {
+            attrs: [],
+            func: Expr::Path {
+                attrs: [],
+                qself: None,
+                path: Path {
+                    leading_colon: None,
+                    segments: [
+                        PathSegment {
+                            ident: Ident {
+                                ident: "ChunkItemValue",
+                                span: #792 bytes(34719..34731),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                        Token![::],
+                        PathSegment {
+                            ident: Ident {
+                                ident: "I16",
+                                span: #792 bytes(34719..34731),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                    ],
+                },
+            },
+            paren_token: Paren,
+            args: [
+                Expr::MethodCall {
+                    attrs: [],
+                    receiver: Expr::Field {
+                        attrs: [],
+                        base: Expr::Path {
+                            attrs: [],
+                            qself: None,
+                            path: Path {
+                                leading_colon: None,
+                                segments: [
+                                    PathSegment {
+                                        ident: Ident {
+                                            ident: "self",
+                                            span: #792 bytes(34719..34731),
+                                        },
+                                        arguments: PathArguments::None,
+                                    },
+                                ],
+                            },
+                        },
+                        dot_token: Token![.],
+                        member: Member::Named(
+                            Ident {
+                                ident: "volume",
+                                span: #0 bytes(34966..34972),
+                            },
+                        ),
+                    },
+                    dot_token: Token![.],
+                    method: Ident {
+                        ident: "get",
+                        span: #792 bytes(34719..34731),
+                    },
+                    turbofish: None,
+                    paren_token: Paren,
+                    args: [],
+                },
+            ],
+        },
+    ],
+}
+
+click_setting: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+unknown_1: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+tempo: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+unknown_2: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+mfx_1_routing: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+mfx_2_routing: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+mfx_3_routing: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+mfx_4_routing: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+mfx_1_direct_out_routing: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+mfx_2_direct_out_routing: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+mfx_3_direct_out_routing: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+mfx_4_direct_out_routing: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+sidechain_routing: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+sidechain_direct_out_routing: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+unknown_3: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_pad: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_1: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_2: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_3: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_4: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_5: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_6: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_7: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_8: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_9: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_10: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_11: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_12: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_13: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_14: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_15: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_sequence_16: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+unknown_4: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_1_led_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_2_led_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_3_led_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_4_led_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_5_led_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_6_led_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_7_led_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_8_led_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_9_led_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+unknown_5: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_1: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_2: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_3: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_4: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_5: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_6: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_7: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_8: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_9: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_10: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_11: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_12: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_13: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_14: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+led_15: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+unknown_6: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_edit_knob_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_edit_knob_1_group: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_edit_knob_2_group: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+unknown_7: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_edit_knob_1_param: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+pad_edit_knob_2_param: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+unknown_8: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+exp_pedal_assign: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+exp_pedal_mode: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+unknown_9: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #792 bytes(34719..34731),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+name: Expr::Call {
+    attrs: [],
+    func: Expr::Path {
+        attrs: [],
+        qself: None,
+        path: Path {
+            leading_colon: None,
+            segments: [
+                PathSegment {
+                    ident: Ident {
+                        ident: "Some",
+                        span: #858 bytes(42035..42047),
+                    },
+                    arguments: PathArguments::None,
+                },
+            ],
+        },
+    },
+    paren_token: Paren,
+    args: [
+        Expr::Call {
+            attrs: [],
+            func: Expr::Path {
+                attrs: [],
+                qself: None,
+                path: Path {
+                    leading_colon: None,
+                    segments: [
+                        PathSegment {
+                            ident: Ident {
+                                ident: "ChunkItemValue",
+                                span: #858 bytes(42035..42047),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                        Token![::],
+                        PathSegment {
+                            ident: Ident {
+                                ident: "text_from_u8_array",
+                                span: #858 bytes(42035..42047),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                    ],
+                },
+            },
+            paren_token: Paren,
+            args: [
+                Expr::Reference {
+                    attrs: [],
+                    and_token: Token![&],
+                    mutability: None,
+                    expr: Expr::Field {
+                        attrs: [],
+                        base: Expr::Path {
+                            attrs: [],
+                            qself: None,
+                            path: Path {
+                                leading_colon: None,
+                                segments: [
+                                    PathSegment {
+                                        ident: Ident {
+                                            ident: "self",
+                                            span: #858 bytes(42035..42047),
+                                        },
+                                        arguments: PathArguments::None,
+                                    },
+                                ],
+                            },
+                        },
+                        dot_token: Token![.],
+                        member: Member::Named(
+                            Ident {
+                                ident: "name",
+                                span: #0 bytes(42151..42155),
+                            },
+                        ),
+                    },
+                },
+                Token![,],
+                Expr::Reference {
+                    attrs: [],
+                    and_token: Token![&],
+                    mutability: None,
+                    expr: Expr::Lit {
+                        attrs: [],
+                        lit: Lit::Int {
+                            token: 0u8,
+                        },
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+memo: Expr::Call {
+    attrs: [],
+    func: Expr::Path {
+        attrs: [],
+        qself: None,
+        path: Path {
+            leading_colon: None,
+            segments: [
+                PathSegment {
+                    ident: Ident {
+                        ident: "Some",
+                        span: #858 bytes(42035..42047),
+                    },
+                    arguments: PathArguments::None,
+                },
+            ],
+        },
+    },
+    paren_token: Paren,
+    args: [
+        Expr::Call {
+            attrs: [],
+            func: Expr::Path {
+                attrs: [],
+                qself: None,
+                path: Path {
+                    leading_colon: None,
+                    segments: [
+                        PathSegment {
+                            ident: Ident {
+                                ident: "ChunkItemValue",
+                                span: #858 bytes(42035..42047),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                        Token![::],
+                        PathSegment {
+                            ident: Ident {
+                                ident: "text_from_u8_array",
+                                span: #858 bytes(42035..42047),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                    ],
+                },
+            },
+            paren_token: Paren,
+            args: [
+                Expr::Reference {
+                    attrs: [],
+                    and_token: Token![&],
+                    mutability: None,
+                    expr: Expr::Field {
+                        attrs: [],
+                        base: Expr::Path {
+                            attrs: [],
+                            qself: None,
+                            path: Path {
+                                leading_colon: None,
+                                segments: [
+                                    PathSegment {
+                                        ident: Ident {
+                                            ident: "self",
+                                            span: #858 bytes(42035..42047),
+                                        },
+                                        arguments: PathArguments::None,
+                                    },
+                                ],
+                            },
+                        },
+                        dot_token: Token![.],
+                        member: Member::Named(
+                            Ident {
+                                ident: "memo",
+                                span: #0 bytes(42225..42229),
+                            },
+                        ),
+                    },
+                },
+                Token![,],
+                Expr::Reference {
+                    attrs: [],
+                    and_token: Token![&],
+                    mutability: None,
+                    expr: Expr::Lit {
+                        attrs: [],
+                        lit: Lit::Int {
+                            token: 0u8,
+                        },
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+volume: Expr::Path {
+    attrs: [],
+    qself: None,
+    path: Path {
+        leading_colon: None,
+        segments: [
+            PathSegment {
+                ident: Ident {
+                    ident: "None",
+                    span: #858 bytes(42035..42047),
+                },
+                arguments: PathArguments::None,
+            },
+        ],
+    },
+}
+
+click_setting: Expr::Call {
+    attrs: [],
+    func: Expr::Path {
+        attrs: [],
+        qself: None,
+        path: Path {
+            leading_colon: None,
+            segments: [
+                PathSegment {
+                    ident: Ident {
+                        ident: "Some",
+                        span: #858 bytes(42035..42047),
+                    },
+                    arguments: PathArguments::None,
+                },
+            ],
+        },
+    },
+    paren_token: Paren,
+    args: [
+        Expr::Call {
+            attrs: [],
+            func: Expr::Path {
+                attrs: [],
+                qself: None,
+                path: Path {
+                    leading_colon: None,
+                    segments: [
+                        PathSegment {
+                            ident: Ident {
+                                ident: "ChunkItemValue",
+                                span: #858 bytes(42035..42047),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                        Token![::],
+                        PathSegment {
+                            ident: Ident {
+                                ident: "EnumStr",
+                                span: #858 bytes(42035..42047),
+                            },
+                            arguments: PathArguments::None,
+                        },
+                    ],
+                },
+            },
+            paren_token: Paren,
+            args: [
+                Expr::Unary {
+                    attrs: [],
+                    op: UnOp::Deref(
+                        Token![*],
+                    ),
+                    expr: Expr::MethodCall {
+                        attrs: [],
+                        receiver: Expr::MethodCall {
+                            attrs: [],
+                            receiver: Expr::Path {
+                                attrs: [],
+                                qself: None,
+                                path: Path {
+                                    leading_colon: None,
+                                    segments: [
+                                        PathSegment {
+                                            ident: Ident {
+                                                ident: "SYS_KIT_SWITCH",
+                                                span: #858 bytes(42035..42047),
+                                            },
+                                            arguments: PathArguments::None,
+                                        },
+                                    ],
+                                },
+                            },
+                            dot_token: Token![.],
+                            method: Ident {
+                                ident: "get",
+                                span: #858 bytes(42035..42047),
+                            },
+                            turbofish: None,
+                            paren_token: Paren,
+                            args: [
+                                Expr::Cast {
+                                    attrs: [],
+                                    expr: Expr::Field {
+                                        attrs: [],
+                                        base: Expr::Path {
+                                            attrs: [],
+                                            qself: None,
+                                            path: Path {
+                                                leading_colon: None,
+                                                segments: [
+                                                    PathSegment {
+                                                        ident: Ident {
+                                                            ident: "self",
+                                                            span: #858 bytes(42035..42047),
+                                                        },
+                                                        arguments: PathArguments::None,
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                        dot_token: Token![.],
+                                        member: Member::Named(
+                                            Ident {
+                                                ident: "click_setting",
+                                                span: #0 bytes(42388..42401),
+                                            },
+                                        ),
+                                    },
+                                    as_token: Token![as],
+                                    ty: Type::Path {
+                                        attrs: [],
+                                        qself: None,
+                                        path: Path {
+                                            leading_colon: None,
+                                            segments: [
+                                                PathSegment {
+                                                    ident: Ident {
+                                                        ident: "usize",
+                                                        span: #858 bytes(42035..42047),
+                                                    },
+                                                    arguments: PathArguments::None,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                        dot_token: Token![.],
+                        method: Ident {
+                            ident: "unwrap_or_else",
+                            span: #858 bytes(42035..42047),
+                        },
+                        turbofish: None,
+                        paren_token: Paren,
+                        args: [
+                            Expr::Closure {
+                                attrs: [],
+                                lifetimes: None,
+                                modifiers: ClosureModifiers,
+                                constness: None,
+                                asyncness: None,
+                                capture: None,
+                                inputs_begin: Token![|],
+                                inputs: [],
+                                inputs_end: Token![|],
+                                output: ReturnType::Default,
+                                body: Expr::Reference {
+                                    attrs: [],
+                                    and_token: Token![&],
+                                    mutability: None,
+                                    expr: Expr::Lit {
+                                        attrs: [],
+                                        lit: Lit::Str {
+                                            token: "INVALID",
+                                        },
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+            ],
+        },
+    ],
+}
+pub mod tests {
+    #![allow(unused)]
+    use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
+    use zerocopy::{U16, LittleEndian};
+    use libtd0_derive::TD0ChunkItem;
+    use libtd0_derive::repeat_fields;
+    use super::chunk::{ChunkItem, ChunkItemValue, ChunkItemValueRaw, IntEncodedDecimal};
+    use super::TD0Result;
+    pub const SYS_KIT_SWITCH: [&'static str; 2] = ["SYSTEM", "KIT"];
+    #[repr(C, packed)]
+    pub struct TestStruct {
+        #[td0_field(field_type = "Text", pad_byte = 0x0)]
+        name: [u8; 16],
+        #[td0_field(field_type = "Text", pad_byte = 0x0)]
+        memo: [u8; 64],
+        #[td0_field(field_type = "Volume")]
+        volume: U16<LittleEndian>,
+        #[td0_field(field_type = "EnumStr", collection = "SYS_KIT_SWITCH")]
+        click_setting: u8,
+    }
+    #[automatically_derived]
+    #[doc(hidden)]
+    unsafe impl ::core::clone::TrivialClone for TestStruct {}
+    #[automatically_derived]
+    impl ::core::clone::Clone for TestStruct {
+        #[inline]
+        fn clone(&self) -> TestStruct {
+            let _: ::core::clone::AssertParamIsClone<[u8; 16]>;
+            let _: ::core::clone::AssertParamIsClone<[u8; 64]>;
+            let _: ::core::clone::AssertParamIsClone<U16<LittleEndian>>;
+            let _: ::core::clone::AssertParamIsClone<u8>;
+            *self
+        }
+    }
+    #[automatically_derived]
+    impl ::core::marker::Copy for TestStruct {}
+    #[automatically_derived]
+    impl ::core::fmt::Debug for TestStruct {
+        #[inline]
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_struct_field4_finish(
+                f,
+                "TestStruct",
+                "name",
+                &{ self.name },
+                "memo",
+                &{ self.memo },
+                "volume",
+                &{ self.volume },
+                "click_setting",
+                &&{ self.click_setting },
+            )
+        }
+    }
+    #[allow(
+        deprecated,
+        private_bounds,
+        non_local_definitions,
+        non_camel_case_types,
+        non_upper_case_globals,
+        non_snake_case,
+        non_ascii_idents,
+        clippy::missing_inline_in_public_items,
+    )]
+    #[deny(ambiguous_associated_items)]
+    #[automatically_derived]
+    const _: () = {
+        #[allow(
+            deprecated,
+            private_bounds,
+            non_local_definitions,
+            non_camel_case_types,
+            non_upper_case_globals,
+            non_snake_case,
+            non_ascii_idents,
+            clippy::missing_inline_in_public_items,
+        )]
+        #[deny(ambiguous_associated_items)]
+        #[automatically_derived]
+        const _: () = {
+            unsafe impl ::zerocopy::TryFromBytes for TestStruct
+            where
+                [u8; 16]: ::zerocopy::TryFromBytes,
+                [u8; 64]: ::zerocopy::TryFromBytes,
+                U16<LittleEndian>: ::zerocopy::TryFromBytes,
+                u8: ::zerocopy::TryFromBytes,
+            {
+                fn only_derive_is_allowed_to_implement_this_trait() {}
+                #[inline(always)]
+                fn is_bit_valid<___ZcAlignment>(
+                    _candidate: ::zerocopy::Maybe<'_, Self, ___ZcAlignment>,
+                ) -> ::zerocopy::util::macro_util::core_reexport::primitive::bool
+                where
+                    ___ZcAlignment: ::zerocopy::invariant::Alignment,
+                {
+                    if false {
+                        fn assert_is_from_bytes<T>()
+                        where
+                            T: ::zerocopy::FromBytes,
+                            T: ?::zerocopy::util::macro_util::core_reexport::marker::Sized,
+                        {}
+                        assert_is_from_bytes::<Self>();
+                    }
+                    true
+                }
+            }
+            #[allow(
+                deprecated,
+                private_bounds,
+                non_local_definitions,
+                non_camel_case_types,
+                non_upper_case_globals,
+                non_snake_case,
+                non_ascii_idents,
+                clippy::missing_inline_in_public_items,
+            )]
+            #[deny(ambiguous_associated_items)]
+            #[automatically_derived]
+            const _: () = {
+                enum ẕname {}
+                enum ẕmemo {}
+                enum ẕvolume {}
+                enum ẕclick_setting {}
+                #[allow(
+                    deprecated,
+                    private_bounds,
+                    non_local_definitions,
+                    non_camel_case_types,
+                    non_upper_case_globals,
+                    non_snake_case,
+                    non_ascii_idents,
+                    clippy::missing_inline_in_public_items,
+                )]
+                #[deny(ambiguous_associated_items)]
+                #[automatically_derived]
+                const _: () = {
+                    unsafe impl ::zerocopy::HasTag for TestStruct {
+                        fn only_derive_is_allowed_to_implement_this_trait() {}
+                        type Tag = ();
+                        type ProjectToTag = ::zerocopy::pointer::cast::CastToUnit;
+                    }
+                };
+                #[allow(
+                    deprecated,
+                    private_bounds,
+                    non_local_definitions,
+                    non_camel_case_types,
+                    non_upper_case_globals,
+                    non_snake_case,
+                    non_ascii_idents,
+                    clippy::missing_inline_in_public_items,
+                )]
+                #[deny(ambiguous_associated_items)]
+                #[automatically_derived]
+                const _: () = {
+                    unsafe impl ::zerocopy::HasField<
+                        ẕname,
+                        { ::zerocopy::STRUCT_VARIANT_ID },
+                        { ::zerocopy::util::macro_util::hash_name("name") },
+                    > for TestStruct {
+                        fn only_derive_is_allowed_to_implement_this_trait() {}
+                        type Type = [u8; 16];
+                        #[inline(always)]
+                        fn project(
+                            slf: ::zerocopy::pointer::PtrInner<'_, Self>,
+                        ) -> *mut <Self as ::zerocopy::HasField<
+                            ẕname,
+                            { ::zerocopy::STRUCT_VARIANT_ID },
+                            { ::zerocopy::util::macro_util::hash_name("name") },
+                        >>::Type {
+                            let slf = slf.as_ptr();
+                            unsafe { &raw mut (*slf).name }
+                        }
+                    }
+                    #[allow(
+                        deprecated,
+                        private_bounds,
+                        non_local_definitions,
+                        non_camel_case_types,
+                        non_upper_case_globals,
+                        non_snake_case,
+                        non_ascii_idents,
+                        clippy::missing_inline_in_public_items,
+                    )]
+                    #[deny(ambiguous_associated_items)]
+                    #[automatically_derived]
+                    const _: () = {
+                        unsafe impl<
+                            Aliasing: ::zerocopy::invariant::Aliasing,
+                            Alignment: ::zerocopy::invariant::Alignment,
+                        > ::zerocopy::ProjectField<
+                            ẕname,
+                            (Aliasing, Alignment, ::zerocopy::invariant::Initialized),
+                            { ::zerocopy::STRUCT_VARIANT_ID },
+                            { ::zerocopy::util::macro_util::hash_name("name") },
+                        > for TestStruct {
+                            fn only_derive_is_allowed_to_implement_this_trait() {}
+                            type Error = ::zerocopy::util::macro_util::core_reexport::convert::Infallible;
+                            type Invariants = (
+                                Aliasing,
+                                ::zerocopy::invariant::Unaligned,
+                                ::zerocopy::invariant::Initialized,
+                            );
+                        }
+                    };
+                };
+                #[allow(
+                    deprecated,
+                    private_bounds,
+                    non_local_definitions,
+                    non_camel_case_types,
+                    non_upper_case_globals,
+                    non_snake_case,
+                    non_ascii_idents,
+                    clippy::missing_inline_in_public_items,
+                )]
+                #[deny(ambiguous_associated_items)]
+                #[automatically_derived]
+                const _: () = {
+                    unsafe impl ::zerocopy::HasField<
+                        ẕmemo,
+                        { ::zerocopy::STRUCT_VARIANT_ID },
+                        { ::zerocopy::util::macro_util::hash_name("memo") },
+                    > for TestStruct {
+                        fn only_derive_is_allowed_to_implement_this_trait() {}
+                        type Type = [u8; 64];
+                        #[inline(always)]
+                        fn project(
+                            slf: ::zerocopy::pointer::PtrInner<'_, Self>,
+                        ) -> *mut <Self as ::zerocopy::HasField<
+                            ẕmemo,
+                            { ::zerocopy::STRUCT_VARIANT_ID },
+                            { ::zerocopy::util::macro_util::hash_name("memo") },
+                        >>::Type {
+                            let slf = slf.as_ptr();
+                            unsafe { &raw mut (*slf).memo }
+                        }
+                    }
+                    #[allow(
+                        deprecated,
+                        private_bounds,
+                        non_local_definitions,
+                        non_camel_case_types,
+                        non_upper_case_globals,
+                        non_snake_case,
+                        non_ascii_idents,
+                        clippy::missing_inline_in_public_items,
+                    )]
+                    #[deny(ambiguous_associated_items)]
+                    #[automatically_derived]
+                    const _: () = {
+                        unsafe impl<
+                            Aliasing: ::zerocopy::invariant::Aliasing,
+                            Alignment: ::zerocopy::invariant::Alignment,
+                        > ::zerocopy::ProjectField<
+                            ẕmemo,
+                            (Aliasing, Alignment, ::zerocopy::invariant::Initialized),
+                            { ::zerocopy::STRUCT_VARIANT_ID },
+                            { ::zerocopy::util::macro_util::hash_name("memo") },
+                        > for TestStruct {
+                            fn only_derive_is_allowed_to_implement_this_trait() {}
+                            type Error = ::zerocopy::util::macro_util::core_reexport::convert::Infallible;
+                            type Invariants = (
+                                Aliasing,
+                                ::zerocopy::invariant::Unaligned,
+                                ::zerocopy::invariant::Initialized,
+                            );
+                        }
+                    };
+                };
+                #[allow(
+                    deprecated,
+                    private_bounds,
+                    non_local_definitions,
+                    non_camel_case_types,
+                    non_upper_case_globals,
+                    non_snake_case,
+                    non_ascii_idents,
+                    clippy::missing_inline_in_public_items,
+                )]
+                #[deny(ambiguous_associated_items)]
+                #[automatically_derived]
+                const _: () = {
+                    unsafe impl ::zerocopy::HasField<
+                        ẕvolume,
+                        { ::zerocopy::STRUCT_VARIANT_ID },
+                        { ::zerocopy::util::macro_util::hash_name("volume") },
+                    > for TestStruct {
+                        fn only_derive_is_allowed_to_implement_this_trait() {}
+                        type Type = U16<LittleEndian>;
+                        #[inline(always)]
+                        fn project(
+                            slf: ::zerocopy::pointer::PtrInner<'_, Self>,
+                        ) -> *mut <Self as ::zerocopy::HasField<
+                            ẕvolume,
+                            { ::zerocopy::STRUCT_VARIANT_ID },
+                            { ::zerocopy::util::macro_util::hash_name("volume") },
+                        >>::Type {
+                            let slf = slf.as_ptr();
+                            unsafe { &raw mut (*slf).volume }
+                        }
+                    }
+                    #[allow(
+                        deprecated,
+                        private_bounds,
+                        non_local_definitions,
+                        non_camel_case_types,
+                        non_upper_case_globals,
+                        non_snake_case,
+                        non_ascii_idents,
+                        clippy::missing_inline_in_public_items,
+                    )]
+                    #[deny(ambiguous_associated_items)]
+                    #[automatically_derived]
+                    const _: () = {
+                        unsafe impl<
+                            Aliasing: ::zerocopy::invariant::Aliasing,
+                            Alignment: ::zerocopy::invariant::Alignment,
+                        > ::zerocopy::ProjectField<
+                            ẕvolume,
+                            (Aliasing, Alignment, ::zerocopy::invariant::Initialized),
+                            { ::zerocopy::STRUCT_VARIANT_ID },
+                            { ::zerocopy::util::macro_util::hash_name("volume") },
+                        > for TestStruct {
+                            fn only_derive_is_allowed_to_implement_this_trait() {}
+                            type Error = ::zerocopy::util::macro_util::core_reexport::convert::Infallible;
+                            type Invariants = (
+                                Aliasing,
+                                ::zerocopy::invariant::Unaligned,
+                                ::zerocopy::invariant::Initialized,
+                            );
+                        }
+                    };
+                };
+                #[allow(
+                    deprecated,
+                    private_bounds,
+                    non_local_definitions,
+                    non_camel_case_types,
+                    non_upper_case_globals,
+                    non_snake_case,
+                    non_ascii_idents,
+                    clippy::missing_inline_in_public_items,
+                )]
+                #[deny(ambiguous_associated_items)]
+                #[automatically_derived]
+                const _: () = {
+                    unsafe impl ::zerocopy::HasField<
+                        ẕclick_setting,
+                        { ::zerocopy::STRUCT_VARIANT_ID },
+                        { ::zerocopy::util::macro_util::hash_name("click_setting") },
+                    > for TestStruct {
+                        fn only_derive_is_allowed_to_implement_this_trait() {}
+                        type Type = u8;
+                        #[inline(always)]
+                        fn project(
+                            slf: ::zerocopy::pointer::PtrInner<'_, Self>,
+                        ) -> *mut <Self as ::zerocopy::HasField<
+                            ẕclick_setting,
+                            { ::zerocopy::STRUCT_VARIANT_ID },
+                            { ::zerocopy::util::macro_util::hash_name("click_setting") },
+                        >>::Type {
+                            let slf = slf.as_ptr();
+                            unsafe { &raw mut (*slf).click_setting }
+                        }
+                    }
+                    #[allow(
+                        deprecated,
+                        private_bounds,
+                        non_local_definitions,
+                        non_camel_case_types,
+                        non_upper_case_globals,
+                        non_snake_case,
+                        non_ascii_idents,
+                        clippy::missing_inline_in_public_items,
+                    )]
+                    #[deny(ambiguous_associated_items)]
+                    #[automatically_derived]
+                    const _: () = {
+                        unsafe impl<
+                            Aliasing: ::zerocopy::invariant::Aliasing,
+                            Alignment: ::zerocopy::invariant::Alignment,
+                        > ::zerocopy::ProjectField<
+                            ẕclick_setting,
+                            (Aliasing, Alignment, ::zerocopy::invariant::Initialized),
+                            { ::zerocopy::STRUCT_VARIANT_ID },
+                            { ::zerocopy::util::macro_util::hash_name("click_setting") },
+                        > for TestStruct {
+                            fn only_derive_is_allowed_to_implement_this_trait() {}
+                            type Error = ::zerocopy::util::macro_util::core_reexport::convert::Infallible;
+                            type Invariants = (
+                                Aliasing,
+                                ::zerocopy::invariant::Unaligned,
+                                ::zerocopy::invariant::Initialized,
+                            );
+                        }
+                    };
+                };
+            };
+        };
+        #[allow(
+            deprecated,
+            private_bounds,
+            non_local_definitions,
+            non_camel_case_types,
+            non_upper_case_globals,
+            non_snake_case,
+            non_ascii_idents,
+            clippy::missing_inline_in_public_items,
+        )]
+        #[deny(ambiguous_associated_items)]
+        #[automatically_derived]
+        const _: () = {
+            unsafe impl ::zerocopy::FromZeros for TestStruct
+            where
+                [u8; 16]: ::zerocopy::FromZeros,
+                [u8; 64]: ::zerocopy::FromZeros,
+                U16<LittleEndian>: ::zerocopy::FromZeros,
+                u8: ::zerocopy::FromZeros,
+            {
+                fn only_derive_is_allowed_to_implement_this_trait() {}
+            }
+        };
+        #[allow(
+            deprecated,
+            private_bounds,
+            non_local_definitions,
+            non_camel_case_types,
+            non_upper_case_globals,
+            non_snake_case,
+            non_ascii_idents,
+            clippy::missing_inline_in_public_items,
+        )]
+        #[deny(ambiguous_associated_items)]
+        #[automatically_derived]
+        const _: () = {
+            unsafe impl ::zerocopy::FromBytes for TestStruct
+            where
+                [u8; 16]: ::zerocopy::FromBytes,
+                [u8; 64]: ::zerocopy::FromBytes,
+                U16<LittleEndian>: ::zerocopy::FromBytes,
+                u8: ::zerocopy::FromBytes,
+            {
+                fn only_derive_is_allowed_to_implement_this_trait() {}
+            }
+        };
+    };
+    #[allow(
+        deprecated,
+        private_bounds,
+        non_local_definitions,
+        non_camel_case_types,
+        non_upper_case_globals,
+        non_snake_case,
+        non_ascii_idents,
+        clippy::missing_inline_in_public_items,
+    )]
+    #[deny(ambiguous_associated_items)]
+    #[automatically_derived]
+    const _: () = {
+        #[allow(
+            deprecated,
+            private_bounds,
+            non_local_definitions,
+            non_camel_case_types,
+            non_upper_case_globals,
+            non_snake_case,
+            non_ascii_idents,
+            clippy::missing_inline_in_public_items,
+        )]
+        #[deny(ambiguous_associated_items)]
+        #[automatically_derived]
+        const _: () = {
+            unsafe impl ::zerocopy::IntoBytes for TestStruct
+            where
+                [u8; 16]: ::zerocopy::IntoBytes,
+                [u8; 64]: ::zerocopy::IntoBytes,
+                U16<LittleEndian>: ::zerocopy::IntoBytes,
+                u8: ::zerocopy::IntoBytes,
+            {
+                fn only_derive_is_allowed_to_implement_this_trait() {}
+            }
+        };
+    };
+    impl Default for TestStruct {
+        fn default() -> Self {
+            Self {
+                name: [0; 16],
+                memo: [0; 64],
+                volume: U16::from(0),
+                click_setting: 0,
+            }
+        }
+    }
+    pub const TEST_STRUCT_FIELDS: [&str; 4] = [
+        "name",
+        "memo",
+        "volume",
+        "click_setting",
+    ];
+    impl ChunkItem for TestStruct {
+        fn get_fields(&self) -> &'static [&'static str] {
+            &TEST_STRUCT_FIELDS
+        }
+        fn get_value(&self, field: &str) -> Option<ChunkItemValue> {
+            match field {
+                "name" => Some(ChunkItemValue::text_from_u8_array(&self.name, &0u8)),
+                "memo" => Some(ChunkItemValue::text_from_u8_array(&self.memo, &0u8)),
+                "volume" => None,
+                "click_setting" => {
+                    Some(
+                        ChunkItemValue::EnumStr(
+                            *SYS_KIT_SWITCH
+                                .get(self.click_setting as usize)
+                                .unwrap_or_else(|| &"INVALID"),
+                        ),
+                    )
+                }
+                _ => None,
+            }
+        }
+        fn set_value(&mut self, field: &str, value: &ChunkItemValue) -> TD0Result<()> {
+            ::core::panicking::panic("not yet implemented")
+        }
+        fn get_value_raw(&self, field: &str) -> Option<ChunkItemValueRaw> {
+            ::core::panicking::panic("not yet implemented")
+        }
+        fn set_value_raw(
+            &mut self,
+            field: &str,
+            value: &ChunkItemValueRaw,
+        ) -> TD0Result<()> {
+            ::core::panicking::panic("not yet implemented")
+        }
+    }
+}
