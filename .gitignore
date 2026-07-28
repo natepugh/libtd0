@@ -1,1 +1,4 @@
 /target
+*/target/
+src/pytd0
+Cargo.lock
