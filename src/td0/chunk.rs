@@ -2,20 +2,19 @@ use crate::td0::result::{TD0Error, TD0Result};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use std::collections::HashMap;
-use std::convert::{From, Infallible, TryInto};
+use std::convert::{From, TryInto};
 use std::fmt;
 use std::ops::Mul;
 use std::str::FromStr;
-use zerocopy::{FromBytes, LittleEndian, U32};
+use zerocopy::{FromBytes, I16, LittleEndian, U16, U32};
 use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
 
 const SZ_HDR_EXTRA_DATA: usize = 4;
 // Constants for fields.
-const VOLUME_MIN : Decimal = Decimal::from_parts(60, 0, 0, true, 0);
-const VOLUME_MAX : Decimal = Decimal::from_parts(6, 0, 0, false, 0);
-const VOLUME_MINUS_INF : Decimal = Decimal::from_parts(601, 0, 0, true, 1);
-const VOLUME_MINUS_INF_DISPLAY : &str = "-Infinity";
-
+const VOLUME_MIN: Decimal = Decimal::from_parts(60, 0, 0, true, 0);
+const VOLUME_MAX: Decimal = Decimal::from_parts(6, 0, 0, false, 0);
+const VOLUME_MINUS_INF: Decimal = Decimal::from_parts(601, 0, 0, true, 1);
+const VOLUME_MINUS_INF_DISPLAY: &str = "-Infinity";
 
 #[derive(Debug, Default)]
 pub struct Chunk {
@@ -44,26 +43,53 @@ impl Chunk {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct IntEncodedDecimal(Decimal);
+pub struct IntEncodedDecimal {
+    val: Decimal,
+    min: Decimal,
+    max: Decimal,
+}
 
 impl fmt::Display for IntEncodedDecimal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        if self.val.eq(&VOLUME_MINUS_INF) {
+            write!(f, "{}", VOLUME_MINUS_INF_DISPLAY)
+        } else {
+            write!(f, "{:.1}", self.val)
+        }
     }
 }
 
-impl FromStr for IntEncodedDecimal {
-    type Err = <Decimal as FromStr>::Err;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self {0:  Decimal::from_str(s)? })
+impl IntEncodedDecimal {
+    fn validate_impl_range(val: &Decimal, min: &Decimal, max: &Decimal) -> Result<(), TD0Error> {
+        if val.lt(min) || val.gt(max) {
+            Err(TD0Error::ConvertRangeError {
+                min: min.as_i128(),
+                max: max.as_i128(),
+            })
+        } else {
+            Ok(())
+        }
     }
-}
 
-impl TryFrom<u16> for IntEncodedDecimal {
-    type Error = Infallible;
-    fn try_from(value: u16) -> Result<Self, Infallible> {
+    pub fn get_val(&self) -> &Decimal {
+        &self.val
+    }
+
+    pub fn validate(&self) -> Result<(), TD0Error> {
+        Self::validate_impl_range(&self.val, &self.min, &self.max)
+    }
+
+    pub fn new_from_parts_raw(val: u16, min: &Decimal, max: &Decimal) -> Result<Self, TD0Error> {
+        let dec_val: Decimal = Decimal::from_u16(val).expect("u16 should fit in a Decimal");
+        Ok(Self::new_from_parts(&dec_val, min, max)?)
+    }
+
+    pub fn new_from_parts(val: &Decimal, min: &Decimal, max: &Decimal) -> Result<Self, TD0Error> {
+        Self::validate_impl_range(val, min, max)?;
         Ok(Self {
-            0: Decimal::from(value / 10),
+            val: val.clone(),
+            min: min.clone(),
+            max: max.clone(),
         })
     }
 }
@@ -72,9 +98,20 @@ impl TryInto<u16> for IntEncodedDecimal {
     type Error = <Decimal as TryInto<u16>>::Error;
 
     fn try_into(self) -> Result<u16, Self::Error> {
-        let myval: Decimal = self.0.mul(Decimal::from(10)).round();
-        let converted: u16 = myval.try_into()?;
-        Ok(converted)
+        let myval: Decimal = self.val.mul(Decimal::from(10)).round();
+        Ok(myval.try_into()?)
+    }
+}
+
+impl<T> TryInto<U16<T>> for IntEncodedDecimal
+where
+    T: zerocopy::ByteOrder,
+{
+    type Error = <Decimal as TryInto<u16>>::Error;
+
+    fn try_into(self) -> Result<U16<T>, Self::Error> {
+        let myval: u16 = self.try_into()?;
+        Ok(myval.into())
     }
 }
 
@@ -93,13 +130,16 @@ impl fmt::Display for Volume {
 impl Volume {
     fn validate_impl_range(val: &Decimal) -> Result<(), TD0Error> {
         if val.lt(&VOLUME_MINUS_INF) || val.gt(&VOLUME_MAX) {
-            Err(TD0Error::ConvertRangeError { min: VOLUME_MIN.as_i128(), max: VOLUME_MAX.as_i128() })
+            Err(TD0Error::ConvertRangeError {
+                min: VOLUME_MIN.as_i128(),
+                max: VOLUME_MAX.as_i128(),
+            })
         } else {
             Ok(())
         }
     }
 
-    fn validate(&self) -> Result<(), TD0Error> {
+    pub fn validate(&self) -> Result<(), TD0Error> {
         Self::validate_impl_range(&self.0)
     }
 }
@@ -108,13 +148,20 @@ impl FromStr for Volume {
     type Err = TD0Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.eq_ignore_ascii_case(VOLUME_MINUS_INF_DISPLAY) {
-            Ok(Self {0: VOLUME_MINUS_INF.clone()})
+            Ok(Self {
+                0: VOLUME_MINUS_INF.clone(),
+            })
         } else {
-            let selfobj = Self{0: Decimal::from_str(s).map_err(
-                |_| TD0Error::ConvertFromStringError { type_name: "Volume".to_string(), value: s.to_string() }
-            )?.round_dp(1)};
+            let selfobj = Self {
+                0: Decimal::from_str(s)
+                    .map_err(|_| TD0Error::ConvertFromStringError {
+                        type_name: "Volume".to_string(),
+                        value: s.to_string(),
+                    })?
+                    .round_dp(1),
+            };
             selfobj.validate()?;
-            Ok( selfobj )
+            Ok(selfobj)
         }
     }
 }
@@ -124,11 +171,11 @@ impl TryFrom<i16> for Volume {
     fn try_from(value: i16) -> Result<Self, Self::Error> {
         let selfobj = Self {
             0: Decimal::from_f64(f64::from(value) / 10.0f64)
-                .ok_or(TD0Error::ConvertToNativeTypeError { 
+                .ok_or(TD0Error::ConvertToNativeTypeError {
                     field: "Unknown".to_string(),
-                    reason: "Can't convert to Decimal from i16.".to_string() 
+                    reason: "Can't convert to Decimal from i16.".to_string(),
                 })?
-                .round_dp(1)
+                .round_dp(1),
         };
         selfobj.validate()?;
         Ok(selfobj)
@@ -145,21 +192,35 @@ impl TryInto<u16> for Volume {
     }
 }
 
+impl<T> TryInto<I16<T>> for Volume
+where
+    T: zerocopy::ByteOrder,
+{
+    type Error = <Decimal as TryInto<i16>>::Error;
+
+    fn try_into(self) -> Result<I16<T>, Self::Error> {
+        let myval: i16 = self.0.try_into()?;
+        Ok(myval.into())
+    }
+}
+
+// impl TryFrom<I16<T>> for Volume
 
 #[derive(Debug, PartialEq)]
 pub enum ChunkItemValue {
-    TD0Decimal(IntEncodedDecimal),
     EnumStr(&'static str),
+    I16(i16),
+    Slice(Box<[u8]>),
+    TD0Decimal(IntEncodedDecimal),
     Text(String),
     U16(u16),
-    I16(i16),
     U8(u8),
     Volume(Volume),
 }
 
 impl ChunkItemValue {
     pub fn text_from_u8_array(source: &[u8], pad_val: &u8) -> Self {
-        let rpos = source.iter().rposition(|p| p != pad_val ).unwrap_or(0);
+        let rpos = source.iter().rposition(|p| p != pad_val).unwrap_or(0);
         Self::Text(String::from_utf8_lossy(&source[0..rpos]).to_string())
     }
 }
@@ -168,7 +229,6 @@ pub enum ChunkItemValueRaw {
     U8(u8),
     U16(u16),
     I16(i16),
-    Text(String),
     Slice(Box<[u8]>),
 }
 
@@ -182,13 +242,14 @@ impl fmt::Display for ChunkItemValue {
             ChunkItemValue::Text(val) => val.to_string(),
             ChunkItemValue::EnumStr(val) => val.to_string(),
             ChunkItemValue::Volume(val) => val.to_string(),
+            ChunkItemValue::Slice(val) => format!("{val:?}"),
         };
 
         write!(f, "{}", repr)
     }
 }
 
-pub trait ChunkItem : std::fmt::Debug {
+pub trait ChunkItem: std::fmt::Debug {
     fn get_value(&self, field: &str) -> Option<ChunkItemValue>;
     fn get_value_raw(&self, field: &str) -> Option<ChunkItemValueRaw>;
     fn set_value(&mut self, field: &str, value: &ChunkItemValue) -> TD0Result<()>;
@@ -218,8 +279,7 @@ pub trait ChunkItem : std::fmt::Debug {
         Ok(selfobj.clone())
     }
 
-    fn get_values(&self) -> HashMap<String, ChunkItemValue> 
-    {
+    fn get_values(&self) -> HashMap<String, ChunkItemValue> {
         let mut values: HashMap<String, ChunkItemValue> = HashMap::new();
 
         for fld in self.get_fields().iter() {
@@ -322,6 +382,27 @@ pub fn copy_slice_to_native(src: &[u8], dest: &mut [u8], dest_name: &str) -> TD0
         });
     }
     dest.clone_from_slice(src);
+    Ok(())
+}
+
+pub fn copy_slice_to_native_padded(
+    src: &[u8],
+    dest: &mut [u8],
+    dest_name: &str,
+    pad: u8,
+) -> TD0Result<()> {
+    let padding_sz = dest.len().saturating_sub(src.len());
+    let dest_len = dest.len();
+
+    if src.len() > dest_len {
+        return Err(TD0Error::ConvertToNativeTypeError {
+            field: dest_name.to_string(),
+            reason: "src length > dest length".to_string(),
+        });
+    }
+    let padding: Vec<u8> = [0u8].repeat(padding_sz);
+    dest[dest_len..].clone_from_slice(&padding);
+    dest[0..dest_len].clone_from_slice(src);
     Ok(())
 }
 
@@ -449,7 +530,9 @@ impl ChunkItem for HDRaItem {
         Ok(())
     }
 
-    fn get_fields(&self) -> &'static [&'static str] { &FIELDS_HDR_A_ITEM }
+    fn get_fields(&self) -> &'static [&'static str] {
+        &FIELDS_HDR_A_ITEM
+    }
 }
 
 #[cfg(test)]
@@ -464,10 +547,13 @@ mod tests {
         let expected = Volume(rust_decimal::Decimal::from_str("1.2").expect("Broken test"));
         assert_eq!(actual, expected);
     }
-    
+
     #[test]
     fn test_volume_max_from_i16() {
-        let max_as_i16 : i16 = VOLUME_MAX.mul(Decimal::from(10)).try_into().expect("Can't convert VOLUME_MAX to i16.");
+        let max_as_i16: i16 = VOLUME_MAX
+            .mul(Decimal::from(10))
+            .try_into()
+            .expect("Can't convert VOLUME_MAX to i16.");
         let actual = Volume::try_from(max_as_i16).expect("Can't create Volume");
         let expected = Volume(VOLUME_MAX);
         assert_eq!(actual, expected);
@@ -475,7 +561,10 @@ mod tests {
 
     #[test]
     fn test_volume_min_from_i16() {
-        let min_as_i16 : i16 = VOLUME_MIN.mul(Decimal::from(10)).try_into().expect("Can't convert VOLUME_MIN to i16.");
+        let min_as_i16: i16 = VOLUME_MIN
+            .mul(Decimal::from(10))
+            .try_into()
+            .expect("Can't convert VOLUME_MIN to i16.");
         let actual = Volume::try_from(min_as_i16).expect("Can't create Volume");
         let expected = Volume(VOLUME_MIN);
         assert_eq!(actual, expected);
@@ -483,7 +572,10 @@ mod tests {
 
     #[test]
     fn test_volume_minus_inf_from_i16() {
-        let minus_inf_as_i16 : i16 = VOLUME_MINUS_INF.mul(Decimal::from(10)).try_into().expect("Can't convert VOLUME_MINUS_INF to i16.");
+        let minus_inf_as_i16: i16 = VOLUME_MINUS_INF
+            .mul(Decimal::from(10))
+            .try_into()
+            .expect("Can't convert VOLUME_MINUS_INF to i16.");
         let actual = Volume::try_from(minus_inf_as_i16).expect("Can't create Volume");
         let expected = Volume(VOLUME_MINUS_INF);
         assert_eq!(actual, expected);
@@ -492,46 +584,95 @@ mod tests {
     #[test]
     fn test_volume_to_string() {
         let v1 = Volume(VOLUME_MINUS_INF);
-        assert_eq!(v1.to_string().as_str(), VOLUME_MINUS_INF_DISPLAY, "Test {} Volume to string.", VOLUME_MINUS_INF_DISPLAY);
+        assert_eq!(
+            v1.to_string().as_str(),
+            VOLUME_MINUS_INF_DISPLAY,
+            "Test {} Volume to string.",
+            VOLUME_MINUS_INF_DISPLAY
+        );
 
         let v2 = Volume(Decimal::from_str_exact("-25").expect("Test broken."));
-        assert_eq!(v2.to_string().as_str(), "-25.0", "Test a negative Volume value.");
+        assert_eq!(
+            v2.to_string().as_str(),
+            "-25.0",
+            "Test a negative Volume value."
+        );
 
         let v3 = Volume(Decimal::from_str_exact("4.5").expect("Test broken."));
-        assert_eq!(v3.to_string().as_str(), "4.5", "Test a positive Volume value.");
+        assert_eq!(
+            v3.to_string().as_str(),
+            "4.5",
+            "Test a positive Volume value."
+        );
     }
 
     #[test]
     fn test_volume_from_i16_out_of_range() {
         let actual = Volume::try_from(-602i16);
-        debug_assert_matches!(actual, Err(TD0Error::ConvertRangeError {..}), "Test proper Err from > VOLUME_MAX");
+        debug_assert_matches!(
+            actual,
+            Err(TD0Error::ConvertRangeError { .. }),
+            "Test proper Err from > VOLUME_MAX"
+        );
 
         let actual = Volume::try_from(61i16);
-        debug_assert_matches!(actual, Err(TD0Error::ConvertRangeError {..}), "Test proper Err from > VOLUME_MAX");
+        debug_assert_matches!(
+            actual,
+            Err(TD0Error::ConvertRangeError { .. }),
+            "Test proper Err from > VOLUME_MAX"
+        );
     }
     #[test]
     fn test_volume_from_str() {
         let actual = Volume::from_str("-60.2");
-        debug_assert_matches!(actual, Err(TD0Error::ConvertRangeError {..}), "Test proper Err from < VOLUME_MIN");
+        debug_assert_matches!(
+            actual,
+            Err(TD0Error::ConvertRangeError { .. }),
+            "Test proper Err from < VOLUME_MIN"
+        );
 
         let actual = Volume::from_str(VOLUME_MIN.to_string().as_str()).expect("Test broken.");
-        assert_eq!(actual, Volume(VOLUME_MIN), "Test proper conversion for VOLUME_MIN.");
+        assert_eq!(
+            actual,
+            Volume(VOLUME_MIN),
+            "Test proper conversion for VOLUME_MIN."
+        );
 
         let actual = Volume::from_str("6.1");
-        debug_assert_matches!(actual, Err(TD0Error::ConvertRangeError {..}), "Test proper Err from > VOLUME_MAX");
+        debug_assert_matches!(
+            actual,
+            Err(TD0Error::ConvertRangeError { .. }),
+            "Test proper Err from > VOLUME_MAX"
+        );
 
         let actual = Volume::from_str(VOLUME_MAX.to_string().as_str()).expect("Test broken.");
-        assert_eq!(actual, Volume(VOLUME_MAX), "Test proper conversion for VOLUME_MAX.");
+        assert_eq!(
+            actual,
+            Volume(VOLUME_MAX),
+            "Test proper conversion for VOLUME_MAX."
+        );
 
         let actual = Volume::from_str(VOLUME_MINUS_INF_DISPLAY).expect("Test broken.");
-        assert_eq!(actual, Volume(VOLUME_MINUS_INF), "Test proper conversion for -Infinity");
+        assert_eq!(
+            actual,
+            Volume(VOLUME_MINUS_INF),
+            "Test proper conversion for -Infinity"
+        );
     }
 
     #[test]
     fn test_chunk_item_val_from_u8_array() {
-
         let val = ChunkItemValue::text_from_u8_array(&[32, 78, 48, 99, 128, 0, 0, 0, 0], &0);
         assert_eq!(val, ChunkItemValue::Text(" N0c".to_string()));
     }
 
+    #[test]
+    fn test_chunk_item_u8_to_u8() {
+        let val = ChunkItemValue::U8(23u8);
+        if let ChunkItemValue::U8(x) = val {
+            assert_eq!(x, 23u8);
+        } else {
+            assert!(false, "failed");
+        }
+    }
 }

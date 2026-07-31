@@ -13,7 +13,8 @@ pub mod chunk;
 pub mod header;
 pub mod kit;
 pub mod result;
-pub mod tests;
+mod strings;
+mod tests;
 
 fn parse_manifest(bytes: &[u8]) -> TD0Result<Vec<TD0ManifestTag>> {
     let mut manifest = Vec::<TD0ManifestTag>::new();
@@ -158,12 +159,14 @@ impl TD0File {
         let end: usize = start + chunk.sz_item;
 
         return match chunk_tag.get_tag().as_str() {
-            "HDRa" => Ok(Some(Box::new(
-                HDRaItem::from_bytes(&self.buf[start..end], Some("HDRaItem"))?
-            ))),
-            "KITa" => Ok(Some(Box::new(
-                KITaItem::from_bytes(&self.buf[start..end], Some("KITaItem"))?
-            ))),
+            "HDRa" => Ok(Some(Box::new(HDRaItem::from_bytes(
+                &self.buf[start..end],
+                Some("HDRaItem"),
+            )?))),
+            "KITa" => Ok(Some(Box::new(KITaItem::from_bytes(
+                &self.buf[start..end],
+                Some("KITaItem"),
+            )?))),
             _ => Ok(None),
         };
     }
@@ -211,8 +214,8 @@ pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
 
 pub fn get_chunk_item_fields(chunk_name: &str) -> Option<&'static [&'static str]> {
     match chunk_name {
-        "HDRa" => { Some(HDRaItem::default().get_fields()) },
-        "KITa" => { Some(KITaItem::default().get_fields()) },
+        "HDRa" => Some(HDRaItem::default().get_fields()),
+        "KITa" => Some(KITaItem::default().get_fields()),
         _ => None,
     }
 }

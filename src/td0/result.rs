@@ -9,10 +9,10 @@ pub enum TD0Error {
     ConvertToNativeTypeError { field: String, reason: String },
 
     #[error("Value out of range during conversion. Allowed: {min}...{max}")]
-    ConvertRangeError{ min: i128, max: i128 },
+    ConvertRangeError { min: i128, max: i128 },
 
     #[error("Unable to convert to `{type_name}` from String value: `{value}`")]
-    ConvertFromStringError{ type_name: String, value: String },
+    ConvertFromStringError { type_name: String, value: String },
 
     #[error("Duplicate chunk data for chunk {chunk_name}")]
     DuplicateChunkError { chunk_name: String },
@@ -28,6 +28,9 @@ pub enum TD0Error {
 
     #[error("Invalid TD0 tag")]
     InvalidTD0TagError,
+
+    #[error("Invalid raw data for {field}")]
+    RawDataError { field: String },
 
     #[error("Item index out of bounds: the len is {len} but the index is {index}")]
     ItemIndexError { len: usize, index: usize },
