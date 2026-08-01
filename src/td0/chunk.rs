@@ -415,7 +415,7 @@ pub fn copy_slice_to_native_padded(
             reason: "src length > dest length".to_string(),
         });
     }
-    let padding: Vec<u8> = [0u8].repeat(padding_sz);
+    let padding: Vec<u8> = [pad].repeat(padding_sz);
     dest[dest_len..].clone_from_slice(&padding);
     dest[0..dest_len].clone_from_slice(src);
     Ok(())

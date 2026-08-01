@@ -21,18 +21,6 @@ pub const DELAYSYNC_VALUES: [&str; 22] = [
     "1/8.", "1/4", "1/2T", "1/4.", "1/2", "1/1T", "1/2.", "1/1", "2/1T", "1/1.", "2/1",
 ];
 
-pub const DIRECT_OUTS: [&str; 9] = [
-    "DIRECT 1",
-    "DIRECT 2",
-    "DIRECT 1+2",
-    "DIRECT 3",
-    "DIRECT 4",
-    "DIRECT 3+4",
-    "MASTER DIRECT L",
-    "MASTER DIRECT R",
-    "MASTER DIRECT L+R",
-];
-
 pub const DIRECT_ROUTES: [&str; 10] = [
     "OFF",
     "DIRECT 1",
@@ -328,7 +316,6 @@ pub const MIDI_CHANNELS: [&str; 17] = [
 
 pub const OUTPUT_ROUTES: [&str; 2] = ["PHONES+MASTER", "PHONES ONLY"];
 pub const SIDECHAIN_ROUTES: [&str; 2] = ["MASTER+PHONES", "PHONES-ONLY"];
-pub const MFX_ROUTES: [&str; 3] = ["MASTER+PHONES", "PHONES-ONLY", "SIDE CHAIN"];
 
 pub const PAD_EDIT_KNOB_GROUPS: [&str; 8] = [
     "MFX1",

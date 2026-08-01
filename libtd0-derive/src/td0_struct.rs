@@ -106,10 +106,6 @@ struct TD0FieldTypeTD0Decimal {
 }
 
 impl TD0FieldTypeTD0Decimal {
-    pub fn clamp(&self, val: Decimal) -> Decimal {
-        val.clamp(self.min, self.max)
-    }
-
     pub fn clamp_u16(&self, val: u16) -> u16 {
         u16::clamp(
             val,
