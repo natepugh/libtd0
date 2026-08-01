@@ -34,6 +34,22 @@ impl TryFrom<&AttrKeyValue> for u8 {
     }
 }
 
+impl TryFrom<&AttrKeyValue> for i8 {
+    type Error = syn::Error;
+
+    fn try_from(kv_pair: &AttrKeyValue) -> Result<Self, <Self as TryFrom<&AttrKeyValue>>::Error> {
+        match &kv_pair.val {
+            Lit::Int(lit_int) => lit_int
+                .base10_parse()
+                .map_err(|err| syn::Error::new_spanned(lit_int, err.to_string())),
+            _ => Err(syn::Error::new_spanned(
+                &kv_pair.val,
+                "Must be an Integer type.",
+            )),
+        }
+    }
+}
+
 impl TryFrom<&AttrKeyValue> for f64 {
     type Error = syn::Error;
 
@@ -164,6 +180,7 @@ pub struct NativeTypeSlice {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NativeType {
+    I8,
     I16,
     Slice(NativeTypeSlice),
     U16,
@@ -177,6 +194,7 @@ pub fn get_field_native_type(field: &Field) -> Option<NativeType> {
             if tpath.path.segments.len() == 1 {
                 match tpath.path.segments[0].ident.to_string().as_str() {
                     "I16" => Some(NativeType::I16),
+                    "i8" => Some(NativeType::I8),
                     "u8" => Some(NativeType::U8),
                     "U16" => Some(NativeType::U16),
                     "U32" => Some(NativeType::U32),

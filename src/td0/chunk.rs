@@ -209,6 +209,7 @@ where
 #[derive(Debug, PartialEq)]
 pub enum ChunkItemValue {
     EnumStr(&'static str),
+    I8(i8),
     I16(i16),
     Slice(Box<[u8]>),
     TD0Decimal(IntEncodedDecimal),
@@ -226,10 +227,11 @@ impl ChunkItemValue {
 }
 
 pub enum ChunkItemValueRaw {
-    U8(u8),
-    U16(u16),
     I16(i16),
+    I8(i8),
     Slice(Box<[u8]>),
+    U16(u16),
+    U8(u8),
 }
 
 impl fmt::Display for ChunkItemValue {
@@ -237,6 +239,7 @@ impl fmt::Display for ChunkItemValue {
         let repr: String = match self {
             ChunkItemValue::TD0Decimal(val) => val.to_string(),
             ChunkItemValue::U16(val) => val.to_string(),
+            ChunkItemValue::I8(val) => val.to_string(),
             ChunkItemValue::I16(val) => val.to_string(),
             ChunkItemValue::U8(val) => val.to_string(),
             ChunkItemValue::Text(val) => val.to_string(),

@@ -157,6 +157,7 @@ enum TD0FieldType {
     TD0FieldTypeTD0Decimal(TD0FieldTypeTD0Decimal),
     TD0FieldTypeEnumStr(TD0FieldTypeEnumStr),
     TD0FieldTypeI16(TD0FieldTypeNone),
+    TD0FieldTypeI8(TD0FieldTypeNone),
     TD0FieldTypeText(TD0FieldTypeText),
     TD0FieldTypeU16(TD0FieldTypeNone),
     TD0FieldTypeU8(TD0FieldTypeNone),
@@ -197,6 +198,7 @@ impl TryFrom<&Field> for TD0Field {
             }
             "U8" => TD0FieldType::TD0FieldTypeU8(TD0FieldTypeNone {}),
             "I16" => TD0FieldType::TD0FieldTypeI16(TD0FieldTypeNone {}),
+            "I8" => TD0FieldType::TD0FieldTypeI8(TD0FieldTypeNone {}),
             "U16" => TD0FieldType::TD0FieldTypeU16(TD0FieldTypeNone {}),
             "Slice" => TD0FieldTypeSlice(TD0FieldTypeNone {}),
             "Volume" => TD0FieldType::TD0FieldTypeVolume(TD0FieldTypeNone {}),
@@ -232,7 +234,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
 
     output.extend(match native_type {
         NativeType::I16 => quote!(I16::from(0)),
-        NativeType::U8 | NativeType::U32 => quote!(0),
+        NativeType::I8 | NativeType::U8 | NativeType::U32 => quote!(0),
         NativeType::U16 => {
             let u16_default: u16 = match TD0Field::try_from(field) {
                 Ok(td0field) => match td0field.attr {
@@ -376,6 +378,7 @@ fn build_getter_expr(td0field: &TD0Field) -> Expr {
             parse_quote!(Some(ChunkItemValue::U16(self.#ident.get())))
         }
         TD0FieldType::TD0FieldTypeU8(_) => parse_quote!(Some(ChunkItemValue::U8(self.#ident))),
+        TD0FieldType::TD0FieldTypeI8(_) => parse_quote!(Some(ChunkItemValue::I8(self.#ident))),
         TD0FieldType::TD0FieldTypeTD0Decimal(attr) => {
             let min = attr.min.to_string();
             let max = attr.max.to_string();
@@ -383,7 +386,7 @@ fn build_getter_expr(td0field: &TD0Field) -> Expr {
                 Some(
                     ChunkItemValue::TD0Decimal(
                         IntEncodedDecimal::new_from_parts_raw(
-                            self.#ident.get(),
+                            #struct_get_expr,
                             &rust_decimal::Decimal::from_str_exact(#min).unwrap_or(rust_decimal::Decimal::MIN),
                             &rust_decimal::Decimal::from_str_exact(#max).unwrap_or(rust_decimal::Decimal::MAX),
                         ).ok()?
@@ -413,6 +416,7 @@ fn build_getter_expr_raw(td0field: &TD0Field) -> Expr {
     match td0field.native_type {
         NativeType::I16 => parse_quote!(Some(ChunkItemValueRaw::I16(self.#ident.get()))),
         NativeType::U8 => parse_quote!(Some(ChunkItemValueRaw::U8(self.#ident))),
+        NativeType::I8 => parse_quote!(Some(ChunkItemValueRaw::I8(self.#ident))),
         NativeType::U16 => parse_quote!(Some(ChunkItemValueRaw::U16(self.#ident.get()))),
         NativeType::U32 => parse_quote!(Some(ChunkItemValueRaw::U32(self.#ident.get()))),
         NativeType::Slice(_) => {
@@ -500,6 +504,12 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 Ok(())
             }
         ),
+        TD0FieldType::TD0FieldTypeI8(_) => parse_quote!(
+            (#ident_str, ChunkItemValue::I8(val)) => {
+                self.#ident = val.clone();
+                Ok(())
+            }
+        ),
     }
 }
 
@@ -526,6 +536,12 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
                 }
             )
         }
+        NativeType::I8 => parse_quote!(
+            (#ident_str, ChunkItemValueRaw::I8(val)) => {
+                self.#ident = val.clone();
+                Ok(())
+            }
+        ),
         NativeType::U8 => parse_quote!(
             (#ident_str, ChunkItemValueRaw::U8(val)) => {
                 self.#ident = val.clone();
