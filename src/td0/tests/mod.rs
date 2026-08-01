@@ -66,7 +66,7 @@ fn test_create_struct() {
         ts.get_value("tempo"),
         Some(ChunkItemValue::TD0Decimal(
             IntEncodedDecimal::new_from_parts_raw(
-                20,
+                20u8,
                 &Decimal::from_str_exact("20.0").unwrap(),
                 &Decimal::from_str_exact("260.0").unwrap(),
             )

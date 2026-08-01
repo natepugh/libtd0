@@ -79,8 +79,11 @@ impl IntEncodedDecimal {
         Self::validate_impl_range(&self.val, &self.min, &self.max)
     }
 
-    pub fn new_from_parts_raw(val: u16, min: &Decimal, max: &Decimal) -> Result<Self, TD0Error> {
-        let dec_val: Decimal = Decimal::from_u16(val).expect("u16 should fit in a Decimal");
+    pub fn new_from_parts_raw<T>(val: T, min: &Decimal, max: &Decimal) -> Result<Self, TD0Error>
+    where
+        T: Into<u128>,
+    {
+        let dec_val: Decimal = Decimal::from_u128(val.into()).expect("Should fit in a Decimal");
         Ok(Self::new_from_parts(&dec_val, min, max)?)
     }
 
@@ -91,6 +94,15 @@ impl IntEncodedDecimal {
             min: min.clone(),
             max: max.clone(),
         })
+    }
+}
+
+impl TryInto<u8> for IntEncodedDecimal {
+    type Error = <Decimal as TryInto<u8>>::Error;
+
+    fn try_into(self) -> Result<u8, Self::Error> {
+        let myval: Decimal = self.val.mul(Decimal::from(10)).round();
+        Ok(myval.try_into()?)
     }
 }
 

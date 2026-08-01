@@ -382,6 +382,11 @@ fn build_getter_expr(td0field: &TD0Field) -> Expr {
         TD0FieldType::TD0FieldTypeTD0Decimal(attr) => {
             let min = attr.min.to_string();
             let max = attr.max.to_string();
+            let struct_get_expr: Expr = match td0field.native_type {
+                NativeType::U8 | NativeType::I8 => parse_quote!(self.#ident),
+                _ => parse_quote!(self.#ident.get()),
+            };
+
             parse_quote!(
                 Some(
                     ChunkItemValue::TD0Decimal(
@@ -488,13 +493,13 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
         ),
         TD0FieldType::TD0FieldTypeI16(_) => parse_quote!(
             (#ident_str, ChunkItemValue::I16(val)) => {
-                self.#ident = val.into();
+                self.#ident = val.clone().into();
                 Ok(())
             }
         ),
         TD0FieldType::TD0FieldTypeU16(_) => parse_quote!(
             (#ident_str, ChunkItemValue::U16(val)) => {
-                self.#ident = val.into();
+                self.#ident = val.clone().into();
                 Ok(())
             }
         ),
