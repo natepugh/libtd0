@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum TD0Error {
     #[error("Checksum mismatch")]
     ChecksumMismatchError,
@@ -28,6 +28,9 @@ pub enum TD0Error {
 
     #[error("Invalid TD0 tag")]
     InvalidTD0TagError,
+
+    #[error("{message}")]
+    InputError { message: String },
 
     #[error("Invalid raw data for {field}")]
     RawDataError { field: String },

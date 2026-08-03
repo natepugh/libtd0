@@ -171,6 +171,17 @@ impl TD0File {
         };
     }
 
+    pub fn get_chunk_item_default(
+        &self,
+        chunk_name: &str,
+    ) -> Option<Box<dyn ChunkItem>> {
+        match chunk_name {
+            "HDRa" => Some(Box::new(HDRaItem::default())),
+            "KITa" => Some(Box::new(KITaItem::default())),
+            _ => None
+        }
+    }
+
     pub fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]> {
         let chunk_tag = self.get_tag(chunk_name)?;
         println!(
