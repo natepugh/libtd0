@@ -4,7 +4,7 @@ use rust_decimal::prelude::FromPrimitive;
 use std::collections::HashMap;
 use std::convert::{From, TryInto};
 use std::fmt;
-use std::ops::Mul;
+use std::ops::{Div, Mul};
 use std::str::FromStr;
 use zerocopy::{FromBytes, I16, LittleEndian, U16, U32};
 use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
@@ -60,7 +60,15 @@ impl fmt::Display for IntEncodedDecimal {
 }
 
 impl IntEncodedDecimal {
-    fn validate_impl_range(val: &Decimal, min: &Decimal, max: &Decimal) -> Result<(), TD0Error> {
+    fn raw_to_decimal<T>(val: T) -> Decimal
+    where
+        T: Into<Decimal> + Div,
+    {
+        // Scale the int val to the decimal (** -1)
+        Into::<Decimal>::into(val).div(Decimal::from(10)).round()
+    }
+
+    fn validate_impl_range(val: &Decimal, min: &Decimal, max: &Decimal) -> TD0Result<()> {
         if val.lt(min) || val.gt(max) {
             Err(TD0Error::ConvertRangeError {
                 min: min.as_i128(),
@@ -81,9 +89,9 @@ impl IntEncodedDecimal {
 
     pub fn new_from_parts_raw<T>(val: T, min: &Decimal, max: &Decimal) -> Result<Self, TD0Error>
     where
-        T: Into<u128>,
+        T: Into<Decimal> + Div,
     {
-        let dec_val: Decimal = Decimal::from_u128(val.into()).expect("Should fit in a Decimal");
+        let dec_val: Decimal = IntEncodedDecimal::raw_to_decimal(val);
         Ok(Self::new_from_parts(&dec_val, min, max)?)
     }
 
@@ -215,8 +223,6 @@ where
         Ok(myval.into())
     }
 }
-
-// impl TryFrom<I16<T>> for Volume
 
 #[derive(Debug, PartialEq)]
 pub enum ChunkItemValue {
@@ -555,6 +561,20 @@ mod tests {
     use std::debug_assert_matches;
 
     use super::*;
+    #[test]
+    fn test_int_encoded_decimal_from_u16() {
+        let actual = IntEncodedDecimal::new_from_parts_raw(
+            200u16,
+            &Decimal::from_str_exact("20.0").expect("Test is broken."),
+            &Decimal::from_str_exact("20.0").expect("Test is broken"),
+        )
+        .expect("Should create an IntEncodedDecimal.");
+        assert_eq!(
+            actual.get_val(),
+            &Decimal::from_str_exact("20.0").expect("Test is broken"),
+            "Properly converts u16"
+        );
+    }
 
     #[test]
     fn test_volume_from_i16() {

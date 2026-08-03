@@ -1,3 +1,5 @@
+use std::ops::Mul;
+
 use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 use rust_decimal::Decimal;
@@ -109,8 +111,14 @@ impl TD0FieldTypeTD0Decimal {
     pub fn clamp_u16(&self, val: u16) -> u16 {
         u16::clamp(
             val,
-            self.min.try_into().unwrap_or(u16::MIN),
-            self.max.try_into().unwrap_or(u16::MAX),
+            self.min
+                .mul(Decimal::from(10))
+                .try_into()
+                .unwrap_or(u16::MIN),
+            self.max
+                .mul(Decimal::from(10))
+                .try_into()
+                .unwrap_or(u16::MAX),
         )
     }
 }
