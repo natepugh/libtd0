@@ -239,8 +239,13 @@ pub enum ChunkItemValue {
 
 impl ChunkItemValue {
     pub fn text_from_u8_array(source: &[u8], pad_val: &u8) -> Self {
-        let rpos = source.iter().rposition(|p| p != pad_val).unwrap_or(0);
-        Self::Text(String::from_utf8_lossy(&source[0..rpos]).to_string())
+        for pos in (0..source.len()).rev() {
+            if source[pos] != *pad_val {
+                return Self::Text(String::from_utf8_lossy(&source[..=pos]).to_string());
+            }
+        }
+
+        Self::Text("".to_string())
     }
 }
 
@@ -388,10 +393,9 @@ pub fn copy_ascii_str_to_native(
         });
     }
 
-    let dest_len = dest.len();
     let src_bytes = src.as_bytes();
+    dest[src_bytes.len()..].fill(pad_byte);
     dest[..src_bytes.len()].copy_from_slice(&src_bytes);
-    dest[..dest_len - src_bytes.len()].fill(pad_byte);
     Ok(())
 }
 
@@ -412,18 +416,14 @@ pub fn copy_slice_to_native_padded(
     dest_name: &str,
     pad: u8,
 ) -> TD0Result<()> {
-    let padding_sz = dest.len().saturating_sub(src.len());
-    let dest_len = dest.len();
-
-    if src.len() > dest_len {
+    if src.len() > dest.len() {
         return Err(TD0Error::ConvertToNativeTypeError {
             field: dest_name.to_string(),
             reason: "src length > dest length".to_string(),
         });
     }
-    let padding: Vec<u8> = [pad].repeat(padding_sz);
-    dest[dest_len..].clone_from_slice(&padding);
-    dest[0..dest_len].clone_from_slice(src);
+    dest[src.len()..].fill(pad);
+    dest[..src.len()].clone_from_slice(src);
     Ok(())
 }
 
@@ -697,8 +697,19 @@ mod tests {
 
     #[test]
     fn test_chunk_item_val_from_u8_array() {
-        let val = ChunkItemValue::text_from_u8_array(&[32, 78, 48, 99, 128, 0, 0, 0, 0], &0);
-        assert_eq!(val, ChunkItemValue::Text(" N0c".to_string()));
+        let val = ChunkItemValue::text_from_u8_array(" Test \0\0\0\0".as_bytes(), &0);
+        assert_eq!(
+            val,
+            ChunkItemValue::Text(" Test ".to_string()),
+            "Should keep space chars before and after token."
+        );
+
+        let val = ChunkItemValue::text_from_u8_array("Test With Spaces".as_bytes(), &0x20);
+        assert_eq!(
+            val,
+            ChunkItemValue::Text("Test With Spaces".to_string()),
+            "Should keep all non-space chars af end of string."
+        );
     }
 
     #[test]
@@ -709,5 +720,82 @@ mod tests {
         } else {
             assert!(false, "failed");
         }
+    }
+
+    #[test]
+    fn test_copy_ascii_str_to_native() {
+        let mut dest = [0u8; 16];
+        let src: String = "I'm 16chars long".to_string();
+        let result = copy_ascii_str_to_native(&src, &mut dest, "test_buffer", 0x0);
+        assert_eq!(result, Ok(()), "Should not return an Err.");
+        assert_eq!(
+            String::from_utf8(dest.to_vec())
+                .expect("Test broken")
+                .as_str(),
+            "I'm 16chars long",
+            "Should properly copy to dest."
+        );
+
+        let src: String = "Needs padding".to_string();
+        let result = copy_ascii_str_to_native(&src, &mut dest, "test_buffer", '.' as u8);
+        assert_eq!(result, Ok(()), "Testing padding. Should not return an Err.");
+        assert_eq!(
+            String::from_utf8(dest.to_vec())
+                .expect("Test broken")
+                .as_str(),
+            "Needs padding...",
+            "Should properly pad dest bytes."
+        );
+
+        debug_assert_matches!(
+            copy_ascii_str_to_native(
+                &"I'm 17 chars long".to_string(),
+                &mut dest,
+                "test_buffer",
+                0u8
+            ),
+            Err(TD0Error::ConvertToNativeTypeError { .. }),
+            "Error if source string is too long."
+        );
+
+        debug_assert_matches!(
+            copy_ascii_str_to_native(&"I'm not äscii".to_string(), &mut dest, "test_buffer", 0u8),
+            Err(TD0Error::ConvertToNativeTypeError { .. }),
+            "Error if non-ascii chars are in source.."
+        );
+    }
+
+    #[test]
+    fn test_copy_slice_to_native_padded() {
+        let mut dest = [0u8; 16];
+        let src: &[u8] = "I'm 16chars long".as_bytes();
+
+        let result = copy_slice_to_native_padded(src, &mut dest, "test_buffer", 0);
+        assert_eq!(result, Ok(()), "Should not return an error.");
+        assert_eq!(&dest, src);
+
+        let result = copy_slice_to_native_padded(
+            "Needs padding".as_bytes(),
+            &mut dest,
+            "test_buffer",
+            '.' as u8,
+        );
+        assert_eq!(
+            result,
+            Ok(()),
+            "Testing padding. Should not return an error."
+        );
+        assert_eq!(&dest, "Needs padding...".as_bytes());
+
+        debug_assert_matches!(
+            copy_slice_to_native_padded(
+                "I'm 17 chars long".as_bytes(),
+                &mut dest,
+                "test_buffer",
+                0u8
+            ),
+            Err(TD0Error::ConvertToNativeTypeError { .. }),
+            "Error if source slice is too long."
+        );
     }
 }
