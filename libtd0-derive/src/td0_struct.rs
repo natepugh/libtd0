@@ -584,7 +584,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             parse_quote!(
                 (#ident_str, ChunkItemValue::EnumStr(val)) => {
                     let pos : &usize = &#collection.iter().position(|item| item == val)
-                        .ok_or_else(|| TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("Invalid value: {}", val)})?;
+                        .ok_or_else(|| crate::td0::result::TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("Invalid value: {}", val)})?;
                     self.#ident = u8::try_from(*pos).expect("Collection index must be in range.");
                     Ok(())
                 }
@@ -602,7 +602,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                             &rust_decimal::Decimal::from_str_exact(#max).unwrap_or(rust_decimal::Decimal::MAX),
                         )?;
                     self.#ident = validated.try_into().map_err(|err|
-                        TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("{}", err)}
+                        crate::td0::result::TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("{}", err)}
                     )?;
                     Ok(())
                 }
@@ -613,7 +613,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 (#ident_str, ChunkItemValue::Volume(val)) => {
                     val.validate()?;
                     self.#ident = val.clone().try_into().map_err(|err|
-                        TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("{}", err)}
+                        crate::td0::result::TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("{}", err)}
                     )?;
                     Ok(())
                 }
@@ -621,7 +621,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
         }
         TD0FieldType::TD0FieldTypeSlice(_) => parse_quote!(
             (#ident_str, ..) => {
-                Err(TD0Error::ConvertToNativeTypeError {
+                Err(crate::td0::result::TD0Error::ConvertToNativeTypeError {
                     field: field.to_string(),
                     reason: "Field may not be set.".to_string(),
                 })
@@ -684,7 +684,7 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
     let ident = &td0field.ident;
     let ident_str = ident.to_string();
     let raw_data_error: Expr =
-        parse_quote!(TD0Error::RawDataError{ field: #ident_str.to_string() });
+        parse_quote!(crate::td0::result::TD0Error::RawDataError{ field: #ident_str.to_string() });
 
     match td0field.native_type {
         NativeType::I16 => {
@@ -811,7 +811,7 @@ fn build_chunkitem_get_value_raw(td0fields: &Vec<TD0Field>) -> ImplItemFn {
 
 fn build_chunkitem_set_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
-        fn set_value(&mut self, field: &str, value: &ChunkItemValue) -> TD0Result<()> {
+        fn set_value(&mut self, field: &str, value: &ChunkItemValue) -> crate::td0::result::TD0Result<()> {
             match (field, value) {}
         }
     );
@@ -821,7 +821,7 @@ fn build_chunkitem_set_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
         .map(|td0field| build_setter_expr(td0field))
         .collect();
     set_fields_clauses.push(parse_quote!(
-        _ => Err(TD0Error::ConvertToNativeTypeError {
+        _ => Err(crate::td0::result::TD0Error::ConvertToNativeTypeError {
             field: field.to_string(),
             reason: "Unknown field or improper value type.".to_string(),
         })
@@ -835,7 +835,7 @@ fn build_chunkitem_set_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
 
 fn build_chunkitem_set_value_raw(td0fields: &Vec<TD0Field>) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
-        fn set_value_raw(&mut self, field: &str, value: &ChunkItemValueRaw) -> TD0Result<()> {
+        fn set_value_raw(&mut self, field: &str, value: &ChunkItemValueRaw) -> crate::td0::result::TD0Result<()> {
             match (field, value) {}
         }
     );
@@ -845,7 +845,7 @@ fn build_chunkitem_set_value_raw(td0fields: &Vec<TD0Field>) -> ImplItemFn {
         .map(|td0field| build_setter_expr_raw(td0field))
         .collect();
     set_fields_clauses.push(parse_quote!(
-        _ => Err(TD0Error::RawDataError{ field: field.to_string() })
+        _ => Err(crate::td0::result::TD0Error::RawDataError{ field: field.to_string() })
     ));
 
     for arm in set_fields_clauses.iter() {
