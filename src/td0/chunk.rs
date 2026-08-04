@@ -16,6 +16,49 @@ const VOLUME_MAX: Decimal = Decimal::from_parts(6, 0, 0, false, 0);
 const VOLUME_MINUS_INF: Decimal = Decimal::from_parts(601, 0, 0, true, 1);
 const VOLUME_MINUS_INF_DISPLAY: &str = "-Infinity";
 
+pub trait HasMinAndMax {
+    const MIN: Self;
+    const MAX: Self;
+}
+
+impl HasMinAndMax for u16 {
+    const MIN: Self = u16::MIN;
+    const MAX: Self = u16::MAX;
+}
+
+impl HasMinAndMax for u8 {
+    const MIN: Self = u8::MIN;
+    const MAX: Self = u8::MAX;
+}
+
+impl HasMinAndMax for i8 {
+    const MIN: Self = i8::MIN;
+    const MAX: Self = i8::MAX;
+}
+
+impl<T> HasMinAndMax for U16<T> {
+    const MIN: Self = U16::MIN;
+    const MAX: Self = U16::MAX;
+}
+
+pub fn validate_is_in_range<T: Ord + HasMinAndMax + Into<i128> + Copy>(
+    val: T,
+    min: Option<T>,
+    max: Option<T>,
+) -> TD0Result<()> {
+    let min = min.unwrap_or(T::MIN);
+    let max = max.unwrap_or(T::MAX);
+
+    if val != val.clone().clamp(min, max) {
+        Err(TD0Error::ConvertRangeError {
+            min: min.into(),
+            max: max.into(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Chunk {
     pub pos: usize,
@@ -227,8 +270,8 @@ where
 #[derive(Debug, PartialEq)]
 pub enum ChunkItemValue {
     EnumStr(&'static str),
-    I8(i8),
     I16(i16),
+    I8(i8),
     Slice(Box<[u8]>),
     TD0Decimal(IntEncodedDecimal),
     Text(String),

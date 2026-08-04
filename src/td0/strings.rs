@@ -309,6 +309,11 @@ pub const MFX: [&str; 53] = [
     "BPM LOOPER",
 ];
 
+pub const EXP_PEDAL_MIDI_CHANNELS: [&str; 16] = [
+    "CH 1", "CH 2", "CH 3", "CH 4", "CH 5", "CH 6", "CH 7", "CH 8", "CH 9", "CH 10", "CH 11",
+    "CH 12", "CH 13", "CH 14", "CH 15", "CH 16",
+];
+
 pub const MIDI_CHANNELS: [&str; 17] = [
     "CH 1", "CH 2", "CH 3", "CH 4", "CH 5", "CH 6", "CH 7", "CH 8", "CH 9", "CH 10", "CH 11",
     "CH 12", "CH 13", "CH 14", "CH 15", "CH 16", "GLOBAL",
@@ -316,6 +321,7 @@ pub const MIDI_CHANNELS: [&str; 17] = [
 
 pub const OUTPUT_ROUTES: [&str; 2] = ["PHONES+MASTER", "PHONES ONLY"];
 pub const SIDECHAIN_ROUTES: [&str; 2] = ["MASTER+PHONES", "PHONES-ONLY"];
+pub const MFX_ROUTES: [&str; 3] = ["MASTER+PHONES", "PHONES-ONLY", "SIDE CHAIN"];
 
 pub const PAD_EDIT_KNOB_GROUPS: [&str; 8] = [
     "MFX1",
@@ -398,7 +404,7 @@ pub const SEQUENCE_OPTS: [&str; 21] = [
     "SKIP",
 ];
 
-pub const SWITCH: [&str; 2] = ["Off", "On"];
+pub const OFF_ON: [&str; 2] = ["Off", "On"];
 
 pub const SYS_KIT_SWITCH: [&str; 2] = ["SYSTEM", "KIT"];
 

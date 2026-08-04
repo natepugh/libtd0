@@ -25,7 +25,14 @@ pub struct TestStruct {
     #[td0_field(field_type = "EnumStr", collection = "SYS_KIT_SWITCH")]
     click_setting: u8,
 
-    #[td0_field(field_type = "U8")]
+    #[td0_field(field_type = "I8", min = -15, max = 15)]
+    click_pan: i8, // Click pan: -15 = 100% L, 15 = 100% R.  Only int vals, -15 .. 0 .. 15
+
+    // Click volumes are 0 - 127
+    #[td0_field(field_type = "U8", max = 127)]
+    click_volume_accent: u8, // Click Accent volume
+
+    #[td0_field(field_type = "U8", max = 127)]
     unknown_1: u8,
 
     #[repeat(count = 4, format = "mfx_{}_routing")]

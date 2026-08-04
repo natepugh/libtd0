@@ -34,6 +34,22 @@ impl TryFrom<&AttrKeyValue> for u8 {
     }
 }
 
+impl TryFrom<&AttrKeyValue> for u16 {
+    type Error = syn::Error;
+
+    fn try_from(kv_pair: &AttrKeyValue) -> Result<Self, <Self as TryFrom<&AttrKeyValue>>::Error> {
+        match &kv_pair.val {
+            Lit::Int(lit_int) => lit_int
+                .base10_parse()
+                .map_err(|err| syn::Error::new_spanned(lit_int, err.to_string())),
+            _ => Err(syn::Error::new_spanned(
+                &kv_pair.val,
+                "Must be an Integer type.",
+            )),
+        }
+    }
+}
+
 impl TryFrom<&AttrKeyValue> for i8 {
     type Error = syn::Error;
 
