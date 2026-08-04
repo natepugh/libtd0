@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use zerocopy::FromBytes;
 
 use crate::td0::{
-    chunks::{Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, CURaItem},
+    chunks::{Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, CURaItem, STLaItem},
     header::{OFFSET_BYTES_REMAINING, SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, TDO_MAGIC},
     result::{TD0Error, TD0Result},
 };
@@ -169,6 +169,10 @@ impl TD0File {
                 &self.buf[start..end],
                 Some("CURaItem"),
             )?))),
+            "STLa" => Ok(Some(Box::new(STLaItem::from_bytes(
+                &self.buf[start..end],
+                Some("STLaItem"),
+            )?))),
             _ => Ok(None),
         };
     }
@@ -181,6 +185,7 @@ impl TD0File {
             "HDRa" => Some(Box::new(HDRaItem::default())),
             "KITa" => Some(Box::new(KITaItem::default())),
             "CURa" => Some(Box::new(CURaItem::default())),
+            "STLa" => Some(Box::new(STLaItem::default())),
             _ => None
         }
     }
@@ -223,6 +228,7 @@ pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
         "HDRa" => Some(Box::new(HDRaItem::default())),
         "KITa" => Some(Box::new(KITaItem::default())),
         "CURa" => Some(Box::new(CURaItem::default())),
+        "STLa" => Some(Box::new(STLaItem::default())),
         _ => None,
     }
 }
