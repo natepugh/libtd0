@@ -2,7 +2,7 @@ use zerocopy::{FromBytes, LittleEndian, U16, U32};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 use crate::td0::{
-    chunk::ChunkHeader,
+    chunks::ChunkHeader,
     result::{TD0Error, TD0Result},
 };
 use std::{collections::HashMap, fmt};

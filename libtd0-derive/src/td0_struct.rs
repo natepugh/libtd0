@@ -575,7 +575,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             let pad_byte = attr.pad_byte.unwrap_or(0u8);
             parse_quote!(
                 (#ident_str, ChunkItemValue::Text(val)) => {
-                    crate::td0::chunk::copy_ascii_str_to_native(val, &mut self.#ident, field, #pad_byte)
+                    crate::td0::chunks::common::copy_ascii_str_to_native(val, &mut self.#ident, field, #pad_byte)
                 }
             )
         }
@@ -652,7 +652,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
 
             parse_quote!(
                 (#ident_str, ChunkItemValue::U8(val)) => {
-                    crate::td0::chunk::validate_is_in_range(*val, #min_expr, #max_expr)?;
+                    crate::td0::chunks::common::validate_is_in_range(*val, #min_expr, #max_expr)?;
                     self.#ident = val.clone();
                     Ok(())
                 }
@@ -671,7 +671,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
 
             parse_quote!(
                 (#ident_str, ChunkItemValue::I8(val)) => {
-                    crate::td0::chunk::validate_is_in_range(*val, #min_expr, #max_expr)?;
+                    crate::td0::chunks::common::validate_is_in_range(*val, #min_expr, #max_expr)?;
                     self.#ident = val.clone();
                     Ok(())
                 }
@@ -747,10 +747,10 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
             let inner: Stmt = match &td0field.attr {
                 TD0FieldType::TD0FieldTypeText(attr) => {
                     let pad = attr.pad_byte.unwrap_or(0);
-                    parse_quote!(crate::td0::chunk::copy_slice_to_native_padded(val, &mut self.#ident, #ident_str, #pad)?;)
+                    parse_quote!(crate::td0::chunks::common::copy_slice_to_native_padded(val, &mut self.#ident, #ident_str, #pad)?;)
                 }
                 _ => {
-                    parse_quote!(crate::td0::chunk::copy_slice_to_native(val, &mut self.#ident, #ident_str)?;)
+                    parse_quote!(crate::td0::chunks::common::copy_slice_to_native(val, &mut self.#ident, #ident_str)?;)
                 }
             };
             parse_quote!(

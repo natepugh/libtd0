@@ -3,15 +3,13 @@ use std::collections::{HashMap, HashSet};
 use zerocopy::FromBytes;
 
 use crate::td0::{
-    chunk::{Chunk, ChunkHeader, ChunkItem, HDRaItem},
+    chunks::{Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem},
     header::{OFFSET_BYTES_REMAINING, SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, TDO_MAGIC},
-    kit::KITaItem,
     result::{TD0Error, TD0Result},
 };
 
-pub mod chunk;
+pub mod chunks;
 pub mod header;
-pub mod kit;
 pub mod result;
 mod strings;
 mod tests;

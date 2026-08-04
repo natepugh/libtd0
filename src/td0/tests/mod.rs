@@ -2,7 +2,7 @@
 use zerocopy::{I16, LittleEndian, U16};
 use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
 
-use super::chunk::{ChunkItem, ChunkItemValue, ChunkItemValueRaw, IntEncodedDecimal, Volume};
+use super::chunks::{ChunkItem, ChunkItemValue, ChunkItemValueRaw, IntEncodedDecimal, Volume};
 use super::strings::{LED_COLORS, SYS_KIT_SWITCH};
 use crate::td0::result::{TD0Error, TD0Result};
 use libtd0_derive::TD0ChunkItem;
