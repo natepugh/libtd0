@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use zerocopy::FromBytes;
 
 use crate::td0::{
-    chunks::{Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem},
+    chunks::{Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, CURaItem},
     header::{OFFSET_BYTES_REMAINING, SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, TDO_MAGIC},
     result::{TD0Error, TD0Result},
 };
@@ -165,6 +165,10 @@ impl TD0File {
                 &self.buf[start..end],
                 Some("KITaItem"),
             )?))),
+            "CURa" => Ok(Some(Box::new(CURaItem::from_bytes(
+                &self.buf[start..end],
+                Some("CURaItem"),
+            )?))),
             _ => Ok(None),
         };
     }
@@ -176,6 +180,7 @@ impl TD0File {
         match chunk_name {
             "HDRa" => Some(Box::new(HDRaItem::default())),
             "KITa" => Some(Box::new(KITaItem::default())),
+            "CURa" => Some(Box::new(CURaItem::default())),
             _ => None
         }
     }
@@ -217,14 +222,14 @@ pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
     match chunk_name {
         "HDRa" => Some(Box::new(HDRaItem::default())),
         "KITa" => Some(Box::new(KITaItem::default())),
+        "CURa" => Some(Box::new(CURaItem::default())),
         _ => None,
     }
 }
 
 pub fn get_chunk_item_fields(chunk_name: &str) -> Option<&'static [&'static str]> {
-    match chunk_name {
-        "HDRa" => Some(HDRaItem::default().get_fields()),
-        "KITa" => Some(KITaItem::default().get_fields()),
-        _ => None,
+    match get_default_chunk_item(chunk_name) {
+        Some(default_item) => Some(default_item.get_fields()),
+        None => None,
     }
 }
