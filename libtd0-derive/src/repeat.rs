@@ -134,7 +134,6 @@ pub fn repeat_fields(
                 let attr = RepeatSectionAttr::try_from(section_attr.expect("Infallible"))
                     .expect("Infallible");
                 push_section_repeated(&mut new_fields, &new_section_fields, &attr);
-                push_section_repeated(&mut new_fields, &new_section_fields, &attr);
                 section_attr = None;
                 section_last_attr = None;
             }
