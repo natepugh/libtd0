@@ -26,6 +26,11 @@ impl HasMinAndMax for u16 {
     const MAX: Self = u16::MAX;
 }
 
+impl HasMinAndMax for u32 {
+    const MIN: Self = u32::MIN;
+    const MAX: Self = u32::MAX;
+}
+
 impl HasMinAndMax for u8 {
     const MIN: Self = u8::MIN;
     const MAX: Self = u8::MAX;
@@ -44,6 +49,11 @@ impl HasMinAndMax for i16 {
 impl<T> HasMinAndMax for U16<T> {
     const MIN: Self = U16::MIN;
     const MAX: Self = U16::MAX;
+}
+
+impl<T> HasMinAndMax for U32<T> {
+    const MIN: Self = U32::MIN;
+    const MAX: Self = U32::MAX;
 }
 
 pub fn validate_is_in_range<T: Ord + HasMinAndMax + Into<i128> + Copy>(
@@ -349,6 +359,7 @@ pub enum ChunkItemValue {
     TD0Decimal(IntEncodedDecimal),
     Text(String),
     U16(u16),
+    U32(u32),
     U8(u8),
     Volume(Volume),
 }
@@ -371,6 +382,7 @@ pub enum ChunkItemValueRaw {
     I8(i8),
     Slice(Box<[u8]>),
     U16(u16),
+    U32(u32),
     U8(u8),
 }
 
@@ -379,6 +391,7 @@ impl fmt::Display for ChunkItemValue {
         let repr: String = match self {
             ChunkItemValue::TD0Decimal(val) => val.to_string(),
             ChunkItemValue::U16(val) => val.to_string(),
+            ChunkItemValue::U32(val) => val.to_string(),
             ChunkItemValue::I8(val) => val.to_string(),
             ChunkItemValue::I16(val) => val.to_string(),
             ChunkItemValue::U8(val) => val.to_string(),

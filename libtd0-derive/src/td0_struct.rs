@@ -289,6 +289,39 @@ impl TryFrom<&Attribute> for TD0FieldTypeMaybeBoundedU16 {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+struct TD0FieldTypeMaybeBoundedU32 {
+    min: Option<u32>,
+    max: Option<u32>,
+}
+
+impl TD0FieldTypeMaybeBoundedU32 {
+    fn clamp(&self, val: u32) -> u32 {
+        val.clamp(self.min.unwrap_or(u32::MIN), self.max.unwrap_or(u32::MAX))
+    }
+}
+
+impl TryFrom<&Attribute> for TD0FieldTypeMaybeBoundedU32 {
+    type Error = syn::Error;
+
+    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
+        static REQUIRED_NAMES: [&str; 0] = [];
+        static VALID_NAMES: [&str; 2] = ["min", "max"];
+
+        let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
+        Ok(Self {
+            min: match kv_list.find_by_name("min") {
+                Some(pair) => Some(pair.try_into()?),
+                None => None,
+            },
+            max: match kv_list.find_by_name("max") {
+                Some(pair) => Some(pair.try_into()?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 struct TD0FieldTypeMaybeBoundedI16 {
     min: Option<i16>,
     max: Option<i16>,
@@ -330,6 +363,7 @@ enum TD0FieldType {
     TD0FieldTypeTD0Decimal(TD0FieldTypeTD0Decimal),
     TD0FieldTypeText(TD0FieldTypeText),
     TD0FieldTypeU16(TD0FieldTypeMaybeBoundedU16),
+    TD0FieldTypeU32(TD0FieldTypeMaybeBoundedU32),
     TD0FieldTypeU8(TD0FieldTypeMaybeBoundedU8),
     TD0FieldTypeVolume(TD0FieldTypeNone),
 }
@@ -369,6 +403,7 @@ impl TryFrom<&Field> for TD0Field {
                 TD0FieldType::TD0FieldTypeTD0Decimal(TD0FieldTypeTD0Decimal::try_from(&attr)?)
             }
             "U16" => TD0FieldType::TD0FieldTypeU16(TD0FieldTypeMaybeBoundedU16::try_from(&attr)?),
+            "U32" => TD0FieldType::TD0FieldTypeU32(TD0FieldTypeMaybeBoundedU32::try_from(&attr)?),
             "U8" => TD0FieldType::TD0FieldTypeU8(TD0FieldTypeMaybeBoundedU8::try_from(&attr)?),
             "Volume" => TD0FieldType::TD0FieldTypeVolume(TD0FieldTypeNone {}),
             _ => {
@@ -432,7 +467,6 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
             };
             quote!(#u8_default)
         }
-        NativeType::U32 => quote!(0),
         NativeType::U16 => {
             let u16_default: u16 = match TD0Field::try_from(field) {
                 Ok(td0field) => match td0field.attr {
@@ -443,6 +477,16 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
                 Err(_) => 0,
             };
             quote!(U16::from(#u16_default))
+        }
+        NativeType::U32 => {
+            let u32_default: u32 = match TD0Field::try_from(field) {
+                Ok(td0field) => match td0field.attr {
+                    TD0FieldType::TD0FieldTypeU32(field_type) => field_type.clamp(0),
+                    _ => 0,
+                },
+                Err(_) => 0,
+            };
+            quote!(U32::from(#u32_default))
         }
         NativeType::Slice(slice) => {
             let size = slice.size;
@@ -575,6 +619,9 @@ fn build_getter_expr(td0field: &TD0Field) -> Expr {
         }
         TD0FieldType::TD0FieldTypeU16(_) => {
             parse_quote!(Some(ChunkItemValue::U16(self.#ident.get())))
+        }
+        TD0FieldType::TD0FieldTypeU32(_) => {
+            parse_quote!(Some(ChunkItemValue::U32(self.#ident.get())))
         }
         TD0FieldType::TD0FieldTypeU8(_) => parse_quote!(Some(ChunkItemValue::U8(self.#ident))),
         TD0FieldType::TD0FieldTypeI8(_) => parse_quote!(Some(ChunkItemValue::I8(self.#ident))),
@@ -768,6 +815,25 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 }
             )
         }
+        TD0FieldType::TD0FieldTypeU32(attr) => {
+            let min_expr: Expr = match attr.min {
+                Some(min_val) => parse_quote!(Some(#min_val)),
+                None => parse_quote!(None),
+            };
+
+            let max_expr: Expr = match attr.max {
+                Some(max_val) => parse_quote!(Some(#max_val)),
+                None => parse_quote!(None),
+            };
+
+            parse_quote!(
+                (#ident_str, ChunkItemValue::U32(val)) => {
+                    crate::td0::chunks::common::validate_is_in_range(*val, #min_expr, #max_expr)?;
+                    self.#ident = val.clone().into();
+                    Ok(())
+                }
+            )
+        }
         TD0FieldType::TD0FieldTypeU8(attr) => {
             let min_expr: Expr = match attr.min {
                 Some(min_val) => parse_quote!(Some(#min_val)),
@@ -844,7 +910,7 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
         }
         NativeType::U32 => parse_quote!(
             (#ident_str, ChunkItemValueRaw::U32(val)) => {
-                self.#ident = val.clone();
+                self.#ident = U32::from(val.clone());
                 Ok(())
             }
         ),

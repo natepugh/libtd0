@@ -5,7 +5,7 @@ use crate::td0::chunks::common::{
     VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DECIMAL, VOLUME_MINUS_INF_DISPLAY,
     VOLUME_MINUS_INF_I16, Volume,
 };
-use zerocopy::{I16, LittleEndian, U16};
+use zerocopy::{I16, LittleEndian, U16, U32};
 use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
 
 use super::chunks::{ChunkItem, ChunkItemValue, ChunkItemValueRaw, IntEncodedDecimal};
@@ -68,6 +68,12 @@ pub struct TestStruct {
     #[td0_field(field_type = "U16", min = 257, max = 65500)]
     u16_bounded: U16<LittleEndian>,
 
+    #[td0_field(field_type = "U32")]
+    u32_unbounded: U32<LittleEndian>,
+
+    #[td0_field(field_type = "U32", min = 65537, max = 655377)]
+    u32_bounded: U32<LittleEndian>,
+
     #[td0_field(field_type = "U8")]
     u8_unbounded: u8,
 
@@ -102,7 +108,7 @@ use fastnum::dec64;
 
 #[test]
 fn test_creates_expected_fields() {
-    let expected: [&str; 30] = [
+    let expected: [&str; 32] = [
         "enumstr_field",
         "i16_bounded",
         "i16_unbounded",
@@ -116,6 +122,8 @@ fn test_creates_expected_fields() {
         "zero_padded_text",
         "u16_unbounded",
         "u16_bounded",
+        "u32_unbounded",
+        "u32_bounded",
         "u8_unbounded",
         "u8_bounded_min_only",
         "u8_bounded_max_only",
@@ -198,6 +206,16 @@ fn test_expected_defaults() {
     assert_eq!(
         ts.get_value("u16_bounded"),
         Some((ChunkItemValue::U16(257))),
+        "Default 0 should be clamped to field min."
+    );
+    assert_eq!(
+        ts.get_value("u32_unbounded"),
+        Some((ChunkItemValue::U32(0))),
+        "Default 0 shouldn't be clamped."
+    );
+    assert_eq!(
+        ts.get_value("u32_bounded"),
+        Some((ChunkItemValue::U32(65537))),
         "Default 0 should be clamped to field min."
     );
     assert_eq!(
@@ -586,6 +604,39 @@ fn test_setters() {
         val_before,
         ts.get_value("u16_bounded"),
         "`u16_bounded` Setter should not change value on Error."
+    );
+
+    // u32_bounded: #[td0_field(field_type = "U16", min = 65537, max = 655377)]
+    assert_matches!(
+        ts.set_value("u32_bounded", &ChunkItemValue::U32(65537)),
+        Ok { .. },
+        "`u32_bounded` Bounded field setter should accept min value."
+    );
+    assert_matches!(
+        ts.set_value("u32_bounded", &ChunkItemValue::U32(655377)),
+        Ok { .. },
+        "`u32_bounded` Bounded field setter should accept max value."
+    );
+    assert_eq!(
+        ts.get_value("u32_bounded"),
+        Some(ChunkItemValue::U32(655377)),
+        "`u32_bounded` Setter/Getter round-trip should return the same value."
+    );
+    let val_before = ts.get_value("u32_bounded");
+    assert_matches!(
+        ts.set_value("u32_bounded", &ChunkItemValue::U32(65536)),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`u32_bounded` Bounded field setter should Error if less than min."
+    );
+    assert_matches!(
+        ts.set_value("u32_bounded", &ChunkItemValue::U32(655378)),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`u32_bounded` Bounded field setter should Error if greater than max."
+    );
+    assert_eq!(
+        val_before,
+        ts.get_value("u32_bounded"),
+        "`u32_bounded` Setter should not change value on Error."
     );
 
     //u8_unbounded: #[td0_field(field_type = "U8")]
