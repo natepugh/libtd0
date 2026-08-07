@@ -4,7 +4,8 @@ use std::assert_matches;
 use zerocopy::{I16, LittleEndian, U16};
 use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
 
-use super::chunks::{ChunkItem, ChunkItemValue, ChunkItemValueRaw, IntEncodedDecimal, Volume};
+use super::chunks::common::Volume;
+use super::chunks::{ChunkItem, ChunkItemValue, ChunkItemValueRaw, IntEncodedDecimal};
 use super::strings::{LED_COLORS, SYS_KIT_SWITCH};
 use fastnum::D64 as Decimal;
 use libtd0_core::result::{TD0Error, TD0Result};
@@ -73,6 +74,9 @@ pub struct TestStruct {
     #[td0_field(field_type = "U8", max = 142)]
     u8_bounded_max_only: u8,
 
+    #[td0_field(field_type = "Volume")]
+    volume_field: I16<LittleEndian>,
+
     #[repeat(count = 3, format = "repeat_field_{}_val")]
     #[td0_field(field_type = "U8")]
     repeat_field_1_val: u8,
@@ -90,12 +94,16 @@ pub struct TestStruct {
     val_3: u8,
 }
 
+use crate::td0::chunks::common::{
+    VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DECIMAL, VOLUME_MINUS_INF_DISPLAY,
+    VOLUME_MINUS_INF_I16,
+};
 #[cfg(test)]
 use fastnum::dec64;
 
 #[test]
 fn test_creates_expected_fields() {
-    let expected: [&str; 29] = [
+    let expected: [&str; 30] = [
         "enumstr_field",
         "i16_bounded",
         "i16_unbounded",
@@ -112,6 +120,7 @@ fn test_creates_expected_fields() {
         "u8_unbounded",
         "u8_bounded_min_only",
         "u8_bounded_max_only",
+        "volume_field",
         "repeat_field_1_val",
         "repeat_field_2_val",
         "repeat_field_3_val",
@@ -159,12 +168,11 @@ fn test_expected_defaults() {
         Some(ChunkItemValue::Slice(Box::new([0u8; 3]))),
         "Default slice is 0-filled."
     );
-    /*
     assert_eq!(
         ts.get_value("td0_decimal_bounded"),
-        Some(ChunkItemValue::TD0Decimal(IntEncodedDecimal::from(200u16))),
+        Some(ChunkItemValue::TD0Decimal(IntEncodedDecimal(dec64!(20.0)))),
         "TD0Decimal should clamp default 0 to field min."
-    ); */
+    );
     assert_eq!(
         ts.get_value("space_padded_text"),
         Some(ChunkItemValue::Text("".to_string())),
@@ -202,6 +210,11 @@ fn test_expected_defaults() {
         ts.get_value("u8_bounded_min_only"),
         Some((ChunkItemValue::U8(27))),
         "Default 0 should be clamped to field min."
+    );
+    assert_eq!(
+        ts.get_value("volume_field"),
+        Some((ChunkItemValue::Volume(Volume(dec64!(0))))),
+        "Default 0 shouldn't be clamped."
     );
 }
 
@@ -631,6 +644,86 @@ fn test_setters() {
         ts.set_value("u8_bounded_max_only", &ChunkItemValue::U8(u8::MIN)),
         Ok { .. },
         "`u8_bounded_max_only` Bounded_max_only field setter should accept u8 min value."
+    );
+
+    // volume_field: #[td0_field(field_type = "Volume")]
+    assert_matches!(
+        ts.set_value("volume_field", &ChunkItemValue::Volume(Volume(VOLUME_MIN))),
+        Ok { .. },
+        "`volume_field` Bounded field setter should accept min value."
+    );
+    assert_eq!(
+        ts.get_value("volume_field"),
+        Some(ChunkItemValue::Volume(Volume(VOLUME_MIN))),
+        "`volume_field` Bounded field setter should set value."
+    );
+    assert_matches!(
+        ts.set_value("volume_field", &ChunkItemValue::Volume(Volume(VOLUME_MAX))),
+        Ok { .. },
+        "`volume_field` Bounded field setter should accept max value."
+    );
+    assert_eq!(
+        ts.get_value("volume_field"),
+        Some(ChunkItemValue::Volume(Volume(VOLUME_MAX))),
+        "`volume_field` Bounded field setter should set value."
+    );
+    let val_before = ts.get_value("volume_field");
+    assert_matches!(
+        ts.set_value(
+            "volume_field",
+            &ChunkItemValue::Volume(Volume(VOLUME_MIN - dec64!(0.01)))
+        ),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`volume_field` Bounded field setter should Error if less than min."
+    );
+    assert_matches!(
+        ts.set_value(
+            "volume_field",
+            &ChunkItemValue::Volume(Volume(VOLUME_MAX + dec64!(0.01)))
+        ),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`volume_field` Bounded field setter should Error if greater than max."
+    );
+    assert_eq!(
+        val_before,
+        ts.get_value("volume_field"),
+        "`volume_field` Setter should not change value on Error."
+    );
+    assert_matches!(
+        ts.set_value(
+            "volume_field",
+            &ChunkItemValue::Volume(Volume::try_from(VOLUME_MINUS_INF_I16).expect(TEST_BROKEN))
+        ),
+        Ok { .. },
+        "`volume_field` Setter should accept VOLUME_MINUS_INF_I16."
+    );
+    assert_eq!(
+        ts.get_value("volume_field"),
+        Some(ChunkItemValue::Volume(Volume(VOLUME_MINUS_INF_DECIMAL))),
+        "`volume_field` Getter should return VOLUME_MINUS_INF."
+    );
+    assert_eq!(
+        ts.get_value("volume_field").expect(TEST_BROKEN).to_string(),
+        VOLUME_MINUS_INF_DISPLAY,
+        "`volume_field` to_string() should handle VOLUME_MINUS_INF."
+    );
+    assert_matches!(
+        ts.set_value(
+            "volume_field",
+            &ChunkItemValue::Volume(Volume::try_from(-125i16).expect(TEST_BROKEN))
+        ),
+        Ok { .. },
+        "`volume_field` Setter should accept in range value."
+    );
+    assert_eq!(
+        ts.get_value("volume_field"),
+        Some(ChunkItemValue::Volume(Volume(dec64!(-12.5)))),
+        "`volume_field` Setter/getter handle value in range."
+    );
+    assert_eq!(
+        ts.get_value_raw("volume_field"),
+        Some(ChunkItemValueRaw::I16(-125)),
+        "`volume_field` native storage value should be correct."
     );
 
     // repeat_field_1_val, _2_val, _3_val #[td0_field(field_type = "U8")]

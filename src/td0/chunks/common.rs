@@ -1,20 +1,20 @@
+use core::convert::{From, TryFrom};
+use core::fmt;
+use core::str::FromStr;
 use fastnum::D64 as Decimal;
 use fastnum::decimal::Context as DecimalContext;
 use libtd0_core::result::{TD0Error, TD0Result};
 use std::collections::HashMap;
-use std::convert::{From, TryInto};
-use std::fmt;
-use std::str::FromStr;
 use zerocopy::{ByteOrder, FromBytes, I16, LittleEndian, U16, U32};
 use zerocopy_derive::{IntoBytes, KnownLayout};
 
 const SZ_HDR_EXTRA_DATA: usize = 4;
 // Constants for fields.
-const VOLUME_MIN: Decimal = Decimal::from_i8(-60i8);
-const VOLUME_MAX: Decimal = Decimal::from_i8(6i8);
-const VOLUME_MINUS_INF_DECIMAL: Decimal = Decimal::NEG_INFINITY;
-const VOLUME_MINUS_INF_I16: i16 = -601;
-const VOLUME_MINUS_INF_DISPLAY: &str = "-Infinity";
+pub const VOLUME_MIN: Decimal = Decimal::from_i8(-60i8);
+pub const VOLUME_MAX: Decimal = Decimal::from_i8(6i8);
+pub const VOLUME_MINUS_INF_DECIMAL: Decimal = Decimal::NEG_INFINITY;
+pub const VOLUME_MINUS_INF_I16: i16 = -601;
+pub const VOLUME_MINUS_INF_DISPLAY: &str = "-Infinity";
 
 pub trait HasMinAndMax {
     const MIN: Self;
@@ -232,7 +232,7 @@ impl From<IntEncodedDecimal> for Decimal {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct Volume(Decimal);
+pub struct Volume(pub Decimal);
 impl fmt::Display for Volume {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.0.eq(&VOLUME_MINUS_INF_DECIMAL) {
@@ -286,6 +286,21 @@ impl FromStr for Volume {
     }
 }
 
+impl TryFrom<Decimal> for Volume {
+    type Error = TD0Error;
+    fn try_from(value: Decimal) -> Result<Self, Self::Error> {
+        let selfobj = Self { 0: value };
+        selfobj.validate()?;
+        Ok(selfobj)
+    }
+}
+
+impl From<Volume> for Decimal {
+    fn from(value: Volume) -> Self {
+        value.0
+    }
+}
+
 impl TryFrom<i16> for Volume {
     type Error = TD0Error;
     fn try_from(value: i16) -> Result<Self, Self::Error> {
@@ -301,29 +316,26 @@ impl TryFrom<i16> for Volume {
     }
 }
 
-impl TryInto<u16> for Volume {
-    type Error = <Decimal as TryInto<u16>>::Error;
+impl TryFrom<Volume> for i16 {
+    type Error = <i16 as TryFrom<Decimal>>::Error;
 
-    fn try_into(self) -> Result<u16, Self::Error> {
-        let myval: Decimal = self.0.mul(Decimal::TEN).round(0);
-        let converted: u16 = myval.try_into()?;
-        Ok(converted)
+    fn try_from(val: Volume) -> Result<Self, Self::Error> {
+        if val.0 == VOLUME_MINUS_INF_DECIMAL {
+            Ok(VOLUME_MINUS_INF_I16)
+        } else {
+            val.0.mul(Decimal::TEN).round(0).to_i16()
+        }
     }
 }
 
-impl<T> TryInto<I16<T>> for Volume
-where
-    T: zerocopy::ByteOrder,
-{
-    type Error = <Decimal as TryInto<i16>>::Error;
+impl<T: ByteOrder> TryFrom<Volume> for I16<T> {
+    type Error = <i16 as TryFrom<Decimal>>::Error;
 
-    fn try_into(self) -> Result<I16<T>, Self::Error> {
-        if self.0 == VOLUME_MINUS_INF_DECIMAL {
-            // Special handling for "-Infinity" value.
+    fn try_from(val: Volume) -> Result<Self, Self::Error> {
+        if val.0 == VOLUME_MINUS_INF_DECIMAL {
             Ok(I16::from(VOLUME_MINUS_INF_I16))
         } else {
-            let myval: i16 = self.0.try_into()?;
-            Ok(myval.into())
+            Ok(I16::from(val.0.mul(Decimal::TEN).round(0).to_i16()?))
         }
     }
 }
