@@ -3,7 +3,10 @@ use std::collections::{HashMap, HashSet};
 use zerocopy::FromBytes;
 
 use crate::td0::{
-    chunks::{CURaItem, Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, STLaItem},
+    chunks::{
+        CURaItem, Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, STLaItem, STPaItem, TGLaItem,
+        TRGaItem,
+    },
     header::{OFFSET_BYTES_REMAINING, SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, TDO_MAGIC},
 };
 use libtd0_core::result::{TD0Error, TD0Result};
@@ -172,6 +175,18 @@ impl TD0File {
                 &self.buf[start..end],
                 Some("STLaItem"),
             )?))),
+            "STPa" => Ok(Some(Box::new(STPaItem::from_bytes(
+                &self.buf[start..end],
+                Some("STPaItem"),
+            )?))),
+            "TGLa" => Ok(Some(Box::new(TGLaItem::from_bytes(
+                &self.buf[start..end],
+                Some("TGLaItem"),
+            )?))),
+            "TRGa" => Ok(Some(Box::new(TRGaItem::from_bytes(
+                &self.buf[start..end],
+                Some("TRGaItem"),
+            )?))),
             _ => Ok(None),
         };
     }
@@ -182,6 +197,9 @@ impl TD0File {
             "KITa" => Some(Box::new(KITaItem::default())),
             "CURa" => Some(Box::new(CURaItem::default())),
             "STLa" => Some(Box::new(STLaItem::default())),
+            "STPa" => Some(Box::new(STPaItem::default())),
+            "TGLa" => Some(Box::new(TGLaItem::default())),
+            "TRGa" => Some(Box::new(TRGaItem::default())),
             _ => None,
         }
     }
@@ -225,6 +243,9 @@ pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
         "KITa" => Some(Box::new(KITaItem::default())),
         "CURa" => Some(Box::new(CURaItem::default())),
         "STLa" => Some(Box::new(STLaItem::default())),
+        "STPa" => Some(Box::new(STPaItem::default())),
+        "TGLa" => Some(Box::new(TGLaItem::default())),
+        "TRGa" => Some(Box::new(TRGaItem::default())),
         _ => None,
     }
 }
