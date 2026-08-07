@@ -12,7 +12,7 @@ pub struct STPaItem {
 
     /*  This is ugly: The chunk header describes this chunk as containing
         only one item- some (as yet unknown in purpose) data followed by
-        sixteen color data definition comprising of four fields apiece.
+        sixteen color data definition blocks comprising of four fields apiece.
         (R, G, B, and something)
 
         This library will follow the file format as well as it is understood,
