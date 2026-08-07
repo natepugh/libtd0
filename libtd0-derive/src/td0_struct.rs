@@ -1,14 +1,11 @@
-use std::ops::Mul;
-
-use proc_macro2::{Literal, TokenStream};
+use core::convert::Into;
+use fastnum::D64 as Decimal;
+use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote};
-use rust_decimal::Decimal;
-use rust_decimal::prelude::FromPrimitive;
-use syn::{Arm, Expr, Stmt, parse_quote};
+use syn::{Arm, Expr, LitFloat, Stmt, parse_quote};
 use syn::{Attribute, Field, Ident, ImplItemFn, ItemStruct, parse2};
 
 use crate::common::NativeType;
-use crate::td0_struct::TD0FieldType::TD0FieldTypeSlice;
 
 use super::common::{
     AttrKeyValueList, get_field_native_type, get_named_attr, parse_kv_list, push_arm_to_fn_match,
@@ -119,19 +116,53 @@ struct TD0FieldTypeTD0Decimal {
     max: Decimal,
 }
 
+#[allow(dead_code)]
 impl TD0FieldTypeTD0Decimal {
+    pub fn clamp_u8(&self, val: u8) -> u8 {
+        // Convert raw val to a Decimal. Each u8 increment has a Decimal value of 0.1.
+        let val_as_decimal = Decimal::from(val).div(Decimal::TEN);
+        // Clamp, then multiply by 10 to convert back to u8.
+        val_as_decimal
+            .clamp(self.min, self.max)
+            .mul(Decimal::TEN)
+            .to_u8()
+            .expect("Field min / max must be within u8 bounds.")
+    }
+
     pub fn clamp_u16(&self, val: u16) -> u16 {
-        u16::clamp(
-            val,
-            self.min
-                .mul(Decimal::from(10))
-                .try_into()
-                .unwrap_or(u16::MIN),
-            self.max
-                .mul(Decimal::from(10))
-                .try_into()
-                .unwrap_or(u16::MAX),
-        )
+        // Convert raw val to a Decimal. Each u16 increment has a Decimal value of 0.1.
+        let val_as_decimal = Decimal::from(val).div(Decimal::TEN);
+        val_as_decimal
+            .clamp(self.min, self.max)
+            .mul(Decimal::TEN)
+            .to_u16()
+            .expect("Field min / max must be within u16 bounds.")
+    }
+
+    pub fn clamp_i8(&self, val: i8) -> i8 {
+        // Convert raw val to a Decimal. Each i8 increment has a Decimal value of 0.1.
+        let val_as_decimal = Decimal::from(val).div(Decimal::TEN);
+        // Clamp, then multiply by 10 to convert back to u8.
+        val_as_decimal
+            .clamp(self.min, self.max)
+            .mul(Decimal::TEN)
+            .to_i8()
+            .expect("Field min / max must be within i8 bounds.")
+    }
+
+    pub fn clamp_i16(&self, val: i16) -> i16 {
+        // Convert raw val to a Decimal. Each i16 increment has a Decimal value of 0.1.
+        let val_as_decimal = Decimal::from(val).div(Decimal::TEN);
+        val_as_decimal
+            .clamp(self.min, self.max)
+            .mul(Decimal::TEN)
+            .to_i16()
+            .expect("Field min / max must be within i16 bounds.")
+    }
+
+    pub fn clamp_decimal(&self, val: Decimal) -> Decimal {
+        // Clamp function that scales val to the expected TD0Decimal range before clamping.
+        val.clamp(self.min, self.max)
     }
 }
 
@@ -152,18 +183,8 @@ impl TryFrom<&Attribute> for TD0FieldTypeTD0Decimal {
             .expect("Guarded above.")
             .try_into()?;
         Ok(Self {
-            min: Decimal::from_f64(min)
-                .ok_or(syn::Error::new_spanned(
-                    attr,
-                    "Unable to convert to a Decimal.",
-                ))?
-                .round_dp(1),
-            max: Decimal::from_f64(max)
-                .ok_or(syn::Error::new_spanned(
-                    attr,
-                    "Unable to convert to a Decimal.",
-                ))?
-                .round_dp(1),
+            min: Decimal::from(min).round(1),
+            max: Decimal::from(max).round(1),
         })
     }
 }
@@ -268,9 +289,42 @@ impl TryFrom<&Attribute> for TD0FieldTypeMaybeBoundedU16 {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+struct TD0FieldTypeMaybeBoundedI16 {
+    min: Option<i16>,
+    max: Option<i16>,
+}
+
+impl TD0FieldTypeMaybeBoundedI16 {
+    fn clamp(&self, val: i16) -> i16 {
+        val.clamp(self.min.unwrap_or(i16::MIN), self.max.unwrap_or(i16::MAX))
+    }
+}
+
+impl TryFrom<&Attribute> for TD0FieldTypeMaybeBoundedI16 {
+    type Error = syn::Error;
+
+    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
+        static REQUIRED_NAMES: [&str; 0] = [];
+        static VALID_NAMES: [&str; 2] = ["min", "max"];
+
+        let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
+        Ok(Self {
+            min: match kv_list.find_by_name("min") {
+                Some(pair) => Some(pair.try_into()?),
+                None => None,
+            },
+            max: match kv_list.find_by_name("max") {
+                Some(pair) => Some(pair.try_into()?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 enum TD0FieldType {
     TD0FieldTypeEnumStr(TD0FieldTypeEnumStr),
-    TD0FieldTypeI16(TD0FieldTypeNone),
+    TD0FieldTypeI16(TD0FieldTypeMaybeBoundedI16),
     TD0FieldTypeI8(TD0FieldTypeMaybeBoundedI8),
     TD0FieldTypeSlice(TD0FieldTypeNone),
     TD0FieldTypeTD0Decimal(TD0FieldTypeTD0Decimal),
@@ -307,9 +361,9 @@ impl TryFrom<&Field> for TD0Field {
 
         let parsed_field_attr: TD0FieldType = match field_type_name.as_str() {
             "EnumStr" => TD0FieldType::TD0FieldTypeEnumStr(TD0FieldTypeEnumStr::try_from(&attr)?),
-            "I16" => TD0FieldType::TD0FieldTypeI16(TD0FieldTypeNone::try_from(&attr)?),
+            "I16" => TD0FieldType::TD0FieldTypeI16(TD0FieldTypeMaybeBoundedI16::try_from(&attr)?),
             "I8" => TD0FieldType::TD0FieldTypeI8(TD0FieldTypeMaybeBoundedI8::try_from(&attr)?),
-            "Slice" => TD0FieldTypeSlice(TD0FieldTypeNone {}),
+            "Slice" => TD0FieldType::TD0FieldTypeSlice(TD0FieldTypeNone {}),
             "Text" => TD0FieldType::TD0FieldTypeText(TD0FieldTypeText::try_from(&attr)?),
             "TD0Decimal" => {
                 TD0FieldType::TD0FieldTypeTD0Decimal(TD0FieldTypeTD0Decimal::try_from(&attr)?)
@@ -348,7 +402,16 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
     };
 
     output.extend(match native_type {
-        NativeType::I16 => quote!(I16::from(0)),
+        NativeType::I16 => {
+            let i16_default: i16 = match TD0Field::try_from(field) {
+                Ok(td0field) => match td0field.attr {
+                    TD0FieldType::TD0FieldTypeI16(field_type) => field_type.clamp(0),
+                    _ => 0,
+                },
+                Err(_) => 0,
+            };
+            quote!(I16::from(#i16_default))
+        }
         NativeType::I8 => {
             let i8_default: i8 = match TD0Field::try_from(field) {
                 Ok(td0field) => match td0field.attr {
@@ -515,23 +578,10 @@ fn build_getter_expr(td0field: &TD0Field) -> Expr {
         }
         TD0FieldType::TD0FieldTypeU8(_) => parse_quote!(Some(ChunkItemValue::U8(self.#ident))),
         TD0FieldType::TD0FieldTypeI8(_) => parse_quote!(Some(ChunkItemValue::I8(self.#ident))),
-        TD0FieldType::TD0FieldTypeTD0Decimal(attr) => {
-            let min = attr.min.to_string();
-            let max = attr.max.to_string();
-            let struct_get_expr: Expr = match td0field.native_type {
-                NativeType::U8 | NativeType::I8 => parse_quote!(self.#ident),
-                _ => parse_quote!(self.#ident.get()),
-            };
-
+        TD0FieldType::TD0FieldTypeTD0Decimal(_) => {
             parse_quote!(
                 Some(
-                    ChunkItemValue::TD0Decimal(
-                        IntEncodedDecimal::new_from_parts_raw(
-                            #struct_get_expr,
-                            &rust_decimal::Decimal::from_str_exact(#min).unwrap_or(rust_decimal::Decimal::MIN),
-                            &rust_decimal::Decimal::from_str_exact(#max).unwrap_or(rust_decimal::Decimal::MAX),
-                        ).ok()?
-                    )
+                    ChunkItemValue::TD0Decimal(IntEncodedDecimal::from(self.#ident))
                 )
             )
         }
@@ -566,6 +616,67 @@ fn build_getter_expr_raw(td0field: &TD0Field) -> Expr {
     }
 }
 
+fn build_decimal_setter_expr(
+    attr: &TD0FieldTypeTD0Decimal,
+    native_type: &NativeType,
+    ident: &Ident,
+) -> Stmt {
+    let attr_min: LitFloat = LitFloat::new(attr.min.to_string().as_str(), Span::call_site());
+    let attr_max: LitFloat = LitFloat::new(attr.max.to_string().as_str(), Span::call_site());
+    let min: Expr = parse_quote!(fastnum::dec64!(#attr_min));
+    let max: Expr = parse_quote!(fastnum::dec64!(#attr_max));
+    let min_i128 = attr
+        .min
+        .to_i128()
+        .expect("Field min must be in i128 range.");
+    let max_i128 = attr
+        .max
+        .to_i128()
+        .expect("Field max must be in i128 range.");
+    let ident_str = ident.to_string();
+
+    let rhand: Expr = match native_type {
+        NativeType::U8 => parse_quote!(
+            u8::try_from(*val).map_err(|_|
+                libtd0_core::result::TD0Error::ConvertToNativeTypeError{ field: #ident_str.to_string(), reason: "Out of range of u8".to_string()}
+            )?
+        ),
+        NativeType::U16 => parse_quote!(
+            U16::try_from(*val).map_err(|_|
+                libtd0_core::result::TD0Error::ConvertToNativeTypeError{ field: #ident_str.to_string(), reason: "Out of range of u16".to_string()}
+            )?
+        ),
+        NativeType::I8 => parse_quote!(
+            i8::try_from(*val).map_err(|_|
+                libtd0_core::result::TD0Error::ConvertToNativeTypeError{ field: #ident_str.to_string(), reason: "Out of range of i8".to_string()}
+            )?
+        ),
+        NativeType::I16 => parse_quote!(
+            I16::try_from(*val).map_err(|_|
+                libtd0_core::result::TD0Error::ConvertToNativeTypeError{ field: #ident_str.to_string(), reason: "Out of range of i16".to_string()}
+            )?
+        ),
+        _ => parse_quote!(val.clone()),
+    };
+
+    /*
+    parse_quote!(
+        if libtd0_core::in_range_inclusive(&fastnum::D64::from(*val), Some(&#min), Some(&#max)) {
+            self.#ident = #rhand;
+        } else {
+            return Err(libtd0_core::result::TD0Error::ConvertRangeError{ min: #min_i128, max: #max_i128 });
+        }
+    )
+    */
+    parse_quote!(
+        if libtd0_core::in_range_inclusive(IntEncodedDecimal::from(*val).get_val(), Some(&#min), Some(&#max)) {
+            self.#ident = #rhand;
+        } else {
+            return Err(libtd0_core::result::TD0Error::ConvertRangeError{ min: #min_i128, max: #max_i128 });
+        }
+    )
+}
+
 fn build_setter_expr(td0field: &TD0Field) -> Arm {
     let ident = &td0field.ident;
     let ident_str = ident.to_string();
@@ -584,26 +695,18 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             parse_quote!(
                 (#ident_str, ChunkItemValue::EnumStr(val)) => {
                     let pos : &usize = &#collection.iter().position(|item| item == val)
-                        .ok_or_else(|| crate::td0::result::TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("Invalid value: {}", val)})?;
+                        .ok_or_else(|| libtd0_core::result::TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("Invalid value: {}", val)})?;
                     self.#ident = u8::try_from(*pos).expect("Collection index must be in range.");
                     Ok(())
                 }
             )
         }
         TD0FieldType::TD0FieldTypeTD0Decimal(attr) => {
-            let min = &attr.min.to_string();
-            let max = &attr.max.to_string();
+            let inner: Stmt = build_decimal_setter_expr(attr, &td0field.native_type, ident);
 
             parse_quote!(
                 (#ident_str, ChunkItemValue::TD0Decimal(val)) => {
-                    let validated = IntEncodedDecimal::new_from_parts(
-                            val.get_val(),
-                            &rust_decimal::Decimal::from_str_exact(#min).unwrap_or(rust_decimal::Decimal::MIN),
-                            &rust_decimal::Decimal::from_str_exact(#max).unwrap_or(rust_decimal::Decimal::MAX),
-                        )?;
-                    self.#ident = validated.try_into().map_err(|err|
-                        crate::td0::result::TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("{}", err)}
-                    )?;
+                    #inner
                     Ok(())
                 }
             )
@@ -613,7 +716,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 (#ident_str, ChunkItemValue::Volume(val)) => {
                     val.validate()?;
                     self.#ident = val.clone().try_into().map_err(|err|
-                        crate::td0::result::TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("{}", err)}
+                        libtd0_core::result::TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("{}", err)}
                     )?;
                     Ok(())
                 }
@@ -621,24 +724,50 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
         }
         TD0FieldType::TD0FieldTypeSlice(_) => parse_quote!(
             (#ident_str, ..) => {
-                Err(crate::td0::result::TD0Error::ConvertToNativeTypeError {
+                Err(libtd0_core::result::TD0Error::ConvertToNativeTypeError {
                     field: field.to_string(),
                     reason: "Field may not be set.".to_string(),
                 })
             }
         ),
-        TD0FieldType::TD0FieldTypeI16(_) => parse_quote!(
-            (#ident_str, ChunkItemValue::I16(val)) => {
-                self.#ident = val.clone().into();
-                Ok(())
-            }
-        ),
-        TD0FieldType::TD0FieldTypeU16(_) => parse_quote!(
-            (#ident_str, ChunkItemValue::U16(val)) => {
-                self.#ident = val.clone().into();
-                Ok(())
-            }
-        ),
+        TD0FieldType::TD0FieldTypeI16(attr) => {
+            let min_expr: Expr = match attr.min {
+                Some(min_val) => parse_quote!(Some(#min_val)),
+                None => parse_quote!(None),
+            };
+
+            let max_expr: Expr = match attr.max {
+                Some(max_val) => parse_quote!(Some(#max_val)),
+                None => parse_quote!(None),
+            };
+
+            parse_quote!(
+                (#ident_str, ChunkItemValue::I16(val)) => {
+                    crate::td0::chunks::common::validate_is_in_range(*val, #min_expr, #max_expr)?;
+                    self.#ident = val.clone().into();
+                    Ok(())
+                }
+            )
+        }
+        TD0FieldType::TD0FieldTypeU16(attr) => {
+            let min_expr: Expr = match attr.min {
+                Some(min_val) => parse_quote!(Some(#min_val)),
+                None => parse_quote!(None),
+            };
+
+            let max_expr: Expr = match attr.max {
+                Some(max_val) => parse_quote!(Some(#max_val)),
+                None => parse_quote!(None),
+            };
+
+            parse_quote!(
+                (#ident_str, ChunkItemValue::U16(val)) => {
+                    crate::td0::chunks::common::validate_is_in_range(*val, #min_expr, #max_expr)?;
+                    self.#ident = val.clone().into();
+                    Ok(())
+                }
+            )
+        }
         TD0FieldType::TD0FieldTypeU8(attr) => {
             let min_expr: Expr = match attr.min {
                 Some(min_val) => parse_quote!(Some(#min_val)),
@@ -683,22 +812,12 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
 fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
     let ident = &td0field.ident;
     let ident_str = ident.to_string();
-    let raw_data_error: Expr =
-        parse_quote!(crate::td0::result::TD0Error::RawDataError{ field: #ident_str.to_string() });
 
     match td0field.native_type {
         NativeType::I16 => {
-            let inner: Stmt = if let TD0FieldType::TD0FieldTypeVolume(_) = &td0field.attr {
-                parse_quote!(
-                    self.#ident = Volume::try_from(val.clone())?.try_into().map_err(|_| #raw_data_error)?;
-                )
-            } else {
-                parse_quote!(self.#ident = I16::from(val.clone());)
-            };
-
             parse_quote!(
                 (#ident_str, ChunkItemValueRaw::I16(val)) => {
-                    #inner
+                    self.#ident = I16::from(val.clone());
                     Ok(())
                 }
             )
@@ -716,23 +835,9 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
             }
         ),
         NativeType::U16 => {
-            let inner: Stmt = match &td0field.attr {
-                TD0FieldType::TD0FieldTypeTD0Decimal(attr) => {
-                    let attr_min = attr.min.to_string();
-                    let attr_max = attr.max.to_string();
-                    let min: Expr = parse_quote!(rust_decimal::Decimal::from_str_exact(#attr_min).expect("Field min must be convertable to Decimal."));
-                    let max: Expr = parse_quote!(rust_decimal::Decimal::from_str_exact(#attr_max).expect("Field min must be convertable to Decimal."));
-                    parse_quote!(
-                        self.#ident = IntEncodedDecimal::new_from_parts_raw(val.clone(), &#min, &#max)?.try_into().map_err(|_| #raw_data_error)?;
-                    )
-                }
-                _ => parse_quote!(
-                    self.#ident = U16::from(val.clone());
-                ),
-            };
             parse_quote!(
                 (#ident_str, ChunkItemValueRaw::U16(val)) => {
-                    #inner
+                    self.#ident = U16::from(val.clone());
                     Ok(())
                 }
             )
@@ -811,7 +916,11 @@ fn build_chunkitem_get_value_raw(td0fields: &Vec<TD0Field>) -> ImplItemFn {
 
 fn build_chunkitem_set_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
-        fn set_value(&mut self, field: &str, value: &ChunkItemValue) -> crate::td0::result::TD0Result<()> {
+        fn set_value(
+            &mut self,
+            field: &str,
+            value: &ChunkItemValue,
+        ) -> libtd0_core::result::TD0Result<()> {
             match (field, value) {}
         }
     );
@@ -821,7 +930,7 @@ fn build_chunkitem_set_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
         .map(|td0field| build_setter_expr(td0field))
         .collect();
     set_fields_clauses.push(parse_quote!(
-        _ => Err(crate::td0::result::TD0Error::ConvertToNativeTypeError {
+        _ => Err(libtd0_core::result::TD0Error::ConvertToNativeTypeError {
             field: field.to_string(),
             reason: "Unknown field or improper value type.".to_string(),
         })
@@ -835,7 +944,11 @@ fn build_chunkitem_set_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
 
 fn build_chunkitem_set_value_raw(td0fields: &Vec<TD0Field>) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
-        fn set_value_raw(&mut self, field: &str, value: &ChunkItemValueRaw) -> crate::td0::result::TD0Result<()> {
+        fn set_value_raw(
+            &mut self,
+            field: &str,
+            value: &ChunkItemValueRaw,
+        ) -> libtd0_core::result::TD0Result<()> {
             match (field, value) {}
         }
     );
@@ -845,11 +958,38 @@ fn build_chunkitem_set_value_raw(td0fields: &Vec<TD0Field>) -> ImplItemFn {
         .map(|td0field| build_setter_expr_raw(td0field))
         .collect();
     set_fields_clauses.push(parse_quote!(
-        _ => Err(crate::td0::result::TD0Error::RawDataError{ field: field.to_string() })
+        _ => Err(libtd0_core::result::TD0Error::RawDataError{ field: field.to_string() })
     ));
 
     for arm in set_fields_clauses.iter() {
         push_arm_to_fn_match(&mut fn_skel, &arm);
     }
     fn_skel
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fastnum::dec64;
+
+    #[test]
+    fn test_td0_decimal_clamp() {
+        let field = TD0FieldTypeTD0Decimal {
+            min: dec64!(-60.0),
+            max: dec64!(6.0),
+        };
+        assert_eq!(field.clamp(-600i16), -600i16, "Doesn't clamp at min value.");
+        assert_eq!(field.clamp(-601i16), -600i16, "Does clamp at < min value.");
+        assert_eq!(field.clamp(60i16), 60i16, "Doesn't clamp at max value.");
+        assert_eq!(field.clamp(61i16), 60i16, "Does clamp at > max value.");
+
+        let field = TD0FieldTypeTD0Decimal {
+            min: dec64!(2.3),
+            max: dec64!(12.0),
+        };
+        assert_eq!(field.clamp(23i8), 23i8, "Doesn't clamp at min value.");
+        assert_eq!(field.clamp(22i8), 23i8, "Does clamp at < min value.");
+        assert_eq!(field.clamp(120i8), 120i8, "Doesn't clamp at max value.");
+        assert_eq!(field.clamp(121i8), 120i8, "Does clamp at > max value.");
+    }
 }

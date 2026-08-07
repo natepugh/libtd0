@@ -1,19 +1,19 @@
-use crate::td0::result::{TD0Error, TD0Result};
-use rust_decimal::Decimal;
-use rust_decimal::prelude::FromPrimitive;
+use fastnum::D64 as Decimal;
+use fastnum::decimal::Context as DecimalContext;
+use libtd0_core::result::{TD0Error, TD0Result};
 use std::collections::HashMap;
 use std::convert::{From, TryInto};
 use std::fmt;
-use std::ops::{Div, Mul};
 use std::str::FromStr;
-use zerocopy::{FromBytes, I16, LittleEndian, U16, U32};
-use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
+use zerocopy::{ByteOrder, FromBytes, I16, LittleEndian, U16, U32};
+use zerocopy_derive::{IntoBytes, KnownLayout};
 
 const SZ_HDR_EXTRA_DATA: usize = 4;
 // Constants for fields.
-const VOLUME_MIN: Decimal = Decimal::from_parts(60, 0, 0, true, 0);
-const VOLUME_MAX: Decimal = Decimal::from_parts(6, 0, 0, false, 0);
-const VOLUME_MINUS_INF: Decimal = Decimal::from_parts(601, 0, 0, true, 1);
+const VOLUME_MIN: Decimal = Decimal::from_i8(-60i8);
+const VOLUME_MAX: Decimal = Decimal::from_i8(6i8);
+const VOLUME_MINUS_INF_DECIMAL: Decimal = Decimal::NEG_INFINITY;
+const VOLUME_MINUS_INF_I16: i16 = -601;
 const VOLUME_MINUS_INF_DISPLAY: &str = "-Infinity";
 
 pub trait HasMinAndMax {
@@ -34,6 +34,11 @@ impl HasMinAndMax for u8 {
 impl HasMinAndMax for i8 {
     const MIN: Self = i8::MIN;
     const MAX: Self = i8::MAX;
+}
+
+impl HasMinAndMax for i16 {
+    const MIN: Self = i16::MIN;
+    const MAX: Self = i16::MAX;
 }
 
 impl<T> HasMinAndMax for U16<T> {
@@ -86,95 +91,143 @@ impl Chunk {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct IntEncodedDecimal {
-    val: Decimal,
-    min: Decimal,
-    max: Decimal,
+pub struct IntEncodedDecimal(pub Decimal);
+
+impl IntEncodedDecimal {
+    pub fn get_val(&self) -> &Decimal {
+        &self.0
+    }
+    pub fn get_val_mut(&mut self) -> &Decimal {
+        &mut self.0
+    }
 }
 
 impl fmt::Display for IntEncodedDecimal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.val.eq(&VOLUME_MINUS_INF) {
-            write!(f, "{}", VOLUME_MINUS_INF_DISPLAY)
-        } else {
-            write!(f, "{:.1}", self.val)
+        write!(f, "{:.1}", self.0)
+    }
+}
+
+impl FromStr for IntEncodedDecimal {
+    type Err = TD0Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let selfobj = Self {
+            0: Decimal::from_str(s, DecimalContext::default())
+                .map_err(|_| TD0Error::ConvertFromStringError {
+                    type_name: "IntEncodedDecimal".to_string(),
+                    value: s.to_string(),
+                })?
+                .round(1),
+        };
+        Ok(selfobj)
+    }
+}
+
+impl From<i8> for IntEncodedDecimal {
+    fn from(val: i8) -> Self {
+        Self {
+            0: Decimal::from(val).div(Decimal::TEN).round(1),
         }
     }
 }
 
-impl IntEncodedDecimal {
-    fn raw_to_decimal<T>(val: T) -> Decimal
-    where
-        T: Into<Decimal> + Div,
-    {
-        // Scale the int val to the decimal (** -1)
-        Into::<Decimal>::into(val).div(Decimal::from(10)).round()
-    }
+impl TryFrom<IntEncodedDecimal> for i8 {
+    type Error = <i8 as TryFrom<Decimal>>::Error;
 
-    fn validate_impl_range(val: &Decimal, min: &Decimal, max: &Decimal) -> TD0Result<()> {
-        if val.lt(min) || val.gt(max) {
-            Err(TD0Error::ConvertRangeError {
-                min: min.as_i128(),
-                max: max.as_i128(),
-            })
-        } else {
-            Ok(())
+    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
+        val.0.mul(Decimal::TEN).round(0).to_i8()
+    }
+}
+
+impl From<u8> for IntEncodedDecimal {
+    fn from(val: u8) -> Self {
+        Self {
+            0: Decimal::from(val).div(Decimal::TEN).round(1),
         }
     }
+}
 
-    pub fn get_val(&self) -> &Decimal {
-        &self.val
-    }
+impl TryFrom<IntEncodedDecimal> for u8 {
+    type Error = <u8 as TryFrom<Decimal>>::Error;
 
-    pub fn validate(&self) -> Result<(), TD0Error> {
-        Self::validate_impl_range(&self.val, &self.min, &self.max)
-    }
-
-    pub fn new_from_parts_raw<T>(val: T, min: &Decimal, max: &Decimal) -> Result<Self, TD0Error>
-    where
-        T: Into<Decimal> + Div,
-    {
-        let dec_val: Decimal = IntEncodedDecimal::raw_to_decimal(val);
-        Ok(Self::new_from_parts(&dec_val, min, max)?)
-    }
-
-    pub fn new_from_parts(val: &Decimal, min: &Decimal, max: &Decimal) -> Result<Self, TD0Error> {
-        Self::validate_impl_range(val, min, max)?;
-        Ok(Self {
-            val: val.clone(),
-            min: min.clone(),
-            max: max.clone(),
-        })
+    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
+        val.0.mul(Decimal::TEN).round(0).to_u8()
     }
 }
 
-impl TryInto<u8> for IntEncodedDecimal {
-    type Error = <Decimal as TryInto<u8>>::Error;
-
-    fn try_into(self) -> Result<u8, Self::Error> {
-        let myval: Decimal = self.val.mul(Decimal::from(10)).round();
-        Ok(myval.try_into()?)
+impl From<i16> for IntEncodedDecimal {
+    fn from(val: i16) -> Self {
+        Self {
+            0: Decimal::from(val).div(Decimal::TEN).round(1),
+        }
     }
 }
 
-impl TryInto<u16> for IntEncodedDecimal {
-    type Error = <Decimal as TryInto<u16>>::Error;
+impl TryFrom<IntEncodedDecimal> for i16 {
+    type Error = <i16 as TryFrom<Decimal>>::Error;
 
-    fn try_into(self) -> Result<u16, Self::Error> {
-        let myval: Decimal = self.val.mul(Decimal::from(10)).round();
-        Ok(myval.try_into()?)
+    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
+        val.0.mul(Decimal::TEN).round(0).to_i16()
     }
 }
 
-impl<T> TryInto<U16<T>> for IntEncodedDecimal
-where
-    T: zerocopy::ByteOrder,
-{
-    type Error = <Decimal as TryInto<u16>>::Error;
+impl From<u16> for IntEncodedDecimal {
+    fn from(val: u16) -> Self {
+        Self {
+            0: Decimal::from(val).div(Decimal::TEN).round(1),
+        }
+    }
+}
 
-    fn try_into(self) -> Result<U16<T>, Self::Error> {
-        let myval: u16 = self.try_into()?;
-        Ok(myval.into())
+impl TryFrom<IntEncodedDecimal> for u16 {
+    type Error = <u16 as TryFrom<Decimal>>::Error;
+
+    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
+        val.0.mul(Decimal::TEN).round(0).to_u16()
+    }
+}
+
+impl<T: ByteOrder> From<U16<T>> for IntEncodedDecimal {
+    fn from(val: U16<T>) -> Self {
+        Self {
+            0: Decimal::from(val.get()).div(Decimal::TEN).round(1),
+        }
+    }
+}
+
+impl<T: ByteOrder> TryFrom<IntEncodedDecimal> for U16<T> {
+    type Error = <u16 as TryFrom<Decimal>>::Error;
+
+    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
+        Ok(U16::from(val.0.mul(Decimal::TEN).to_u16()?))
+    }
+}
+
+impl<T: ByteOrder> From<I16<T>> for IntEncodedDecimal {
+    fn from(val: I16<T>) -> Self {
+        Self {
+            0: Decimal::from(val.get()).div(Decimal::TEN).round(1),
+        }
+    }
+}
+
+impl<T: ByteOrder> TryFrom<IntEncodedDecimal> for I16<T> {
+    type Error = <i16 as TryFrom<Decimal>>::Error;
+
+    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
+        Ok(I16::from(val.0.mul(Decimal::TEN).round(0).to_i16()?))
+    }
+}
+
+impl From<Decimal> for IntEncodedDecimal {
+    fn from(val: Decimal) -> Self {
+        Self { 0: val }
+    }
+}
+
+impl From<IntEncodedDecimal> for Decimal {
+    fn from(val: IntEncodedDecimal) -> Self {
+        val.0
     }
 }
 
@@ -182,7 +235,7 @@ where
 pub struct Volume(Decimal);
 impl fmt::Display for Volume {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.eq(&VOLUME_MINUS_INF) {
+        if self.0.eq(&VOLUME_MINUS_INF_DECIMAL) {
             write!(f, "{}", VOLUME_MINUS_INF_DISPLAY)
         } else {
             write!(f, "{:.1}", self.0)
@@ -192,10 +245,14 @@ impl fmt::Display for Volume {
 
 impl Volume {
     fn validate_impl_range(val: &Decimal) -> Result<(), TD0Error> {
-        if val.lt(&VOLUME_MINUS_INF) || val.gt(&VOLUME_MAX) {
+        if (val.lt(&VOLUME_MIN) || val.gt(&VOLUME_MAX)) && val.ne(&VOLUME_MINUS_INF_DECIMAL) {
             Err(TD0Error::ConvertRangeError {
-                min: VOLUME_MIN.as_i128(),
-                max: VOLUME_MAX.as_i128(),
+                min: VOLUME_MIN
+                    .to_i128()
+                    .expect("Should be able to convert val to i128."),
+                max: VOLUME_MAX
+                    .to_i128()
+                    .expect("Should be able to convert val to i128."),
             })
         } else {
             Ok(())
@@ -212,16 +269,16 @@ impl FromStr for Volume {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.eq_ignore_ascii_case(VOLUME_MINUS_INF_DISPLAY) {
             Ok(Self {
-                0: VOLUME_MINUS_INF.clone(),
+                0: VOLUME_MINUS_INF_DECIMAL.clone(),
             })
         } else {
             let selfobj = Self {
-                0: Decimal::from_str(s)
+                0: Decimal::from_str(s, DecimalContext::default())
                     .map_err(|_| TD0Error::ConvertFromStringError {
                         type_name: "Volume".to_string(),
                         value: s.to_string(),
                     })?
-                    .round_dp(1),
+                    .round(1),
             };
             selfobj.validate()?;
             Ok(selfobj)
@@ -232,14 +289,13 @@ impl FromStr for Volume {
 impl TryFrom<i16> for Volume {
     type Error = TD0Error;
     fn try_from(value: i16) -> Result<Self, Self::Error> {
-        let selfobj = Self {
-            0: Decimal::from_f64(f64::from(value) / 10.0f64)
-                .ok_or(TD0Error::ConvertToNativeTypeError {
-                    field: "Unknown".to_string(),
-                    reason: "Can't convert to Decimal from i16.".to_string(),
-                })?
-                .round_dp(1),
+        let dec_value = if value == VOLUME_MINUS_INF_I16 {
+            // Special handling for "-Infinity" value.
+            VOLUME_MINUS_INF_DECIMAL
+        } else {
+            Decimal::from_f64(f64::from(value) / 10.0f64).round(1)
         };
+        let selfobj = Self { 0: dec_value };
         selfobj.validate()?;
         Ok(selfobj)
     }
@@ -249,7 +305,7 @@ impl TryInto<u16> for Volume {
     type Error = <Decimal as TryInto<u16>>::Error;
 
     fn try_into(self) -> Result<u16, Self::Error> {
-        let myval: Decimal = self.0.mul(Decimal::from(10)).round();
+        let myval: Decimal = self.0.mul(Decimal::TEN).round(0);
         let converted: u16 = myval.try_into()?;
         Ok(converted)
     }
@@ -262,8 +318,13 @@ where
     type Error = <Decimal as TryInto<i16>>::Error;
 
     fn try_into(self) -> Result<I16<T>, Self::Error> {
-        let myval: i16 = self.0.try_into()?;
-        Ok(myval.into())
+        if self.0 == VOLUME_MINUS_INF_DECIMAL {
+            // Special handling for "-Infinity" value.
+            Ok(I16::from(VOLUME_MINUS_INF_I16))
+        } else {
+            let myval: i16 = self.0.try_into()?;
+            Ok(myval.into())
+        }
     }
 }
 
@@ -292,6 +353,7 @@ impl ChunkItemValue {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum ChunkItemValueRaw {
     I16(i16),
     I8(i8),
@@ -601,35 +663,37 @@ impl ChunkItem for HDRaItem {
 
 #[cfg(test)]
 mod tests {
-    use std::debug_assert_matches;
-
     use super::*;
+    use core::debug_assert_matches;
+    use fastnum::dec64;
+
     #[test]
     fn test_int_encoded_decimal_from_u16() {
-        let actual = IntEncodedDecimal::new_from_parts_raw(
-            200u16,
-            &Decimal::from_str_exact("20.0").expect("Test is broken."),
-            &Decimal::from_str_exact("20.0").expect("Test is broken"),
-        )
-        .expect("Should create an IntEncodedDecimal.");
+        let actual = IntEncodedDecimal::from(200u16);
+        assert_eq!(actual.get_val(), &dec64!(20.0), "Properly converts u16");
+    }
+
+    #[test]
+    fn test_int_encoded_decimal_into_u16() {
+        let actual = IntEncodedDecimal(dec64!(20.0));
         assert_eq!(
-            actual.get_val(),
-            &Decimal::from_str_exact("20.0").expect("Test is broken"),
-            "Properly converts u16"
+            u16::try_from(actual).expect("Or test is broken."),
+            200u16,
+            "Properly converts to u16"
         );
     }
 
     #[test]
     fn test_volume_from_i16() {
         let actual = Volume::try_from(12i16).expect("Can't create Volume");
-        let expected = Volume(rust_decimal::Decimal::from_str("1.2").expect("Broken test"));
+        let expected = Volume(dec64!(1.2));
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn test_volume_max_from_i16() {
         let max_as_i16: i16 = VOLUME_MAX
-            .mul(Decimal::from(10))
+            .mul(Decimal::TEN)
             .try_into()
             .expect("Can't convert VOLUME_MAX to i16.");
         let actual = Volume::try_from(max_as_i16).expect("Can't create Volume");
@@ -640,7 +704,7 @@ mod tests {
     #[test]
     fn test_volume_min_from_i16() {
         let min_as_i16: i16 = VOLUME_MIN
-            .mul(Decimal::from(10))
+            .mul(Decimal::TEN)
             .try_into()
             .expect("Can't convert VOLUME_MIN to i16.");
         let actual = Volume::try_from(min_as_i16).expect("Can't create Volume");
@@ -650,18 +714,14 @@ mod tests {
 
     #[test]
     fn test_volume_minus_inf_from_i16() {
-        let minus_inf_as_i16: i16 = VOLUME_MINUS_INF
-            .mul(Decimal::from(10))
-            .try_into()
-            .expect("Can't convert VOLUME_MINUS_INF to i16.");
-        let actual = Volume::try_from(minus_inf_as_i16).expect("Can't create Volume");
-        let expected = Volume(VOLUME_MINUS_INF);
+        let actual = Volume::try_from(VOLUME_MINUS_INF_I16).expect("Can't create Volume");
+        let expected = Volume(VOLUME_MINUS_INF_DECIMAL);
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn test_volume_to_string() {
-        let v1 = Volume(VOLUME_MINUS_INF);
+        let v1 = Volume(VOLUME_MINUS_INF_DECIMAL);
         assert_eq!(
             v1.to_string().as_str(),
             VOLUME_MINUS_INF_DISPLAY,
@@ -669,14 +729,14 @@ mod tests {
             VOLUME_MINUS_INF_DISPLAY
         );
 
-        let v2 = Volume(Decimal::from_str_exact("-25").expect("Test broken."));
+        let v2 = Volume(dec64!(-25));
         assert_eq!(
             v2.to_string().as_str(),
             "-25.0",
             "Test a negative Volume value."
         );
 
-        let v3 = Volume(Decimal::from_str_exact("4.5").expect("Test broken."));
+        let v3 = Volume(dec64!(4.5));
         assert_eq!(
             v3.to_string().as_str(),
             "4.5",
@@ -733,7 +793,7 @@ mod tests {
         let actual = Volume::from_str(VOLUME_MINUS_INF_DISPLAY).expect("Test broken.");
         assert_eq!(
             actual,
-            Volume(VOLUME_MINUS_INF),
+            Volume(VOLUME_MINUS_INF_DECIMAL),
             "Test proper conversion for -Infinity"
         );
     }

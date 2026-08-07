@@ -1,0 +1,9 @@
+[package]
+name = "libtd0-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+fastnum = "0.7.5"
+thiserror = "2.0.19"
+zerocopy = { version = "0.8.55", features = ["derive"] }

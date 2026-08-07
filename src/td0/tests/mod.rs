@@ -1,93 +1,689 @@
 #![allow(unused)]
+use std::assert_matches;
+
 use zerocopy::{I16, LittleEndian, U16};
 use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
 
 use super::chunks::{ChunkItem, ChunkItemValue, ChunkItemValueRaw, IntEncodedDecimal, Volume};
 use super::strings::{LED_COLORS, SYS_KIT_SWITCH};
-use crate::td0::result::{TD0Error, TD0Result};
+use fastnum::D64 as Decimal;
+use libtd0_core::result::{TD0Error, TD0Result};
 use libtd0_derive::TD0ChunkItem;
 use libtd0_derive::repeat_fields;
-use rust_decimal::Decimal;
+
+const ENUM_STR_VALUES: [&'static str; 5] = [
+    "Test_0_EnumStr",
+    "Test_1_EnumStr",
+    "Test_2_EnumStr",
+    "Test_3_EnumStr",
+    "Test_4_EnumStr",
+];
+
+const TEST_BROKEN: &str = "Test broken if failed.";
 
 #[repeat_fields]
 #[derive(Clone, Copy, Debug, FromBytes, IntoBytes, TD0ChunkItem)]
 #[repr(C, packed)]
 pub struct TestStruct {
-    #[td0_field(field_type = "Text", pad_byte = 0x20)]
-    name: [u8; 16],
+    #[td0_field(field_type = "EnumStr", collection = "ENUM_STR_VALUES")]
+    enumstr_field: u8,
 
-    #[td0_field(field_type = "Text", pad_byte = 0x20)]
-    memo: [u8; 64],
+    #[td0_field(field_type = "I16", min = -2048, max = 50)]
+    i16_bounded: I16<LittleEndian>,
 
-    #[td0_field(field_type = "Volume")]
-    volume: I16<LittleEndian>,
+    #[td0_field(field_type = "I16")]
+    i16_unbounded: I16<LittleEndian>,
 
-    #[td0_field(field_type = "EnumStr", collection = "SYS_KIT_SWITCH")]
-    click_setting: u8,
+    #[td0_field(field_type = "I8")]
+    i8_unbounded: i8,
 
-    #[td0_field(field_type = "I8", min = -15, max = 15)]
-    click_pan: i8, // Click pan: -15 = 100% L, 15 = 100% R.  Only int vals, -15 .. 0 .. 15
+    #[td0_field(field_type = "I8", min = -45)]
+    i8_bounded_min_only: i8,
 
-    // Click volumes are 0 - 127
-    #[td0_field(field_type = "U8", max = 127)]
-    click_volume_accent: u8, // Click Accent volume
-
-    #[td0_field(field_type = "U8", max = 127)]
-    unknown_1: u8,
-
-    #[repeat(count = 4, format = "mfx_{}_routing")]
-    #[td0_field(field_type = "U8")]
-    mfx_1_routing: u8,
-
-    #[td0_field(field_type = "TD0Decimal", min = 20.0, max = 260.0)]
-    tempo: U16<LittleEndian>,
+    #[td0_field(field_type = "I8", max = -45)]
+    i8_bounded_max_only: i8,
 
     #[td0_field(field_type = "Slice")]
-    unknown_2: [u8; 3],
+    slice: [u8; 3],
 
-    #[repeat(count = 15, format = "led_{}")]
-    #[td0_field(field_type = "EnumStr", collection = "LED_COLORS")]
-    led_1: u8,
+    #[td0_field(field_type = "TD0Decimal", min = 20.0, max = 260.0)]
+    td0_decimal_bounded: U16<LittleEndian>,
+
+    #[td0_field(field_type = "TD0Decimal", min = 0.1, max = 8.0)]
+    td0_decimal_u8: u8,
+
+    #[td0_field(field_type = "Text", pad_byte = 0x20)]
+    space_padded_text: [u8; 16],
+
+    #[td0_field(field_type = "Text", pad_byte = 0)]
+    zero_padded_text: [u8; 16],
+
+    #[td0_field(field_type = "U16")]
+    u16_unbounded: U16<LittleEndian>,
+
+    #[td0_field(field_type = "U16", min = 257, max = 65500)]
+    u16_bounded: U16<LittleEndian>,
+
+    #[td0_field(field_type = "U8")]
+    u8_unbounded: u8,
+
+    #[td0_field(field_type = "U8", min = 27)]
+    u8_bounded_min_only: u8,
+
+    #[td0_field(field_type = "U8", max = 142)]
+    u8_bounded_max_only: u8,
+
+    #[repeat(count = 3, format = "repeat_field_{}_val")]
+    #[td0_field(field_type = "U8")]
+    repeat_field_1_val: u8,
+
+    #[repeat_section(count = 2, prefix_format = "item_{}")]
+    #[td0_field(field_type = "U8")]
+    val_1: u8,
+
+    #[repeat(count = 3, format = "val_rpt_{}")]
+    #[td0_field(field_type = "U8")]
+    val_rpt_1: u8,
+
+    #[repeat_section_last]
+    #[td0_field(field_type = "U8")]
+    val_3: u8,
 }
 
 #[cfg(test)]
+use fastnum::dec64;
+
 #[test]
-fn test_create_struct() {
+fn test_creates_expected_fields() {
+    let expected: [&str; 29] = [
+        "enumstr_field",
+        "i16_bounded",
+        "i16_unbounded",
+        "i8_unbounded",
+        "i8_bounded_min_only",
+        "i8_bounded_max_only",
+        "slice",
+        "td0_decimal_bounded",
+        "td0_decimal_u8",
+        "space_padded_text",
+        "zero_padded_text",
+        "u16_unbounded",
+        "u16_bounded",
+        "u8_unbounded",
+        "u8_bounded_min_only",
+        "u8_bounded_max_only",
+        "repeat_field_1_val",
+        "repeat_field_2_val",
+        "repeat_field_3_val",
+        "item_1_val_1",
+        "item_1_val_rpt_1",
+        "item_1_val_rpt_2",
+        "item_1_val_rpt_3",
+        "item_1_val_3",
+        "item_2_val_1",
+        "item_2_val_rpt_1",
+        "item_2_val_rpt_2",
+        "item_2_val_rpt_3",
+        "item_2_val_3",
+    ];
+
     let ts = TestStruct::default();
-    assert_eq!(ts.name, [32; 16]);
+    assert_eq!(ts.get_fields(), expected);
+}
+
+#[test]
+fn test_expected_defaults() {
+    let ts = TestStruct::default();
     assert_eq!(
-        ts.get_value("name"),
-        Some(ChunkItemValue::Text("".to_string()))
+        ts.get_value("enumstr_field"),
+        Some(ChunkItemValue::EnumStr(ENUM_STR_VALUES[0])),
+        "Should be zeroth element."
     );
     assert_eq!(
-        ts.get_value("click_setting"),
-        Some(ChunkItemValue::EnumStr("SYSTEM"))
+        ts.get_value("i16_bounded"),
+        Some(ChunkItemValue::I16(0i16)),
+        "Default 0 shouldn't be clamped."
     );
     assert_eq!(
-        ts.get_value("volume"),
-        Some(ChunkItemValue::Volume(
-            Volume::try_from(0i16).expect("Test is broken.")
-        ))
+        ts.get_value("i8_bounded_min_only"),
+        Some(ChunkItemValue::I8(0i8)),
+        "Default 0 shouldn't be clamped."
     );
     assert_eq!(
-        ts.get_value("tempo"),
-        Some(ChunkItemValue::TD0Decimal(
-            IntEncodedDecimal::new_from_parts_raw(
-                200u8,
-                &Decimal::from_str_exact("20.0").unwrap(),
-                &Decimal::from_str_exact("260.0").unwrap(),
-            )
-            .expect("Test broken")
-        ))
+        ts.get_value("i8_bounded_max_only"),
+        Some(ChunkItemValue::I8(-45i8)),
+        "Default 0 clamped to max."
     );
     assert_eq!(
-        format!("{}", ts.get_value("unknown_2").expect("Test is broken")),
-        "[0, 0, 0]"
+        ts.get_value("slice"),
+        Some(ChunkItemValue::Slice(Box::new([0u8; 3]))),
+        "Default slice is 0-filled."
+    );
+    /*
+    assert_eq!(
+        ts.get_value("td0_decimal_bounded"),
+        Some(ChunkItemValue::TD0Decimal(IntEncodedDecimal::from(200u16))),
+        "TD0Decimal should clamp default 0 to field min."
+    ); */
+    assert_eq!(
+        ts.get_value("space_padded_text"),
+        Some(ChunkItemValue::Text("".to_string())),
+        "Default is pad byte (' '), which should be trimmed."
+    );
+    assert_eq!(
+        ts.get_value_raw("space_padded_text"),
+        Some(ChunkItemValueRaw::Slice(Box::new([0x20; 16])))
+    );
+    assert_eq!(
+        ts.get_value("zero_padded_text"),
+        Some(ChunkItemValue::Text("".to_string())),
+        "Default is pad byte ('\\0'), which should be trimmed."
+    );
+    assert_eq!(
+        ts.get_value_raw("zero_padded_text"),
+        Some(ChunkItemValueRaw::Slice(Box::new([0; 16])))
+    );
+    assert_eq!(
+        ts.get_value("u16_unbounded"),
+        Some((ChunkItemValue::U16(0))),
+        "Default 0 shouldn't be clamped."
+    );
+    assert_eq!(
+        ts.get_value("u16_bounded"),
+        Some((ChunkItemValue::U16(257))),
+        "Default 0 should be clamped to field min."
+    );
+    assert_eq!(
+        ts.get_value("u8_unbounded"),
+        Some((ChunkItemValue::U8(0))),
+        "Default 0 shouldn't be clamped."
+    );
+    assert_eq!(
+        ts.get_value("u8_bounded_min_only"),
+        Some((ChunkItemValue::U8(27))),
+        "Default 0 should be clamped to field min."
     );
 }
 
 #[test]
-fn test_enumstr_get_value() {
-    let val = *SYS_KIT_SWITCH.get(0).unwrap_or_else(|| &"INVALID");
-    assert_eq!(val, "SYSTEM");
+fn test_repeat_fields() {
+    let ts = TestStruct::default();
+    assert_eq!(
+        ts.get_value("repeat_field_1_val"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat field `repeat_field_1_val` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("repeat_field_2_val"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat field `repeat_field_2_val` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("repeat_field_3_val"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat field `repeat_field_3_val` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("item_1_val_1"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat section field `item_1_val_1` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("item_1_val_rpt_1"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat section field `item_1_val_rpt_1` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("item_1_val_rpt_2"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat section field `item_1_val_rpt_2` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("item_1_val_rpt_3"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat section field `item_1_val_rpt_3` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("item_1_val_3"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat section field `item_1_val_3` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("item_2_val_1"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat section field `item_2_val_1` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("item_2_val_rpt_1"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat section field `item_2_val_rpt_1` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("item_2_val_rpt_2"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat section field `item_2_val_rpt_2` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("item_2_val_rpt_3"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat section field `item_2_val_rpt_3` should be retrievable."
+    );
+    assert_eq!(
+        ts.get_value("item_2_val_3"),
+        Some((ChunkItemValue::U8(0))),
+        "Repeat section field `item_2_val_3` should be retrievable."
+    );
+}
+
+#[test]
+fn test_setters() {
+    let mut ts = TestStruct::default();
+    // enumstr_field: #[td0_field(field_type = "EnumStr", ...)]
+    ts.set_value("enumstr_field", &ChunkItemValue::EnumStr("Test_3_EnumStr"))
+        .expect("Can't set `enumstr_field`");
+    assert_eq!(
+        ts.get_value("enumstr_field"),
+        Some(ChunkItemValue::EnumStr("Test_3_EnumStr")),
+        "`enumstr_field` Setter should have set the correct value."
+    );
+    assert_eq!(
+        ts.get_value_raw("enumstr_field"),
+        Some(ChunkItemValueRaw::U8(3)),
+        "`enumstr_field` Setter should have set the correct raw value."
+    );
+    let raw_before = ts.get_value_raw("enumstr_field");
+    assert_matches!(
+        ts.set_value("enumstr_field", &ChunkItemValue::EnumStr("INVALID")),
+        Err(TD0Error::ConvertToNativeTypeError { .. }),
+        "`enumstr_field` Setter should error on invalid value."
+    );
+    assert_eq!(
+        raw_before,
+        ts.get_value_raw("enumstr_field"),
+        "`enumstr_field` Setter should not change value on Error."
+    );
+
+    // i16_bounded #[td0_field(field_type = "I16", min = -2048, max = 50)]
+    assert_matches!(
+        ts.set_value("i16_bounded", &ChunkItemValue::I16(-2048)),
+        Ok { .. },
+        "`i16_bounded` Bounded field setter should accept min value."
+    );
+    assert_matches!(
+        ts.set_value("i16_bounded", &ChunkItemValue::I16(50)),
+        Ok { .. },
+        "`i16_bounded` Bounded field setter should accept max value."
+    );
+    let val_before = ts.get_value("i16_bounded");
+    assert_matches!(
+        ts.set_value("i16_bounded", &ChunkItemValue::I16(-2049)),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`i16_bounded` Bounded field setter should Error if less than min."
+    );
+    assert_matches!(
+        ts.set_value("i16_bounded", &ChunkItemValue::I16(51)),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`i16_bounded` Bounded field setter should Error if greater than max."
+    );
+    assert_eq!(
+        val_before,
+        ts.get_value("i16_bounded"),
+        "`i16_bounded` Setter should not change value on Error."
+    );
+
+    // i8_bounded_min_only: #[td0_field(field_type = "I8", min = -45)]
+    assert_matches!(
+        ts.set_value("i8_bounded_min_only", &ChunkItemValue::I8(-45)),
+        Ok { .. },
+        "`i8_bounded_min_only` Bounded_min_only field setter should accept min value."
+    );
+    assert_matches!(
+        ts.set_value("i8_bounded_min_only", &ChunkItemValue::I8(-46)),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`i8_bounded_min_only` Bounded_min_only field setter should Error if less than min."
+    );
+    let val_before = ts.get_value("i8_bounded_min_only");
+    assert_eq!(
+        val_before,
+        ts.get_value("i8_bounded_min_only"),
+        "`i8_bounded_min_only` Setter should not change value on Error."
+    );
+
+    // i8_bounded_max_only: #[td0_field(field_type = "I8", max = -45)]
+    assert_matches!(
+        ts.set_value("i8_bounded_max_only", &ChunkItemValue::I8(-45)),
+        Ok { .. },
+        "`i8_bounded_max_only` Bounded_max_only field setter should accept max value."
+    );
+    assert_matches!(
+        ts.set_value("i8_bounded_max_only", &ChunkItemValue::I8(-44)),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`i8_bounded_max_only` Bounded_max_only field setter should Error if greater than max."
+    );
+
+    // slice: [u8; 3]: #[td0_field(field_type = "Slice")]
+    assert_matches!(
+        ts.set_value("slice", &ChunkItemValue::Slice(Box::new([1u8; 3]))),
+        Err(TD0Error::ConvertToNativeTypeError { .. }),
+        "Slice shouldn't be settable with set_value()."
+    );
+
+    // td0_decimal_bounded: #[td0_field(field_type = "TD0Decimal", min = 20.0, max = 260.0)]
+    assert_matches!(
+        ts.set_value(
+            "td0_decimal_bounded",
+            &ChunkItemValue::TD0Decimal(200u16.into())
+        ),
+        Ok { .. },
+        "`decimal_bounded` Bounded field setter should accept min value."
+    );
+    assert_eq!(
+        ts.get_value("td0_decimal_bounded"),
+        Some(ChunkItemValue::TD0Decimal(IntEncodedDecimal(dec64!(20.0)))),
+        "`decimal_bounded` Bounded field setter should set value."
+    );
+    assert_matches!(
+        ts.set_value(
+            "td0_decimal_bounded",
+            &ChunkItemValue::TD0Decimal(260u16.into())
+        ),
+        Ok { .. },
+        "`decimal_bounded` Bounded field setter should accept max value."
+    );
+    assert_eq!(
+        ts.get_value("td0_decimal_bounded"),
+        Some(ChunkItemValue::TD0Decimal(IntEncodedDecimal::from(260u16))),
+        "`decimal_bounded` Bounded field setter should set value."
+    );
+    let val_before = ts.get_value("td0_decimal_bounded");
+    assert_matches!(
+        ts.set_value(
+            "td0_decimal_bounded",
+            &ChunkItemValue::TD0Decimal(IntEncodedDecimal(dec64!(19.9999)))
+        ),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`td0_decimal_bounded` Bounded field setter should Error if less than min."
+    );
+    assert_matches!(
+        ts.set_value(
+            "td0_decimal_bounded",
+            &ChunkItemValue::TD0Decimal(IntEncodedDecimal(dec64!(260.00001)))
+        ),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`td0_decimal_bounded` Bounded field setter should Error if greater than max."
+    );
+    assert_eq!(
+        val_before,
+        ts.get_value("td0_decimal_bounded"),
+        "`td0_decimal_bounded` Setter should not change value on Error."
+    );
+
+    // td0_decimal_u8: #[td0_field(field_type = "TD0Decimal", min = 0.1, max = 8.0)]
+    assert_matches!(
+        ts.set_value("td0_decimal_u8", &ChunkItemValue::TD0Decimal(1u8.into())),
+        Ok { .. },
+        "`decimal_u8` Bounded field setter should accept min value."
+    );
+    assert_eq!(
+        ts.get_value("td0_decimal_u8"),
+        Some(ChunkItemValue::TD0Decimal(IntEncodedDecimal(dec64!(0.1)))),
+        "`decimal_u8` Bounded field setter should set value."
+    );
+    assert_matches!(
+        ts.set_value("td0_decimal_u8", &ChunkItemValue::TD0Decimal(80u8.into())),
+        Ok { .. },
+        "`decimal_u8` Bounded field setter should accept max value."
+    );
+    assert_eq!(
+        ts.get_value("td0_decimal_u8"),
+        Some(ChunkItemValue::TD0Decimal(IntEncodedDecimal(dec64!(8.0)))),
+        "`decimal_u8` Bounded field setter should set value."
+    );
+    let val_before = ts.get_value("td0_decimal_u8");
+    assert_matches!(
+        ts.set_value("td0_decimal_u8", &ChunkItemValue::TD0Decimal(0u8.into())),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`td0_decimal_u8` Bounded field setter should Error if less than min."
+    );
+    assert_matches!(
+        ts.set_value("td0_decimal_u8", &ChunkItemValue::TD0Decimal(81u8.into())),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`td0_decimal_u8` Bounded field setter should Error if greater than max."
+    );
+    assert_eq!(
+        val_before,
+        ts.get_value("td0_decimal_u8"),
+        "`td0_decimal_u8` Setter should not change value on Error."
+    );
+
+    // space_padded_text: [u8; 16] : #[td0_field(field_type = "Text", pad_byte = 0x20)]
+    assert_matches!(
+        ts.set_value(
+            "space_padded_text",
+            &ChunkItemValue::Text("Testing: 1..2..3".to_string())
+        ),
+        Ok { .. },
+        "`space_padded_text` Setter should accept maximum length string."
+    );
+    assert_eq!(
+        ts.get_value("space_padded_text"),
+        Some(ChunkItemValue::Text("Testing: 1..2..3".to_string())),
+        "`space_padded_text` Setter should set value."
+    );
+    assert_matches!(
+        ts.set_value(
+            "space_padded_text",
+            &ChunkItemValue::Text("One char too long".to_string())
+        ),
+        Err(TD0Error::ConvertToNativeTypeError { .. }),
+        "`space_padded_text` Setter should Error if string too long."
+    );
+    assert_eq!(
+        ts.get_value("space_padded_text"),
+        Some(ChunkItemValue::Text("Testing: 1..2..3".to_string())),
+        "`space_padded_text` Setter should not change value on Error."
+    );
+    assert_matches!(
+        ts.set_value(
+            "space_padded_text",
+            &ChunkItemValue::Text("Short test".to_string())
+        ),
+        Ok { .. },
+        "`space_padded_text` Setter should accept less than maximum length string."
+    );
+    assert_eq!(
+        ts.get_value("space_padded_text"),
+        Some(ChunkItemValue::Text("Short test".to_string())),
+        "`space_padded_text` Setter should strip padding from a short string."
+    );
+    assert_eq!(
+        ts.get_value_raw("space_padded_text"),
+        Some(ChunkItemValueRaw::Slice(Box::new(
+            b"Short test      ".to_owned()
+        ))),
+        "`space_padded_text` Setter should pad a short string."
+    );
+    assert_matches!(
+        ts.set_value("space_padded_text", &ChunkItemValue::Text("".to_string())),
+        Ok { .. },
+        "`space_padded_text` Setter should set value on an empty string."
+    );
+    assert_eq!(
+        ts.get_value("space_padded_text"),
+        Some(ChunkItemValue::Text("".to_string())),
+        "`space_padded_text` Getter should return empty string."
+    );
+    assert_eq!(
+        ts.get_value_raw("space_padded_text"),
+        Some(ChunkItemValueRaw::Slice(Box::new(
+            b"                ".to_owned()
+        ))),
+        "`space_padded_text` Setter should set pad an empty string."
+    );
+
+    // zero_padded_text: [u8; 16]: #[td0_field(field_type = "Text", pad_byte = 0)]
+    assert_matches!(
+        ts.set_value(
+            "zero_padded_text",
+            &ChunkItemValue::Text("Short test".to_string())
+        ),
+        Ok { .. },
+        "`space_padded_text` Setter should pad a short string."
+    );
+    assert_eq!(
+        ts.get_value("zero_padded_text"),
+        Some(ChunkItemValue::Text("Short test".to_string())),
+        "`zero_padded_text` Getter should strip padding from a padded string."
+    );
+    assert_eq!(
+        ts.get_value_raw("zero_padded_text"),
+        Some(ChunkItemValueRaw::Slice(Box::new(
+            b"Short test\0\0\0\0\0\0".to_owned()
+        ))),
+        "`zero_padded_text` Setter should set pad a short string."
+    );
+
+    // u16_bounded: #[td0_field(field_type = "U16", min = 257, max = 65500)]
+    assert_matches!(
+        ts.set_value("u16_bounded", &ChunkItemValue::U16(257)),
+        Ok { .. },
+        "`u16_bounded` Bounded field setter should accept min value."
+    );
+    assert_matches!(
+        ts.set_value("u16_bounded", &ChunkItemValue::U16(65500)),
+        Ok { .. },
+        "`u16_bounded` Bounded field setter should accept max value."
+    );
+    assert_eq!(
+        ts.get_value("u16_bounded"),
+        Some(ChunkItemValue::U16(65500)),
+        "`u16_bounded` Setter/Getter round-trip should return the same value."
+    );
+    let val_before = ts.get_value("u16_bounded");
+    assert_matches!(
+        ts.set_value("u16_bounded", &ChunkItemValue::U16(256)),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`u16_bounded` Bounded field setter should Error if less than min."
+    );
+    assert_matches!(
+        ts.set_value("u16_bounded", &ChunkItemValue::U16(65501)),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`u16_bounded` Bounded field setter should Error if greater than max."
+    );
+    assert_eq!(
+        val_before,
+        ts.get_value("u16_bounded"),
+        "`u16_bounded` Setter should not change value on Error."
+    );
+
+    //u8_unbounded: #[td0_field(field_type = "U8")]
+    assert_matches!(
+        ts.set_value("u8_unbounded", &ChunkItemValue::U8(u8::MIN)),
+        Ok { .. },
+        "`u8_unbounded` Bounded field setter should accept min value."
+    );
+    assert_matches!(
+        ts.set_value("u8_unbounded", &ChunkItemValue::U8(u8::MAX)),
+        Ok { .. },
+        "`u8_unbounded` Bounded field setter should accept max value."
+    );
+    assert_eq!(
+        ts.get_value("u8_unbounded"),
+        Some(ChunkItemValue::U8(u8::MAX)),
+        "`u8_unbounded` Setter/Getter round-trip should return the same value."
+    );
+
+    // u8_bounded_min_only: #[td0_field(field_type = "U8", min = 27)]
+    assert_matches!(
+        ts.set_value("u8_bounded_min_only", &ChunkItemValue::U8(27)),
+        Ok { .. },
+        "`u8_bounded_min_only` Bounded_min_only field setter should accept min value."
+    );
+    assert_matches!(
+        ts.set_value("u8_bounded_min_only", &ChunkItemValue::U8(26)),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`u8_bounded_min_only` Bounded_min_only field setter should Error if less than min."
+    );
+    let val_before = ts.get_value("u8_bounded_min_only");
+    assert_eq!(
+        val_before,
+        ts.get_value("u8_bounded_min_only"),
+        "`u8_bounded_min_only` Setter should not change value on Error."
+    );
+    assert_matches!(
+        ts.set_value("u8_bounded_min_only", &ChunkItemValue::U8(u8::MAX)),
+        Ok { .. },
+        "`u8_bounded_min_only` Bounded_min_only field setter should accept u8 max value."
+    );
+
+    // u8_bounded_max_only: u8 #[td0_field(field_type = "U8", max = 142)]
+    assert_matches!(
+        ts.set_value("u8_bounded_max_only", &ChunkItemValue::U8(142)),
+        Ok { .. },
+        "`u8_bounded_max_only` Bounded_max_only field setter should accept max value."
+    );
+    assert_matches!(
+        ts.set_value("u8_bounded_max_only", &ChunkItemValue::U8(143)),
+        Err(TD0Error::ConvertRangeError { .. }),
+        "`u8_bounded_max_only` Bounded_max_only field setter should Error if greater than max."
+    );
+    assert_matches!(
+        ts.set_value("u8_bounded_max_only", &ChunkItemValue::U8(u8::MIN)),
+        Ok { .. },
+        "`u8_bounded_max_only` Bounded_max_only field setter should accept u8 min value."
+    );
+
+    // repeat_field_1_val, _2_val, _3_val #[td0_field(field_type = "U8")]
+    assert_matches!(
+        ts.set_value("repeat_field_1_val", &ChunkItemValue::U8(23)),
+        Ok { .. },
+        "`repeat_field_1_val` Setter works on repeat field."
+    );
+    assert_matches!(
+        ts.set_value("repeat_field_2_val", &ChunkItemValue::U8(24)),
+        Ok { .. },
+        "`repeat_field_2_val` Setter works on repeat field."
+    );
+    assert_matches!(
+        ts.set_value("repeat_field_3_val", &ChunkItemValue::U8(25)),
+        Ok { .. },
+        "`repeat_field_3_val` Setter works on repeat field."
+    );
+    assert_eq!(
+        ts.get_value("repeat_field_1_val"),
+        Some(ChunkItemValue::U8(23)),
+        "`repeat_field_1_val` Getter works on repeat field and set/getters are independent."
+    );
+    assert_eq!(
+        ts.get_value("repeat_field_2_val"),
+        Some(ChunkItemValue::U8(24)),
+        "`repeat_field_2_val` Getter works on repeat field and set/getters are independent."
+    );
+    assert_eq!(
+        ts.get_value("repeat_field_3_val"),
+        Some(ChunkItemValue::U8(25)),
+        "`repeat_field_3_val` Getter works on repeat field and set/getters are independent."
+    );
+
+    // item_1_val_1, item_2_val_1 #[repeat_section(count=2, prefix_format = "item_{}")]
+    assert_matches!(
+        ts.set_value("item_1_val_1", &ChunkItemValue::U8(23)),
+        Ok { .. },
+        "`item_1_val_1` Setter works on repeat section field."
+    );
+    assert_matches!(
+        ts.set_value("item_2_val_1", &ChunkItemValue::U8(24)),
+        Ok { .. },
+        "`item_2_val_1` Setter works on repeat section field."
+    );
+    assert_eq!(
+        ts.get_value("item_1_val_1"),
+        Some(ChunkItemValue::U8(23)),
+        "`item_1_val_1` Getter works on repeat section field and set/getters are independent."
+    );
+    assert_eq!(
+        ts.get_value("item_2_val_1"),
+        Some(ChunkItemValue::U8(24)),
+        "`item_2_val_1` Getter works on repeat section field and set/getters are independent."
+    );
 }

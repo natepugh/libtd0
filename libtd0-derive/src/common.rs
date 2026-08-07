@@ -66,6 +66,22 @@ impl TryFrom<&AttrKeyValue> for i8 {
     }
 }
 
+impl TryFrom<&AttrKeyValue> for i16 {
+    type Error = syn::Error;
+
+    fn try_from(kv_pair: &AttrKeyValue) -> Result<Self, <Self as TryFrom<&AttrKeyValue>>::Error> {
+        match &kv_pair.val {
+            Lit::Int(lit_int) => lit_int
+                .base10_parse()
+                .map_err(|err| syn::Error::new_spanned(lit_int, err.to_string())),
+            _ => Err(syn::Error::new_spanned(
+                &kv_pair.val,
+                "Must be an Integer type.",
+            )),
+        }
+    }
+}
+
 impl TryFrom<&AttrKeyValue> for f64 {
     type Error = syn::Error;
 
@@ -126,7 +142,11 @@ impl AttrKeyValueList {
 }
 
 pub fn parse_kv_list(attr: &Attribute) -> syn::Result<AttrKeyValueList> {
-    attr.parse_args::<AttrKeyValueList>()
+    match &attr.meta {
+        Meta::List(_mlist) => attr.parse_args::<AttrKeyValueList>(),
+        Meta::Path(_mpath) => Ok(AttrKeyValueList::default()),
+        Meta::NameValue(_m_namevalue) => attr.parse_args::<AttrKeyValueList>(),
+    }
 }
 
 pub fn get_type_path(typeobj: &Type) -> &Path {
@@ -185,6 +205,7 @@ pub fn push_arm_to_fn_match(func: &mut ImplItemFn, arm: &Arm) {
 pub fn get_named_attr<'a>(attr_name: &'static str, field: &'a Field) -> Option<&'a Attribute> {
     field.attrs.iter().find(|attr| match &attr.meta {
         Meta::List(mlist) => mlist.path.is_ident(attr_name),
+        Meta::Path(mpath) => mpath.is_ident(attr_name),
         _ => false,
     })
 }

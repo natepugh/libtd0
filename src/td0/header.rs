@@ -1,10 +1,8 @@
 use zerocopy::{FromBytes, LittleEndian, U16, U32};
-use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
+use zerocopy_derive::{Immutable, IntoBytes, KnownLayout};
 
-use crate::td0::{
-    chunks::ChunkHeader,
-    result::{TD0Error, TD0Result},
-};
+use crate::td0::chunks::ChunkHeader;
+use libtd0_core::result::{TD0Error, TD0Result};
 use std::{collections::HashMap, fmt};
 
 pub const SZ_HDR_CHUNK: usize = 16;

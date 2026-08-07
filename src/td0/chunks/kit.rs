@@ -6329,3 +6329,4 @@ pub struct KITaItem {
     #[td0_field(field_type = "Slice")]
     foot_sw_2_layer_2_unknown_12: [u8; 12], //  Padding?
 }
+// To test: field count: 2295

@@ -3,14 +3,13 @@ use std::collections::{HashMap, HashSet};
 use zerocopy::FromBytes;
 
 use crate::td0::{
-    chunks::{Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, CURaItem, STLaItem},
+    chunks::{CURaItem, Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, STLaItem},
     header::{OFFSET_BYTES_REMAINING, SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, TDO_MAGIC},
-    result::{TD0Error, TD0Result},
 };
+use libtd0_core::result::{TD0Error, TD0Result};
 
 pub mod chunks;
 pub mod header;
-pub mod result;
 mod strings;
 mod tests;
 
@@ -177,16 +176,13 @@ impl TD0File {
         };
     }
 
-    pub fn get_chunk_item_default(
-        &self,
-        chunk_name: &str,
-    ) -> Option<Box<dyn ChunkItem>> {
+    pub fn get_chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
         match chunk_name {
             "HDRa" => Some(Box::new(HDRaItem::default())),
             "KITa" => Some(Box::new(KITaItem::default())),
             "CURa" => Some(Box::new(CURaItem::default())),
             "STLa" => Some(Box::new(STLaItem::default())),
-            _ => None
+            _ => None,
         }
     }
 

@@ -1,9 +1,9 @@
 pub mod td0;
-use md5::{Md5,Digest};
-use td0::result::TD0Result;
+use libtd0_core::result::{TD0Error, TD0Result};
+use md5::{Digest, Md5};
 // use anyhow::{Ok, Result};
 
-use crate::td0::{header::TD0ManifestTag, result::TD0Error};
+use crate::td0::header::TD0ManifestTag;
 
 const SZ_MD5_DIGEST: usize = 16;
 
@@ -49,14 +49,16 @@ impl ManifestData {
         let mut chunks: Vec<TD0ManifestTag> = td0file.manifest.clone();
         chunks.copy_from_slice(&td0file.manifest[..]);
 
-        Ok(ManifestData{
+        Ok(ManifestData {
             backup_size: 0,
             backup_type: TD0BackupType::Unknown,
             checksum_actual: checksum_actual,
             checksum_calculated: Into::into(checksum_calculated),
             device_model: TD0DeviceModel::Unknown,
             size_actual: bytes.len(),
-            size_calculated: last_chunk_tag.get_pos() as usize + last_chunk_tag.get_length() as usize + SZ_MD5_DIGEST,
+            size_calculated: last_chunk_tag.get_pos() as usize
+                + last_chunk_tag.get_length() as usize
+                + SZ_MD5_DIGEST,
             chunks: chunks,
         })
     }

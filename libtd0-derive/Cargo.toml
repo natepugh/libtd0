@@ -4,10 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+fastnum = "0.7.5"
 proc-macro2 = "1.0.107"
 quote = "1.0.47"
-rust_decimal = "1.42.1"
 syn = { version = "3.0.3", features = ["extra-traits", "full"] }
+libtd0-core = { path = "../libtd0-core" }
 
 [lib]
 proc-macro = true
