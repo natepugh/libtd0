@@ -31,12 +31,27 @@ pub struct WVPaItem {
     #[td0_field(field_type = "Text", pad_byte = 0x20)]
     filename: [u8; 100], // Filename
 
+    /* NOTE:
+       The first two bytes of this field differ between firmware versions.
+       The padding character used for PRELOAD files is different from user files.
+
+       PRELOAD files: 0x0
+       USER    files: 0x20 (ASCII space: " ")
+
+       Observed patterns:
+           - 1.10 (PRELOAD) [0x20, 0x20]
+           - 2.0  (PRELOAD) [0xb0, 0x04]
+
+           - 1.10 (USER) [0x0, 0x0]
+           - 2.0  (USER) [0xb0, 0x04]
+    */
     #[td0_field(field_type = "Slice")]
     unknown6: [u8; 16], // Unknown data
 
     #[td0_field(field_type = "Text", pad_byte = 0)]
     device_serial_number: [u8; 8], // device_serial_number
 
+    // NOTE: This field differs per each file.
     #[td0_field(field_type = "Slice")]
     unknown7: [u8; 4], // Unknown data
 }
