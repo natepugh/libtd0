@@ -1,10 +1,13 @@
 #![allow(unused)]
 use std::assert_matches;
 
+use crate::td0::chunks::common::{
+    VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DECIMAL, VOLUME_MINUS_INF_DISPLAY,
+    VOLUME_MINUS_INF_I16, Volume,
+};
 use zerocopy::{I16, LittleEndian, U16};
 use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
 
-use super::chunks::common::Volume;
 use super::chunks::{ChunkItem, ChunkItemValue, ChunkItemValueRaw, IntEncodedDecimal};
 use super::strings::{LED_COLORS, SYS_KIT_SWITCH};
 use fastnum::D64 as Decimal;
@@ -94,10 +97,6 @@ pub struct TestStruct {
     val_3: u8,
 }
 
-use crate::td0::chunks::common::{
-    VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DECIMAL, VOLUME_MINUS_INF_DISPLAY,
-    VOLUME_MINUS_INF_I16,
-};
 #[cfg(test)]
 use fastnum::dec64;
 
