@@ -5,6 +5,7 @@ mod stl;
 mod stp;
 mod tgl;
 mod trg;
+mod wvp;
 
 pub use common::{
     Chunk, ChunkHeader, ChunkItem, ChunkItemValue, ChunkItemValueRaw, HDRaItem, IntEncodedDecimal,
@@ -16,3 +17,4 @@ pub use stl::STLaItem;
 pub use stp::STPaItem;
 pub use tgl::TGLaItem;
 pub use trg::TRGaItem;
+pub use wvp::WVPaItem;

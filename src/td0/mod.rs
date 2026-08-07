@@ -5,7 +5,7 @@ use zerocopy::FromBytes;
 use crate::td0::{
     chunks::{
         CURaItem, Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, STLaItem, STPaItem, TGLaItem,
-        TRGaItem,
+        TRGaItem, WVPaItem,
     },
     header::{OFFSET_BYTES_REMAINING, SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, TDO_MAGIC},
 };
@@ -187,6 +187,10 @@ impl TD0File {
                 &self.buf[start..end],
                 Some("TRGaItem"),
             )?))),
+            "WVPa" => Ok(Some(Box::new(WVPaItem::from_bytes(
+                &self.buf[start..end],
+                Some("WVPaItem"),
+            )?))),
             _ => Ok(None),
         };
     }
@@ -200,6 +204,7 @@ impl TD0File {
             "STPa" => Some(Box::new(STPaItem::default())),
             "TGLa" => Some(Box::new(TGLaItem::default())),
             "TRGa" => Some(Box::new(TRGaItem::default())),
+            "WVPa" => Some(Box::new(WVPaItem::default())),
             _ => None,
         }
     }
@@ -246,6 +251,7 @@ pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
         "STPa" => Some(Box::new(STPaItem::default())),
         "TGLa" => Some(Box::new(TGLaItem::default())),
         "TRGa" => Some(Box::new(TRGaItem::default())),
+        "WVPa" => Some(Box::new(WVPaItem::default())),
         _ => None,
     }
 }
