@@ -28,12 +28,15 @@ pub struct WVPaItem {
     #[td0_field(field_type = "Text", pad_byte = 0x20)]
     name: [u8; 16], // Name
 
-    #[td0_field(field_type = "Text", pad_byte = 0)]
-    filename: [u8; 116], // Filename
+    #[td0_field(field_type = "Text", pad_byte = 0x20)]
+    filename: [u8; 100], // Filename
+
+    #[td0_field(field_type = "Slice")]
+    unknown6: [u8; 16], // Unknown data
 
     #[td0_field(field_type = "Text", pad_byte = 0)]
     device_serial_number: [u8; 8], // device_serial_number
 
     #[td0_field(field_type = "Slice")]
-    unknown6: [u8; 4], // Unknown data
+    unknown7: [u8; 4], // Unknown data
 }
