@@ -2,6 +2,7 @@ pub mod common;
 mod cur;
 mod kit;
 mod kit_b;
+mod pvr;
 mod stl;
 mod stp;
 mod stp_b;
@@ -16,6 +17,7 @@ pub use common::{
 pub use cur::CURaItem;
 pub use kit::KITaItem;
 pub use kit_b::KITbItem;
+pub use pvr::PVRaItem;
 pub use stl::STLaItem;
 pub use stp::STPaItem;
 pub use stp_b::STPbItem;

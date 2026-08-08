@@ -4,8 +4,8 @@ use zerocopy::FromBytes;
 
 use crate::td0::{
     chunks::{
-        CURaItem, Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, KITbItem, STLaItem, STPaItem, STPbItem, TGLaItem,
-        TRGaItem, WVPaItem,
+        CURaItem, Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, KITbItem, PVRaItem, STLaItem,
+        STPaItem, STPbItem, TGLaItem, TRGaItem, WVPaItem,
     },
     header::{OFFSET_BYTES_REMAINING, SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, TDO_MAGIC},
 };
@@ -175,6 +175,10 @@ impl TD0File {
                 &self.buf[start..end],
                 Some("CURaItem"),
             )?))),
+            "PVRa" => Ok(Some(Box::new(PVRaItem::from_bytes(
+                &self.buf[start..end],
+                Some("PVRaItem"),
+            )?))),
             "STLa" => Ok(Some(Box::new(STLaItem::from_bytes(
                 &self.buf[start..end],
                 Some("STLaItem"),
@@ -209,6 +213,7 @@ impl TD0File {
             "KITa" => Some(Box::new(KITaItem::default())),
             "KITb" => Some(Box::new(KITbItem::default())),
             "CURa" => Some(Box::new(CURaItem::default())),
+            "PVRa" => Some(Box::new(PVRaItem::default())),
             "STLa" => Some(Box::new(STLaItem::default())),
             "STPa" => Some(Box::new(STPaItem::default())),
             "STPb" => Some(Box::new(STPbItem::default())),
@@ -258,6 +263,7 @@ pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
         "KITa" => Some(Box::new(KITaItem::default())),
         "KITb" => Some(Box::new(KITbItem::default())),
         "CURa" => Some(Box::new(CURaItem::default())),
+        "PVRa" => Some(Box::new(PVRaItem::default())),
         "STLa" => Some(Box::new(STLaItem::default())),
         "STPa" => Some(Box::new(STPaItem::default())),
         "STPb" => Some(Box::new(STPbItem::default())),
