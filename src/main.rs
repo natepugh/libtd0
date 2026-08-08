@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
+use core::fmt;
 use hexout::{HexOutSettings, hex_out};
 use libtd0::ManifestData;
+use libtd0::td0::chunks::{ChunkItem, ChunkItemValue};
 use libtd0::td0::header::TD0ManifestTag;
 use libtd0::td0::{TD0File, get_chunk_item_fields};
 use libtd0_core::result::{TD0Error, TD0Result};
@@ -21,6 +23,12 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     DisplayManifest {},
+    ChunkItemCompare {
+        chunk_name_1: String,
+        chunk_name_2: String,
+        #[arg(short, long)]
+        item_num: usize,
+    },
     ChunkValues {
         chunk_name: String,
         #[arg(short, long)]
@@ -166,6 +174,115 @@ fn command_dump_chunk_values(
     Ok(output)
 }
 
+struct ChunkFieldDiffItem {
+    index: usize,
+    field: &'static str,
+    left: Option<ChunkItemValue>,
+    right: Option<ChunkItemValue>,
+}
+
+impl fmt::Display for ChunkFieldDiffItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (&self.left, &self.right) {
+            (Some(_), None) => write!(
+                f,
+                "{} `{}`: Field not present on right.",
+                self.index, self.field
+            ),
+            (None, Some(_)) => write!(
+                f,
+                "{} `{}`: Field not present on left.",
+                self.index, self.field
+            ),
+            (Some(left), Some(right)) => {
+                if left == right {
+                    write!(
+                        f,
+                        "{} `{}`: Both sides are identical.",
+                        self.index, self.field
+                    )
+                } else {
+                    write!(
+                        f,
+                        "{} `{}`: left = '{}' | right = '{}'",
+                        self.index, self.field, left, right
+                    )
+                }
+            }
+            (None, None) => write!(
+                f,
+                "{} {}: Field not present in left or right.",
+                self.index, self.field
+            ),
+        }
+    }
+}
+
+fn get_chunk_item(
+    td0file: &TD0File,
+    chunk_name: &str,
+    item_num: usize,
+) -> TD0Result<Box<dyn ChunkItem>> {
+    let Some(chunk_tag) = td0file.get_tag(chunk_name) else {
+        return Err(TD0Error::InvalidChunkError {
+            chunk_name: chunk_name.to_string(),
+        });
+    };
+
+    let Some(item) = td0file.get_chunk_item(chunk_tag, item_num)? else {
+        let Ok(Some(chunk_header)) = td0file.get_chunk_header(&chunk_tag) else {
+            return Err(TD0Error::InvalidChunkError {
+                chunk_name: chunk_name.to_string(),
+            });
+        };
+        return Err(TD0Error::ItemIndexError {
+            len: chunk_header.get_num_items() as usize,
+            index: item_num as usize,
+        });
+    };
+    Ok(item)
+}
+
+fn command_compare_chunk_items(
+    bytes: &[u8],
+    chunk_name_1: &str,
+    chunk_name_2: &str,
+    item_num: usize,
+) -> TD0Result<String> {
+    let td0file = TD0File::from_bytes(bytes.to_vec())?;
+
+    let chunk_1_item = get_chunk_item(&td0file, chunk_name_1, item_num)?;
+    let chunk_2_item = get_chunk_item(&td0file, chunk_name_2, item_num)?;
+
+    let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();
+
+    // TODO: Currently this won't show fields from chunk_2 that aren't in chunk_1.
+    for (idx, fld_name) in chunk_1_item.get_fields().iter().enumerate() {
+        let c1_val = chunk_1_item.get_value(*fld_name);
+        let c2_val = chunk_2_item.get_value(*fld_name);
+        if c1_val != c2_val {
+            diffs.push(ChunkFieldDiffItem {
+                index: idx,
+                field: *fld_name,
+                left: c1_val,
+                right: c2_val,
+            });
+        }
+    }
+
+    let output: String = if diffs.len() > 0 {
+        diffs
+            .iter()
+            .map(|diff| diff.to_string())
+            .collect::<Vec<String>>()
+            .join("\n")
+    } else {
+        "No differences".into()
+    };
+
+    Ok(output)
+}
+
 fn command_dump_chunk(bytes: &[u8], chunk_name: &str) -> TD0Result<String> {
     let td0file = TD0File::from_bytes(bytes.to_vec())?;
     let Some(chunk_tag) = td0file.get_tag(chunk_name) else {
@@ -195,6 +312,38 @@ fn main() {
             let bytes: Vec<u8> = fs::read(cli.file).expect("Could not read input file.");
             let manifest_data = ManifestData::from_bytes(&bytes).unwrap();
             println!("{}", manifest_data);
+        }
+        Some(Commands::ChunkItemCompare {
+            chunk_name_1,
+            chunk_name_2,
+            item_num,
+        }) => {
+            let bytes: Vec<u8> = fs::read(cli.file).expect("Could not read input file.");
+            let Some(inum_reindexed) = item_num.checked_sub(1) else {
+                eprintln!("Item index out of bounds. Must be 1 - ? inclusive.");
+                exit(1);
+            };
+
+            let compare_result = match command_compare_chunk_items(
+                &bytes,
+                chunk_name_1,
+                chunk_name_2,
+                inum_reindexed,
+            ) {
+                Ok(data) => data,
+                Err(e) => {
+                    match e {
+                        TD0Error::ItemIndexError { len, .. } => {
+                            eprintln!("Item index out of bounds. Must be 1 - {len} inclusive.");
+                        }
+                        _ => {
+                            eprintln!("{}", e);
+                        }
+                    };
+                    exit(1);
+                }
+            };
+            println!("{compare_result}");
         }
         Some(Commands::ChunkValues {
             chunk_name,
