@@ -4,7 +4,7 @@ use zerocopy::FromBytes;
 
 use crate::td0::{
     chunks::{
-        CURaItem, Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, STLaItem, STPaItem, TGLaItem,
+        CURaItem, Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, KITbItem, STLaItem, STPaItem, STPbItem, TGLaItem,
         TRGaItem, WVPaItem,
     },
     header::{OFFSET_BYTES_REMAINING, SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, TDO_MAGIC},
@@ -167,6 +167,10 @@ impl TD0File {
                 &self.buf[start..end],
                 Some("KITaItem"),
             )?))),
+            "KITb" => Ok(Some(Box::new(KITbItem::from_bytes(
+                &self.buf[start..end],
+                Some("KITbItem"),
+            )?))),
             "CURa" => Ok(Some(Box::new(CURaItem::from_bytes(
                 &self.buf[start..end],
                 Some("CURaItem"),
@@ -178,6 +182,10 @@ impl TD0File {
             "STPa" => Ok(Some(Box::new(STPaItem::from_bytes(
                 &self.buf[start..end],
                 Some("STPaItem"),
+            )?))),
+            "STPb" => Ok(Some(Box::new(STPbItem::from_bytes(
+                &self.buf[start..end],
+                Some("STPbItem"),
             )?))),
             "TGLa" => Ok(Some(Box::new(TGLaItem::from_bytes(
                 &self.buf[start..end],
@@ -199,9 +207,11 @@ impl TD0File {
         match chunk_name {
             "HDRa" => Some(Box::new(HDRaItem::default())),
             "KITa" => Some(Box::new(KITaItem::default())),
+            "KITb" => Some(Box::new(KITbItem::default())),
             "CURa" => Some(Box::new(CURaItem::default())),
             "STLa" => Some(Box::new(STLaItem::default())),
             "STPa" => Some(Box::new(STPaItem::default())),
+            "STPb" => Some(Box::new(STPbItem::default())),
             "TGLa" => Some(Box::new(TGLaItem::default())),
             "TRGa" => Some(Box::new(TRGaItem::default())),
             "WVPa" => Some(Box::new(WVPaItem::default())),
@@ -246,9 +256,11 @@ pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
     match chunk_name {
         "HDRa" => Some(Box::new(HDRaItem::default())),
         "KITa" => Some(Box::new(KITaItem::default())),
+        "KITb" => Some(Box::new(KITbItem::default())),
         "CURa" => Some(Box::new(CURaItem::default())),
         "STLa" => Some(Box::new(STLaItem::default())),
         "STPa" => Some(Box::new(STPaItem::default())),
+        "STPb" => Some(Box::new(STPbItem::default())),
         "TGLa" => Some(Box::new(TGLaItem::default())),
         "TRGa" => Some(Box::new(TRGaItem::default())),
         "WVPa" => Some(Box::new(WVPaItem::default())),

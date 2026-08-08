@@ -6,7 +6,7 @@ use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
 #[repeat_fields]
 #[derive(Clone, Copy, Debug, FromBytes, IntoBytes, KnownLayout, TD0ChunkItem)]
 #[repr(C, packed)]
-pub struct STPaItem {
+pub struct STPbItem {
     #[td0_field(field_type = "Slice")]
     unknown_1: [u8; 248],
 
@@ -35,4 +35,13 @@ pub struct STPaItem {
     #[repeat_section_last]
     #[td0_field(field_type = "U16")]
     unknown: U16<LittleEndian>,
+
+    // Extra 128 bytes of something
+
+    // "Backup" on the sample I've seen.
+    #[td0_field(field_type = "Text", pad_byte = 0x20)]
+    unknown_name: [u8; 16],
+
+    #[td0_field(field_type = "Slice")]
+    unknown_2: [u8; 112],
 }

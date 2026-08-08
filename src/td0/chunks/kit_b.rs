@@ -37,7 +37,7 @@ use crate::td0::strings::{
 #[repeat_fields]
 #[derive(Clone, Copy, Debug, FromBytes, IntoBytes, KnownLayout, TD0ChunkItem)]
 #[repr(C, packed)]
-pub struct KITaItem {
+pub struct KITbItem {
     #[td0_field(field_type = "Text", pad_byte = 0x20)]
     name: [u8; 16],
 
@@ -1240,6 +1240,24 @@ pub struct KITaItem {
     #[repeat_section_last]
     #[td0_field(field_type = "Slice")]
     layer_2_unknown_12: [u8; 12], //  Padding?
+
+    /* NOTE: Possible data here?
+     *   ( see https://www.roland.com/us/support/by_product/spd-sx_pro/updates_drivers/2e9e3491-dd14-4d5d-99e3-4674794d0cde/ )
+     *
+     *    - Per-Kit Master Effect Support: Master Effects can now be set individually for each kit.
+     *    - Loop Stop Setting When Switching Kits:
+     *      Previously, loop phrases continued playing when switching kits.
+     *      A new setting allows loop playback to stop when changing kits.
+     *      (Set to "Loop ON (Mute on KitChg)" on the PAD EDIT (1/5) screen.)
+     *
+     *   - Pad Output Mute for PHONES and MASTER OUT
+     *       You can now set individual pads so that they do not output sound to PHONES or MASTER OUT.
+     *       Previously, sound was always output to PHONES.
+     *       This is useful when you want to output sound only to DIRECT OUT, or when using a kick pad as a control signal for sidechain processing and do not want its sound sent to PHONES or MASTER OUT.
+     *       (Set OUTPUT to "OFF" on the OUTPUT/EFFECTS screen or the OUTPUT ASSIGN - PAD OUTPUT screen.)
+     */
+    #[td0_field(field_type = "Slice")]
+    kit_b_unknown: [u8; 72],
 }
 
 #[cfg(test)]
@@ -1247,7 +1265,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_kit_a_item_expected_num_fields() {
-        assert_eq!(KITA_ITEM_FIELDS.len(), 2296);
+    fn test_kit_b_item_expected_num_fields() {
+        assert_eq!(KITB_ITEM_FIELDS.len(), 2297);
     }
 }
