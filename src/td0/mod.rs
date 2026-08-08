@@ -29,7 +29,7 @@ fn parse_manifest(bytes: &[u8]) -> TD0Result<Vec<TD0ManifestTag>> {
     Ok(manifest)
 }
 
-fn build_tag_indexes(tags: &Vec<TD0ManifestTag>) -> TD0Result<HashMap<String, usize>> {
+fn build_tag_indexes(tags: &[TD0ManifestTag]) -> TD0Result<HashMap<String, usize>> {
     let mut indexes: HashMap<String, usize> = HashMap::<String, usize>::new();
     for (idx, tag) in tags.iter().enumerate() {
         // let tag_name = str::from_utf8(&tag.tag).map_err(|e| { TD0Error::InvalidTD0TagError })?;
@@ -48,7 +48,7 @@ fn validate_id_tag(tag: &TD0IdChunk) -> TD0Result<()> {
     }
 }
 
-fn validate_manifest(manifest: &Vec<TD0ManifestTag>) -> TD0Result<()> {
+fn validate_manifest(manifest: &[TD0ManifestTag]) -> TD0Result<()> {
     let mut unique: HashSet<String> = HashSet::<String>::new();
     for tag_name in manifest.iter().map(|tag| tag.get_tag()) {
         if unique.contains(&tag_name) {
@@ -75,13 +75,13 @@ impl TD0File {
     pub fn from_bytes(bytes: Vec<u8>) -> TD0Result<Self> {
         let id_tag = header::TD0IdChunk::read_from_bytes(&bytes[..header::SZ_HDR_CHUNK])
             .map_err(|_| TD0Error::InvalidHeaderError)?;
-        let _ = validate_id_tag(&id_tag)?;
+        validate_id_tag(&id_tag)?;
 
         let manifest = parse_manifest(
             &bytes[SZ_HDR_CHUNK
                 ..id_tag.get_bytes_remaining() as usize + OFFSET_BYTES_REMAINING as usize],
         )?;
-        let _ = validate_manifest(&manifest)?;
+        validate_manifest(&manifest)?;
         let tag_indexes = build_tag_indexes(&manifest)?;
 
         let mut chunk_headers: HashMap<String, ChunkHeader> = HashMap::new();
@@ -112,10 +112,10 @@ impl TD0File {
 
         Ok(Self {
             buf: bytes,
-            manifest: manifest,
-            tag_indexes: tag_indexes,
-            chunk_headers: chunk_headers,
-            chunks: chunks,
+            manifest,
+            tag_indexes,
+            chunk_headers,
+            chunks,
         })
     }
 
@@ -158,7 +158,7 @@ impl TD0File {
         };
         let end: usize = start + chunk.sz_item;
 
-        return match chunk_tag.get_tag().as_str() {
+        match chunk_tag.get_tag().as_str() {
             "HDRa" => Ok(Some(Box::new(HDRaItem::from_bytes(
                 &self.buf[start..end],
                 Some("HDRaItem"),
@@ -204,7 +204,7 @@ impl TD0File {
                 Some("WVPaItem"),
             )?))),
             _ => Ok(None),
-        };
+        }
     }
 
     pub fn get_chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
@@ -240,7 +240,7 @@ impl TD0File {
 
     pub fn get_chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> Option<&[u8]> {
         let chunk_tag = self.get_tag(chunk_name)?;
-        return match self.chunk_headers.get(chunk_name) {
+        match self.chunk_headers.get(chunk_name) {
             Some(chunk_header) => {
                 if item_index >= chunk_header.get_num_items() as usize {
                     return None;
@@ -253,7 +253,7 @@ impl TD0File {
                 Some(&self.buf[start..end])
             }
             _ => None,
-        };
+        }
     }
 }
 

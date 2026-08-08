@@ -74,34 +74,34 @@ fn command_dump_chunk_item(bytes: &[u8], chunk_name: &str, item_num: usize) -> T
     let Some(item_data) = item_result else {
         // The index was out of bounds if we've arrived here.
         // Retrieve the chunk_header in order to provide the actual number of items to
-        let Ok(Some(chunk_header)) = td0file.get_chunk_header(&chunk_tag) else {
+        let Ok(Some(chunk_header)) = td0file.get_chunk_header(chunk_tag) else {
             return Err(TD0Error::InvalidChunkError {
                 chunk_name: chunk_name.to_string(),
             });
         };
         return Err(TD0Error::ItemIndexError {
             len: chunk_header.get_num_items() as usize,
-            index: item_num as usize,
+            index: item_num,
         });
     };
 
-    let hexout_settings = create_hexout_settings(&chunk_tag);
-    let dump = hex_out(&item_data, &hexout_settings, 0, 0, 0).unwrap();
+    let hexout_settings = create_hexout_settings(chunk_tag);
+    let dump = hex_out(item_data, &hexout_settings, 0, 0, 0).unwrap();
     Ok(format!("{chunk_tag}\n{}", dump))
 }
 
-fn validate_fields(td0file: &TD0File, chunk_name: &str, fields: &Vec<String>) -> TD0Result<()> {
+fn validate_fields(td0file: &TD0File, chunk_name: &str, fields: &[String]) -> TD0Result<()> {
     let all_fields: HashSet<String> = chunk_item_fields_as_strings(td0file, chunk_name)?
         .into_iter()
         .collect();
-    let param_fields: HashSet<String> = fields.clone().into_iter().collect();
+    let param_fields: HashSet<String> = fields.iter().cloned().collect();
 
     let unknown_fields = param_fields.difference(&all_fields);
     let unknown_fields_str = unknown_fields
         .map(|it| it.to_string())
         .collect::<Vec<String>>()
         .join(",");
-    if unknown_fields_str.len() > 0 {
+    if !unknown_fields_str.is_empty() {
         return Err(TD0Error::InputError {
             message: format!("Unknown {chunk_name} fields: [{unknown_fields_str}]"),
         });
@@ -136,7 +136,7 @@ fn command_dump_chunk_values(
 
     let fields = match fields {
         Some(flds) => {
-            validate_fields(&td0file, &chunk_name, &flds)?;
+            validate_fields(&td0file, chunk_name, flds)?;
             flds.to_owned()
         }
         None => chunk_item_fields_as_strings(&td0file, chunk_name)?,
@@ -153,10 +153,7 @@ fn command_dump_chunk_values(
     };
 
     for idx in item_range {
-        let item_result = td0file.get_chunk_item(&chunk_tag, idx)?;
-
-        if item_result.is_some() {
-            let item = item_result.expect("Item is Some");
+        if let Some(item) = td0file.get_chunk_item(chunk_tag, idx)? {
             let mut vals: Vec<String> = Vec::new();
             for field in fields.iter() {
                 vals.push(format!(
@@ -230,14 +227,14 @@ fn get_chunk_item(
     };
 
     let Some(item) = td0file.get_chunk_item(chunk_tag, item_num)? else {
-        let Ok(Some(chunk_header)) = td0file.get_chunk_header(&chunk_tag) else {
+        let Ok(Some(chunk_header)) = td0file.get_chunk_header(chunk_tag) else {
             return Err(TD0Error::InvalidChunkError {
                 chunk_name: chunk_name.to_string(),
             });
         };
         return Err(TD0Error::ItemIndexError {
             len: chunk_header.get_num_items() as usize,
-            index: item_num as usize,
+            index: item_num,
         });
     };
     Ok(item)
@@ -258,26 +255,26 @@ fn command_compare_chunk_items(
 
     // TODO: Currently this won't show fields from chunk_2 that aren't in chunk_1.
     for (idx, fld_name) in chunk_1_item.get_fields().iter().enumerate() {
-        let c1_val = chunk_1_item.get_value(*fld_name);
-        let c2_val = chunk_2_item.get_value(*fld_name);
+        let c1_val = chunk_1_item.get_value(fld_name);
+        let c2_val = chunk_2_item.get_value(fld_name);
         if c1_val != c2_val {
             diffs.push(ChunkFieldDiffItem {
                 index: idx,
-                field: *fld_name,
+                field: fld_name,
                 left: c1_val,
                 right: c2_val,
             });
         }
     }
 
-    let output: String = if diffs.len() > 0 {
+    let output: String = if diffs.is_empty() {
+        "No differences".into()
+    } else {
         diffs
             .iter()
             .map(|diff| diff.to_string())
             .collect::<Vec<String>>()
             .join("\n")
-    } else {
-        "No differences".into()
     };
 
     Ok(output)
@@ -299,8 +296,8 @@ fn command_dump_chunk(bytes: &[u8], chunk_name: &str) -> TD0Result<String> {
         });
     };
 
-    let hexout_settings = create_hexout_settings(&chunk_tag);
-    let dump = hex_out(&chunk_data, &hexout_settings, 0, 0, 0).unwrap();
+    let hexout_settings = create_hexout_settings(chunk_tag);
+    let dump = hex_out(chunk_data, &hexout_settings, 0, 0, 0).unwrap();
     Ok(format!("{chunk_tag}\n{}", dump))
 }
 
@@ -433,5 +430,3 @@ fn main() {
         }
     }
 }
-
-//:  &Option<u32>

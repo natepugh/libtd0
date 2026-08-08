@@ -14,7 +14,7 @@ impl Parse for AttrKeyValue {
         let key: Ident = input.parse()?;
         let _: Token![=] = input.parse()?;
         let val: Lit = input.parse()?;
-        Ok(Self { key: key, val: val })
+        Ok(Self { key, val })
     }
 }
 
@@ -168,7 +168,7 @@ pub fn parse_kv_list(attr: &Attribute) -> syn::Result<AttrKeyValueList> {
 pub fn get_type_path(typeobj: &Type) -> &Path {
     match typeobj {
         Type::Path(tpath) => &tpath.path,
-        Type::Array(apath) => get_type_path(&*apath.elem),
+        Type::Array(apath) => get_type_path(&apath.elem),
         _ => unimplemented!("get_type_path: Type: {:#?}", typeobj),
     }
 }
@@ -210,11 +210,9 @@ pub fn validate_attr_list_required_attrs(
 
 pub fn push_arm_to_fn_match(func: &mut ImplItemFn, arm: &Arm) {
     for stmt in func.block.stmts.iter_mut() {
-        if let Stmt::Expr(expr, _) = stmt {
-            if let Expr::Match(match_stmt) = expr {
-                match_stmt.arms.push(arm.clone());
-            }
-        };
+        if let Stmt::Expr(expr, _) = stmt && let Expr::Match(match_stmt) = expr {
+            match_stmt.arms.push(arm.clone());
+        }
     }
 }
 
@@ -262,11 +260,11 @@ pub fn get_field_native_type(field: &Field) -> Option<NativeType> {
             }
         }
         Type::Array(apath) => {
-            let path = get_type_path(&*apath.elem);
+            let path = get_type_path(&apath.elem);
             let last_segment = path
                 .segments
                 .iter()
-                .last()
+                .next_back()
                 .expect("Path must have segments");
 
             match last_segment.ident.to_string().as_str() {
@@ -275,7 +273,7 @@ pub fn get_field_native_type(field: &Field) -> Option<NativeType> {
                         && let Lit::Int(int_expr) = &type_expr.lit
                     {
                         Some(NativeType::Slice(NativeTypeSlice {
-                            size: int_expr.base10_parse().unwrap_or_else(|_| 0),
+                            size: int_expr.base10_parse().unwrap_or(0)
                         }))
                     } else {
                         None

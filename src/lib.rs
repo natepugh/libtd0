@@ -52,14 +52,14 @@ impl ManifestData {
         Ok(ManifestData {
             backup_size: 0,
             backup_type: TD0BackupType::Unknown,
-            checksum_actual: checksum_actual,
+            checksum_actual,
             checksum_calculated: Into::into(checksum_calculated),
             device_model: TD0DeviceModel::Unknown,
             size_actual: bytes.len(),
             size_calculated: last_chunk_tag.get_pos() as usize
                 + last_chunk_tag.get_length() as usize
                 + SZ_MD5_DIGEST,
-            chunks: chunks,
+            chunks,
         })
     }
 }

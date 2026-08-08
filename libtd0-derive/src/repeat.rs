@@ -89,7 +89,7 @@ pub fn repeat_fields(
                 let attr_path_name = attr
                     .path()
                     .get_ident()
-                    .unwrap_or_else(|| &fake_ident)
+                    .unwrap_or(&fake_ident)
                     .to_string();
                 !MY_ATTR_NAMES.contains(&attr_path_name.as_str())
             });
@@ -102,9 +102,7 @@ pub fn repeat_fields(
                 if section_attr.is_some() {
                     new_section_fields.named.push(fld);
                     if section_last_attr.is_some() {
-                        let attr = RepeatSectionAttr::try_from(section_attr.expect("Infallible"))
-                            .expect("Infallible");
-                        push_section_repeated(&mut new_fields, &new_section_fields, &attr);
+                        push_section_repeated(&mut new_fields, &new_section_fields, &section_attr.expect("Infallible"));
                         section_attr = None;
                         section_last_attr = None;
                     }
@@ -117,7 +115,7 @@ pub fn repeat_fields(
 
             let repeat_field_attr = repeat_field_attr.expect("is_none already checked.");
             let repeat_attrs = match RepeatFieldAttr::try_from(repeat_field_attr) {
-                Ok(attr) => RepeatFieldAttr::from(attr),
+                Ok(attr) => attr,
                 Err(err) => return err.into_compile_error().into(),
             };
 
@@ -131,9 +129,7 @@ pub fn repeat_fields(
             }
 
             if section_last_attr.is_some() {
-                let attr = RepeatSectionAttr::try_from(section_attr.expect("Infallible"))
-                    .expect("Infallible");
-                push_section_repeated(&mut new_fields, &new_section_fields, &attr);
+                push_section_repeated(&mut new_fields, &new_section_fields, &section_attr.expect("Infallible"));
                 section_attr = None;
                 section_last_attr = None;
             }
@@ -148,13 +144,13 @@ pub fn repeat_fields(
 fn push_field_repeated(
     dest: &mut FieldsNamed,
     field: &Field,
-    new_attrs: &Vec<Attribute>,
+    new_attrs: &[Attribute],
     count: u8,
     format: &str,
 ) {
     for idx in 1..count + 1 {
         let mut new_field = field.clone();
-        new_field.attrs = new_attrs.clone();
+        new_field.attrs = new_attrs.to_vec().clone();
 
         let ident_str = format.replace("{}", idx.to_string().as_str());
         new_field.ident = format_ident!("{}", ident_str).into();
@@ -217,6 +213,7 @@ impl TryFrom<&Attribute> for RepeatFieldAttr {
     }
 }
 
+#[derive(Clone)]
 struct RepeatSectionAttr {
     count: u8,
     prefix_format: String,

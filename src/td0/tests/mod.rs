@@ -15,7 +15,7 @@ use libtd0_core::result::{TD0Error, TD0Result};
 use libtd0_derive::TD0ChunkItem;
 use libtd0_derive::repeat_fields;
 
-const ENUM_STR_VALUES: [&'static str; 5] = [
+const ENUM_STR_VALUES: [&str; 5] = [
     "Test_0_EnumStr",
     "Test_1_EnumStr",
     "Test_2_EnumStr",
@@ -200,37 +200,37 @@ fn test_expected_defaults() {
     );
     assert_eq!(
         ts.get_value("u16_unbounded"),
-        Some((ChunkItemValue::U16(0))),
+        Some(ChunkItemValue::U16(0)),
         "Default 0 shouldn't be clamped."
     );
     assert_eq!(
         ts.get_value("u16_bounded"),
-        Some((ChunkItemValue::U16(257))),
+        Some(ChunkItemValue::U16(257)),
         "Default 0 should be clamped to field min."
     );
     assert_eq!(
         ts.get_value("u32_unbounded"),
-        Some((ChunkItemValue::U32(0))),
+        Some(ChunkItemValue::U32(0)),
         "Default 0 shouldn't be clamped."
     );
     assert_eq!(
         ts.get_value("u32_bounded"),
-        Some((ChunkItemValue::U32(65537))),
+        Some(ChunkItemValue::U32(65537)),
         "Default 0 should be clamped to field min."
     );
     assert_eq!(
         ts.get_value("u8_unbounded"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Default 0 shouldn't be clamped."
     );
     assert_eq!(
         ts.get_value("u8_bounded_min_only"),
-        Some((ChunkItemValue::U8(27))),
+        Some(ChunkItemValue::U8(27)),
         "Default 0 should be clamped to field min."
     );
     assert_eq!(
         ts.get_value("volume_field"),
-        Some((ChunkItemValue::Volume(Volume(dec64!(0))))),
+        Some(ChunkItemValue::Volume(Volume(dec64!(0)))),
         "Default 0 shouldn't be clamped."
     );
 }
@@ -240,67 +240,67 @@ fn test_repeat_fields() {
     let ts = TestStruct::default();
     assert_eq!(
         ts.get_value("repeat_field_1_val"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat field `repeat_field_1_val` should be retrievable."
     );
     assert_eq!(
         ts.get_value("repeat_field_2_val"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat field `repeat_field_2_val` should be retrievable."
     );
     assert_eq!(
         ts.get_value("repeat_field_3_val"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat field `repeat_field_3_val` should be retrievable."
     );
     assert_eq!(
         ts.get_value("item_1_val_1"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat section field `item_1_val_1` should be retrievable."
     );
     assert_eq!(
         ts.get_value("item_1_val_rpt_1"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat section field `item_1_val_rpt_1` should be retrievable."
     );
     assert_eq!(
         ts.get_value("item_1_val_rpt_2"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat section field `item_1_val_rpt_2` should be retrievable."
     );
     assert_eq!(
         ts.get_value("item_1_val_rpt_3"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat section field `item_1_val_rpt_3` should be retrievable."
     );
     assert_eq!(
         ts.get_value("item_1_val_3"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat section field `item_1_val_3` should be retrievable."
     );
     assert_eq!(
         ts.get_value("item_2_val_1"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat section field `item_2_val_1` should be retrievable."
     );
     assert_eq!(
         ts.get_value("item_2_val_rpt_1"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat section field `item_2_val_rpt_1` should be retrievable."
     );
     assert_eq!(
         ts.get_value("item_2_val_rpt_2"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat section field `item_2_val_rpt_2` should be retrievable."
     );
     assert_eq!(
         ts.get_value("item_2_val_rpt_3"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat section field `item_2_val_rpt_3` should be retrievable."
     );
     assert_eq!(
         ts.get_value("item_2_val_3"),
-        Some((ChunkItemValue::U8(0))),
+        Some(ChunkItemValue::U8(0)),
         "Repeat section field `item_2_val_3` should be retrievable."
     );
 }

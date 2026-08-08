@@ -67,25 +67,19 @@ mod tests {
 
     #[test]
     fn test_in_range_inclusive_u8() {
-        assert_eq!(in_range_inclusive(&u8::MIN, None, None), true);
-        assert_eq!(in_range_inclusive(&u8::MAX, None, None), true);
-        assert_eq!(in_range_inclusive(&1u8, Some(&1u8), Some(&1u8)), true);
-        assert_eq!(in_range_inclusive(&2u8, Some(&1u8), Some(&1u8)), false);
-        assert_eq!(in_range_inclusive(&0u8, Some(&1u8), Some(&1u8)), false);
+        assert!(in_range_inclusive(&u8::MIN, None, None));
+        assert!(in_range_inclusive(&u8::MAX, None, None));
+        assert!(in_range_inclusive(&1u8, Some(&1u8), Some(&1u8)));
+        assert!(!in_range_inclusive(&2u8, Some(&1u8), Some(&1u8)));
+        assert!(!in_range_inclusive(&0u8, Some(&1u8), Some(&1u8)));
     }
 
     #[test]
     fn test_in_range_inclusive_decimal() {
-        assert_eq!(in_range_inclusive(&Decimal::MIN, None, None), true);
-        assert_eq!(in_range_inclusive(&Decimal::MAX, None, None), true);
-        assert_eq!(
-            in_range_inclusive(&dec64!(23.0), Some(&dec64!(22.9)), Some(&dec64!(23.1))),
-            true
-        );
-        assert_eq!(
-            in_range_inclusive(&Decimal::NEG_INFINITY, None, None),
-            false
-        );
-        assert_eq!(in_range_inclusive(&Decimal::INFINITY, None, None), false);
+        assert!(in_range_inclusive(&Decimal::MIN, None, None));
+        assert!(in_range_inclusive(&Decimal::MAX, None, None));
+        assert!(in_range_inclusive(&dec64!(23.0), Some(&dec64!(22.9)), Some(&dec64!(23.1))));
+        assert!(!in_range_inclusive(&Decimal::NEG_INFINITY, None, None));
+        assert!(!in_range_inclusive(&Decimal::INFINITY, None, None));
     }
 }

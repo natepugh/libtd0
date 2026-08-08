@@ -37,7 +37,7 @@ fn td0_field_validate_required_attrs(
 ) -> syn::Result<()> {
     let mut my_required_names: Vec<&str> = Vec::from(required_names);
     my_required_names.insert(0, "field_type");
-    validate_attr_list_required_attrs(&kv_list, &my_required_names[..], source_attr)
+    validate_attr_list_required_attrs(kv_list, &my_required_names[..], source_attr)
 }
 
 fn td0_field_parse_and_validate_kv_list(
@@ -356,16 +356,16 @@ impl TryFrom<&Attribute> for TD0FieldTypeMaybeBoundedI16 {
 
 #[derive(Clone, Debug, PartialEq)]
 enum TD0FieldType {
-    TD0FieldTypeEnumStr(TD0FieldTypeEnumStr),
-    TD0FieldTypeI16(TD0FieldTypeMaybeBoundedI16),
-    TD0FieldTypeI8(TD0FieldTypeMaybeBoundedI8),
-    TD0FieldTypeSlice(TD0FieldTypeNone),
-    TD0FieldTypeTD0Decimal(TD0FieldTypeTD0Decimal),
-    TD0FieldTypeText(TD0FieldTypeText),
-    TD0FieldTypeU16(TD0FieldTypeMaybeBoundedU16),
-    TD0FieldTypeU32(TD0FieldTypeMaybeBoundedU32),
-    TD0FieldTypeU8(TD0FieldTypeMaybeBoundedU8),
-    TD0FieldTypeVolume(TD0FieldTypeNone),
+    EnumStr(TD0FieldTypeEnumStr),
+    I16(TD0FieldTypeMaybeBoundedI16),
+    I8(TD0FieldTypeMaybeBoundedI8),
+    Slice(TD0FieldTypeNone),
+    TD0Decimal(TD0FieldTypeTD0Decimal),
+    Text(TD0FieldTypeText),
+    U16(TD0FieldTypeMaybeBoundedU16),
+    U32(TD0FieldTypeMaybeBoundedU32),
+    U8(TD0FieldTypeMaybeBoundedU8),
+    Volume(TD0FieldTypeNone),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -394,21 +394,21 @@ impl TryFrom<&Field> for TD0Field {
         let field_type_name: String = field_type.try_into()?;
 
         let parsed_field_attr: TD0FieldType = match field_type_name.as_str() {
-            "EnumStr" => TD0FieldType::TD0FieldTypeEnumStr(TD0FieldTypeEnumStr::try_from(&attr)?),
-            "I16" => TD0FieldType::TD0FieldTypeI16(TD0FieldTypeMaybeBoundedI16::try_from(&attr)?),
-            "I8" => TD0FieldType::TD0FieldTypeI8(TD0FieldTypeMaybeBoundedI8::try_from(&attr)?),
-            "Slice" => TD0FieldType::TD0FieldTypeSlice(TD0FieldTypeNone {}),
-            "Text" => TD0FieldType::TD0FieldTypeText(TD0FieldTypeText::try_from(&attr)?),
+            "EnumStr" => TD0FieldType::EnumStr(TD0FieldTypeEnumStr::try_from(&attr)?),
+            "I16" => TD0FieldType::I16(TD0FieldTypeMaybeBoundedI16::try_from(&attr)?),
+            "I8" => TD0FieldType::I8(TD0FieldTypeMaybeBoundedI8::try_from(&attr)?),
+            "Slice" => TD0FieldType::Slice(TD0FieldTypeNone {}),
+            "Text" => TD0FieldType::Text(TD0FieldTypeText::try_from(&attr)?),
             "TD0Decimal" => {
-                TD0FieldType::TD0FieldTypeTD0Decimal(TD0FieldTypeTD0Decimal::try_from(&attr)?)
+                TD0FieldType::TD0Decimal(TD0FieldTypeTD0Decimal::try_from(&attr)?)
             }
-            "U16" => TD0FieldType::TD0FieldTypeU16(TD0FieldTypeMaybeBoundedU16::try_from(&attr)?),
-            "U32" => TD0FieldType::TD0FieldTypeU32(TD0FieldTypeMaybeBoundedU32::try_from(&attr)?),
-            "U8" => TD0FieldType::TD0FieldTypeU8(TD0FieldTypeMaybeBoundedU8::try_from(&attr)?),
-            "Volume" => TD0FieldType::TD0FieldTypeVolume(TD0FieldTypeNone {}),
+            "U16" => TD0FieldType::U16(TD0FieldTypeMaybeBoundedU16::try_from(&attr)?),
+            "U32" => TD0FieldType::U32(TD0FieldTypeMaybeBoundedU32::try_from(&attr)?),
+            "U8" => TD0FieldType::U8(TD0FieldTypeMaybeBoundedU8::try_from(&attr)?),
+            "Volume" => TD0FieldType::Volume(TD0FieldTypeNone {}),
             _ => {
                 return Err(syn::Error::new_spanned(
-                    &field_type.get_val(),
+                    field_type.get_val(),
                     format!("Unknown field_type: `{field_type_name}`"),
                 ));
             }
@@ -422,9 +422,9 @@ impl TryFrom<&Field> for TD0Field {
         };
 
         Ok(Self {
-            ident: ident,
+            ident,
             attr: parsed_field_attr,
-            native_type: native_type,
+            native_type,
         })
     }
 }
@@ -440,7 +440,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         NativeType::I16 => {
             let i16_default: i16 = match TD0Field::try_from(field) {
                 Ok(td0field) => match td0field.attr {
-                    TD0FieldType::TD0FieldTypeI16(field_type) => field_type.clamp(0),
+                    TD0FieldType::I16(field_type) => field_type.clamp(0),
                     _ => 0,
                 },
                 Err(_) => 0,
@@ -450,7 +450,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         NativeType::I8 => {
             let i8_default: i8 = match TD0Field::try_from(field) {
                 Ok(td0field) => match td0field.attr {
-                    TD0FieldType::TD0FieldTypeI8(field_type) => field_type.clamp(0),
+                    TD0FieldType::I8(field_type) => field_type.clamp(0),
                     _ => 0,
                 },
                 Err(_) => 0,
@@ -460,7 +460,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         NativeType::U8 => {
             let u8_default: u8 = match TD0Field::try_from(field) {
                 Ok(td0field) => match td0field.attr {
-                    TD0FieldType::TD0FieldTypeU8(field_type) => field_type.clamp(0),
+                    TD0FieldType::U8(field_type) => field_type.clamp(0),
                     _ => 0,
                 },
                 Err(_) => 0,
@@ -470,8 +470,8 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         NativeType::U16 => {
             let u16_default: u16 = match TD0Field::try_from(field) {
                 Ok(td0field) => match td0field.attr {
-                    TD0FieldType::TD0FieldTypeTD0Decimal(field_type) => field_type.clamp_u16(0),
-                    TD0FieldType::TD0FieldTypeU16(field_type) => field_type.clamp(0),
+                    TD0FieldType::TD0Decimal(field_type) => field_type.clamp_u16(0),
+                    TD0FieldType::U16(field_type) => field_type.clamp(0),
                     _ => 0,
                 },
                 Err(_) => 0,
@@ -481,7 +481,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         NativeType::U32 => {
             let u32_default: u32 = match TD0Field::try_from(field) {
                 Ok(td0field) => match td0field.attr {
-                    TD0FieldType::TD0FieldTypeU32(field_type) => field_type.clamp(0),
+                    TD0FieldType::U32(field_type) => field_type.clamp(0),
                     _ => 0,
                 },
                 Err(_) => 0,
@@ -492,7 +492,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
             let size = slice.size;
             let slice_default: u8 = match TD0Field::try_from(field) {
                 Ok(td0field) => match td0field.attr {
-                    TD0FieldType::TD0FieldTypeText(attr) => attr.pad_byte.unwrap_or(0),
+                    TD0FieldType::Text(attr) => attr.pad_byte.unwrap_or(0),
                     _ => 0,
                 },
                 Err(_) => 0,
@@ -509,7 +509,7 @@ fn td0_struct_gen_impl_default(source: &ItemStruct) -> TokenStream {
     let mut field_defs: Vec<TokenStream> = Vec::new();
     for field in &source.fields {
         let field_ident = field.ident.clone().expect("Fields must be named.");
-        let default_val = default_tokenstream_for_field_type(&field);
+        let default_val = default_tokenstream_for_field_type(field);
         field_defs.push(quote! {#field_ident: #default_val});
     }
 
@@ -529,7 +529,7 @@ fn const_name_from_ident(val: &Ident) -> String {
     let mut output: String = String::new();
     let val_string = val.to_string();
     let mut val_chars = val_string.chars();
-    let mut last_char = val_chars.nth(0).unwrap();
+    let mut last_char = val_chars.next().unwrap();
 
     output.push(last_char.to_ascii_uppercase());
     for char in val_chars {
@@ -554,11 +554,8 @@ fn td0_struct_gen_chunk_item_impl(source: &ItemStruct) -> TokenStream {
     let mut td0fields: Vec<TD0Field> = Vec::new();
 
     for field in source.fields.iter() {
-        match &field.ident {
-            Some(ident) => {
-                field_tokenstreams.push(ident.to_string());
-            }
-            None => (),
+        if let Some(ident) = &field.ident {
+            field_tokenstreams.push(ident.to_string());
         }
 
         // TODO:  Make this more efficient:
@@ -607,38 +604,38 @@ fn td0_struct_gen_chunk_item_impl(source: &ItemStruct) -> TokenStream {
 fn build_getter_expr(td0field: &TD0Field) -> Expr {
     let ident = &td0field.ident;
     match &td0field.attr {
-        TD0FieldType::TD0FieldTypeSlice(_) => parse_quote!(
+        TD0FieldType::Slice(_) => parse_quote!(
             Some(ChunkItemValue::Slice(Box::new(self.#ident.clone())))
         ),
-        TD0FieldType::TD0FieldTypeText(attr) => {
+        TD0FieldType::Text(attr) => {
             let pad_val: u8 = attr.pad_byte.unwrap_or(0);
             parse_quote!(Some(ChunkItemValue::text_from_u8_array(&self.#ident, &#pad_val)))
         }
-        TD0FieldType::TD0FieldTypeI16(_) => {
+        TD0FieldType::I16(_) => {
             parse_quote!(Some(ChunkItemValue::I16(self.#ident.get())))
         }
-        TD0FieldType::TD0FieldTypeU16(_) => {
+        TD0FieldType::U16(_) => {
             parse_quote!(Some(ChunkItemValue::U16(self.#ident.get())))
         }
-        TD0FieldType::TD0FieldTypeU32(_) => {
+        TD0FieldType::U32(_) => {
             parse_quote!(Some(ChunkItemValue::U32(self.#ident.get())))
         }
-        TD0FieldType::TD0FieldTypeU8(_) => parse_quote!(Some(ChunkItemValue::U8(self.#ident))),
-        TD0FieldType::TD0FieldTypeI8(_) => parse_quote!(Some(ChunkItemValue::I8(self.#ident))),
-        TD0FieldType::TD0FieldTypeTD0Decimal(_) => {
+        TD0FieldType::U8(_) => parse_quote!(Some(ChunkItemValue::U8(self.#ident))),
+        TD0FieldType::I8(_) => parse_quote!(Some(ChunkItemValue::I8(self.#ident))),
+        TD0FieldType::TD0Decimal(_) => {
             parse_quote!(
                 Some(
                     ChunkItemValue::TD0Decimal(IntEncodedDecimal::from(self.#ident))
                 )
             )
         }
-        TD0FieldType::TD0FieldTypeVolume(_) => parse_quote!(
+        TD0FieldType::Volume(_) => parse_quote!(
             match Volume::try_from(self.#ident.get()) {
                 Ok(vol) => Some(ChunkItemValue::Volume(vol)),
                 Err(_) => None
             }
         ),
-        TD0FieldType::TD0FieldTypeEnumStr(attr) => {
+        TD0FieldType::EnumStr(attr) => {
             let collection_ident = format_ident!("{}", &attr.collection);
             parse_quote!(Some(ChunkItemValue::EnumStr(
                 *#collection_ident
@@ -729,7 +726,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
     let ident_str = ident.to_string();
 
     match &td0field.attr {
-        TD0FieldType::TD0FieldTypeText(attr) => {
+        TD0FieldType::Text(attr) => {
             let pad_byte = attr.pad_byte.unwrap_or(0u8);
             parse_quote!(
                 (#ident_str, ChunkItemValue::Text(val)) => {
@@ -737,7 +734,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 }
             )
         }
-        TD0FieldType::TD0FieldTypeEnumStr(attr) => {
+        TD0FieldType::EnumStr(attr) => {
             let collection = format_ident!("{}", &attr.collection);
             parse_quote!(
                 (#ident_str, ChunkItemValue::EnumStr(val)) => {
@@ -748,7 +745,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 }
             )
         }
-        TD0FieldType::TD0FieldTypeTD0Decimal(attr) => {
+        TD0FieldType::TD0Decimal(attr) => {
             let inner: Stmt = build_decimal_setter_expr(attr, &td0field.native_type, ident);
 
             parse_quote!(
@@ -758,7 +755,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 }
             )
         }
-        TD0FieldType::TD0FieldTypeVolume(_) => {
+        TD0FieldType::Volume(_) => {
             parse_quote!(
                 (#ident_str, ChunkItemValue::Volume(val)) => {
                     val.validate()?;
@@ -769,7 +766,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 }
             )
         }
-        TD0FieldType::TD0FieldTypeSlice(_) => parse_quote!(
+        TD0FieldType::Slice(_) => parse_quote!(
             (#ident_str, ..) => {
                 Err(libtd0_core::result::TD0Error::ConvertToNativeTypeError {
                     field: field.to_string(),
@@ -777,7 +774,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 })
             }
         ),
-        TD0FieldType::TD0FieldTypeI16(attr) => {
+        TD0FieldType::I16(attr) => {
             let min_expr: Expr = match attr.min {
                 Some(min_val) => parse_quote!(Some(#min_val)),
                 None => parse_quote!(None),
@@ -796,7 +793,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 }
             )
         }
-        TD0FieldType::TD0FieldTypeU16(attr) => {
+        TD0FieldType::U16(attr) => {
             let min_expr: Expr = match attr.min {
                 Some(min_val) => parse_quote!(Some(#min_val)),
                 None => parse_quote!(None),
@@ -815,7 +812,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 }
             )
         }
-        TD0FieldType::TD0FieldTypeU32(attr) => {
+        TD0FieldType::U32(attr) => {
             let min_expr: Expr = match attr.min {
                 Some(min_val) => parse_quote!(Some(#min_val)),
                 None => parse_quote!(None),
@@ -834,7 +831,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 }
             )
         }
-        TD0FieldType::TD0FieldTypeU8(attr) => {
+        TD0FieldType::U8(attr) => {
             let min_expr: Expr = match attr.min {
                 Some(min_val) => parse_quote!(Some(#min_val)),
                 None => parse_quote!(None),
@@ -853,7 +850,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 }
             )
         }
-        TD0FieldType::TD0FieldTypeI8(attr) => {
+        TD0FieldType::I8(attr) => {
             let min_expr: Expr = match attr.min {
                 Some(min_val) => parse_quote!(Some(#min_val)),
                 None => parse_quote!(None),
@@ -916,7 +913,7 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
         ),
         NativeType::Slice(_) => {
             let inner: Stmt = match &td0field.attr {
-                TD0FieldType::TD0FieldTypeText(attr) => {
+                TD0FieldType::Text(attr) => {
                     let pad = attr.pad_byte.unwrap_or(0);
                     parse_quote!(crate::td0::chunks::common::copy_slice_to_native_padded(val, &mut self.#ident, #ident_str, #pad)?;)
                 }
@@ -934,7 +931,7 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
     }
 }
 
-fn build_chunkitem_get_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
+fn build_chunkitem_get_value(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
         fn get_value(&self, field: &str) -> Option<ChunkItemValue> {
             match field {}
@@ -952,12 +949,12 @@ fn build_chunkitem_get_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
     get_fields_clauses.push(parse_quote!(_ => None));
 
     for arm in get_fields_clauses.iter() {
-        push_arm_to_fn_match(&mut fn_skel, &arm);
+        push_arm_to_fn_match(&mut fn_skel, arm);
     }
     fn_skel
 }
 
-fn build_chunkitem_get_value_raw(td0fields: &Vec<TD0Field>) -> ImplItemFn {
+fn build_chunkitem_get_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
         fn get_value_raw(&self, field: &str) -> Option<ChunkItemValueRaw> {
             match field {}
@@ -975,12 +972,12 @@ fn build_chunkitem_get_value_raw(td0fields: &Vec<TD0Field>) -> ImplItemFn {
     get_fields_clauses.push(parse_quote!(_ => None));
 
     for arm in get_fields_clauses.iter() {
-        push_arm_to_fn_match(&mut fn_skel, &arm);
+        push_arm_to_fn_match(&mut fn_skel, arm);
     }
     fn_skel
 }
 
-fn build_chunkitem_set_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
+fn build_chunkitem_set_value(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
         fn set_value(
             &mut self,
@@ -991,10 +988,7 @@ fn build_chunkitem_set_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
         }
     );
 
-    let mut set_fields_clauses: Vec<Arm> = td0fields
-        .iter()
-        .map(|td0field| build_setter_expr(td0field))
-        .collect();
+    let mut set_fields_clauses: Vec<Arm> = td0fields.iter().map(build_setter_expr).collect();
     set_fields_clauses.push(parse_quote!(
         _ => Err(libtd0_core::result::TD0Error::ConvertToNativeTypeError {
             field: field.to_string(),
@@ -1003,12 +997,12 @@ fn build_chunkitem_set_value(td0fields: &Vec<TD0Field>) -> ImplItemFn {
     ));
 
     for arm in set_fields_clauses.iter() {
-        push_arm_to_fn_match(&mut fn_skel, &arm);
+        push_arm_to_fn_match(&mut fn_skel, arm);
     }
     fn_skel
 }
 
-fn build_chunkitem_set_value_raw(td0fields: &Vec<TD0Field>) -> ImplItemFn {
+fn build_chunkitem_set_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
         fn set_value_raw(
             &mut self,
@@ -1021,14 +1015,14 @@ fn build_chunkitem_set_value_raw(td0fields: &Vec<TD0Field>) -> ImplItemFn {
 
     let mut set_fields_clauses: Vec<Arm> = td0fields
         .iter()
-        .map(|td0field| build_setter_expr_raw(td0field))
+        .map(build_setter_expr_raw)
         .collect();
     set_fields_clauses.push(parse_quote!(
         _ => Err(libtd0_core::result::TD0Error::RawDataError{ field: field.to_string() })
     ));
 
     for arm in set_fields_clauses.iter() {
-        push_arm_to_fn_match(&mut fn_skel, &arm);
+        push_arm_to_fn_match(&mut fn_skel, arm);
     }
     fn_skel
 }
@@ -1044,18 +1038,18 @@ mod tests {
             min: dec64!(-60.0),
             max: dec64!(6.0),
         };
-        assert_eq!(field.clamp(-600i16), -600i16, "Doesn't clamp at min value.");
-        assert_eq!(field.clamp(-601i16), -600i16, "Does clamp at < min value.");
-        assert_eq!(field.clamp(60i16), 60i16, "Doesn't clamp at max value.");
-        assert_eq!(field.clamp(61i16), 60i16, "Does clamp at > max value.");
+        assert_eq!(field.clamp_i16(-600i16), -600i16, "Doesn't clamp at min value.");
+        assert_eq!(field.clamp_i16(-601i16), -600i16, "Does clamp at < min value.");
+        assert_eq!(field.clamp_i16(60i16), 60i16, "Doesn't clamp at max value.");
+        assert_eq!(field.clamp_i16(61i16), 60i16, "Does clamp at > max value.");
 
         let field = TD0FieldTypeTD0Decimal {
             min: dec64!(2.3),
             max: dec64!(12.0),
         };
-        assert_eq!(field.clamp(23i8), 23i8, "Doesn't clamp at min value.");
-        assert_eq!(field.clamp(22i8), 23i8, "Does clamp at < min value.");
-        assert_eq!(field.clamp(120i8), 120i8, "Doesn't clamp at max value.");
-        assert_eq!(field.clamp(121i8), 120i8, "Does clamp at > max value.");
+        assert_eq!(field.clamp_i8(23i8), 23i8, "Doesn't clamp at min value.");
+        assert_eq!(field.clamp_i8(22i8), 23i8, "Does clamp at < min value.");
+        assert_eq!(field.clamp_i8(120i8), 120i8, "Doesn't clamp at max value.");
+        assert_eq!(field.clamp_i8(121i8), 120i8, "Does clamp at > max value.");
     }
 }

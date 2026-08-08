@@ -64,7 +64,7 @@ pub fn validate_is_in_range<T: Ord + HasMinAndMax + Into<i128> + Copy>(
     let min = min.unwrap_or(T::MIN);
     let max = max.unwrap_or(T::MAX);
 
-    if val != val.clone().clamp(min, max) {
+    if val != val.clamp(min, max) {
         Err(TD0Error::ConvertRangeError {
             min: min.into(),
             max: max.into(),
@@ -121,23 +121,21 @@ impl fmt::Display for IntEncodedDecimal {
 impl FromStr for IntEncodedDecimal {
     type Err = TD0Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let selfobj = Self {
-            0: Decimal::from_str(s, DecimalContext::default())
+        let selfobj = Self (
+            Decimal::from_str(s, DecimalContext::default())
                 .map_err(|_| TD0Error::ConvertFromStringError {
                     type_name: "IntEncodedDecimal".to_string(),
                     value: s.to_string(),
                 })?
                 .round(1),
-        };
+        );
         Ok(selfobj)
     }
 }
 
 impl From<i8> for IntEncodedDecimal {
     fn from(val: i8) -> Self {
-        Self {
-            0: Decimal::from(val).div(Decimal::TEN).round(1),
-        }
+        Self ( Decimal::from(val).div(Decimal::TEN).round(1))
     }
 }
 
@@ -151,9 +149,7 @@ impl TryFrom<IntEncodedDecimal> for i8 {
 
 impl From<u8> for IntEncodedDecimal {
     fn from(val: u8) -> Self {
-        Self {
-            0: Decimal::from(val).div(Decimal::TEN).round(1),
-        }
+        Self (Decimal::from(val).div(Decimal::TEN).round(1))
     }
 }
 
@@ -167,9 +163,7 @@ impl TryFrom<IntEncodedDecimal> for u8 {
 
 impl From<i16> for IntEncodedDecimal {
     fn from(val: i16) -> Self {
-        Self {
-            0: Decimal::from(val).div(Decimal::TEN).round(1),
-        }
+        Self (Decimal::from(val).div(Decimal::TEN).round(1)) 
     }
 }
 
@@ -183,9 +177,7 @@ impl TryFrom<IntEncodedDecimal> for i16 {
 
 impl From<u16> for IntEncodedDecimal {
     fn from(val: u16) -> Self {
-        Self {
-            0: Decimal::from(val).div(Decimal::TEN).round(1),
-        }
+        Self (Decimal::from(val).div(Decimal::TEN).round(1)) 
     }
 }
 
@@ -199,9 +191,7 @@ impl TryFrom<IntEncodedDecimal> for u16 {
 
 impl<T: ByteOrder> From<U16<T>> for IntEncodedDecimal {
     fn from(val: U16<T>) -> Self {
-        Self {
-            0: Decimal::from(val.get()).div(Decimal::TEN).round(1),
-        }
+        Self(Decimal::from(val.get()).div(Decimal::TEN).round(1)) 
     }
 }
 
@@ -215,9 +205,7 @@ impl<T: ByteOrder> TryFrom<IntEncodedDecimal> for U16<T> {
 
 impl<T: ByteOrder> From<I16<T>> for IntEncodedDecimal {
     fn from(val: I16<T>) -> Self {
-        Self {
-            0: Decimal::from(val.get()).div(Decimal::TEN).round(1),
-        }
+        Self(Decimal::from(val.get()).div(Decimal::TEN).round(1))
     }
 }
 
@@ -231,7 +219,7 @@ impl<T: ByteOrder> TryFrom<IntEncodedDecimal> for I16<T> {
 
 impl From<Decimal> for IntEncodedDecimal {
     fn from(val: Decimal) -> Self {
-        Self { 0: val }
+        Self(val)
     }
 }
 
@@ -278,28 +266,26 @@ impl FromStr for Volume {
     type Err = TD0Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.eq_ignore_ascii_case(VOLUME_MINUS_INF_DISPLAY) {
-            Ok(Self {
-                0: VOLUME_MINUS_INF_DECIMAL.clone(),
-            })
+            Ok(Self(VOLUME_MINUS_INF_DECIMAL))
         } else {
-            let selfobj = Self {
-                0: Decimal::from_str(s, DecimalContext::default())
+            let selfobj = Self(
+                Decimal::from_str(s, DecimalContext::default())
                     .map_err(|_| TD0Error::ConvertFromStringError {
                         type_name: "Volume".to_string(),
                         value: s.to_string(),
                     })?
                     .round(1),
-            };
+            );
             selfobj.validate()?;
             Ok(selfobj)
-        }
+        } 
     }
 }
 
 impl TryFrom<Decimal> for Volume {
     type Error = TD0Error;
     fn try_from(value: Decimal) -> Result<Self, Self::Error> {
-        let selfobj = Self { 0: value };
+        let selfobj = Self(value);
         selfobj.validate()?;
         Ok(selfobj)
     }
@@ -320,7 +306,7 @@ impl TryFrom<i16> for Volume {
         } else {
             Decimal::from_f64(f64::from(value) / 10.0f64).round(1)
         };
-        let selfobj = Self { 0: dec_value };
+        let selfobj = Self(dec_value);
         selfobj.validate()?;
         Ok(selfobj)
     }
@@ -441,7 +427,7 @@ pub trait ChunkItem: std::fmt::Debug {
         for fld in self.get_fields().iter() {
             values.insert(
                 String::from(*fld),
-                self.get_value(*fld)
+                self.get_value(fld)
                     .unwrap_or(ChunkItemValue::Text("Unknown".to_string())),
             );
         }
@@ -462,15 +448,15 @@ pub struct ChunkHeader {
 
 impl ChunkHeader {
     pub fn get_num_items(&self) -> u32 {
-        return self.num_items.get();
+        self.num_items.get()
     }
 
     pub fn get_item_size(&self) -> u32 {
-        return self.item_size.get();
+        self.item_size.get()
     }
 
     pub fn get_first_item_offset(&self) -> u32 {
-        return self.first_item_offset.get();
+        self.first_item_offset.get()
     }
 
     pub fn get_unknown_header_data(&self) -> &[u8; SZ_HDR_EXTRA_DATA] {
@@ -525,7 +511,7 @@ pub fn copy_ascii_str_to_native(
 
     let src_bytes = src.as_bytes();
     dest[src_bytes.len()..].fill(pad_byte);
-    dest[..src_bytes.len()].copy_from_slice(&src_bytes);
+    dest[..src_bytes.len()].copy_from_slice(src_bytes);
     Ok(())
 }
 
@@ -569,7 +555,7 @@ const FIELDS_HDR_A_ITEM: [&str; 7] = [
 
 impl ChunkItem for HDRaItem {
     fn get_value(&self, field: &str) -> Option<ChunkItemValue> {
-        return match field {
+        match field {
             "tag" => Some(ChunkItemValue::Text(
                 String::from_utf8_lossy(&self.tag).to_string(),
             )),
@@ -588,21 +574,21 @@ impl ChunkItem for HDRaItem {
             )),
             "suffix" => Some(ChunkItemValue::Text(format!("{:?}", self.suffix))),
             _ => None,
-        };
+        }
     }
     fn get_value_raw(&self, field: &str) -> Option<ChunkItemValueRaw> {
-        return match field {
-            "tag" => Some(ChunkItemValueRaw::Slice(Box::new(self.tag.clone()))),
-            "data" => Some(ChunkItemValueRaw::Slice(Box::new(self.data.clone()))),
-            "name" => Some(ChunkItemValueRaw::Slice(Box::new(self.name.clone()))),
-            "firmware" => Some(ChunkItemValueRaw::Slice(Box::new(self.firmware.clone()))),
-            "build" => Some(ChunkItemValueRaw::Slice(Box::new(self.build.clone()))),
+        match field {
+            "tag" => Some(ChunkItemValueRaw::Slice(Box::new(self.tag))),
+            "data" => Some(ChunkItemValueRaw::Slice(Box::new(self.data))),
+            "name" => Some(ChunkItemValueRaw::Slice(Box::new(self.name))),
+            "firmware" => Some(ChunkItemValueRaw::Slice(Box::new(self.firmware))),
+            "build" => Some(ChunkItemValueRaw::Slice(Box::new(self.build))),
             "device_serial" => Some(ChunkItemValueRaw::Slice(Box::new(
-                self.device_serial.clone(),
+                self.device_serial,
             ))),
-            "suffix" => Some(ChunkItemValueRaw::Slice(Box::new(self.suffix.clone()))),
+            "suffix" => Some(ChunkItemValueRaw::Slice(Box::new(self.suffix))),
             _ => None,
-        };
+        }
     }
     fn set_value(&mut self, field: &str, value: &ChunkItemValue) -> TD0Result<()> {
         match (field, value) {
@@ -841,16 +827,6 @@ mod tests {
     }
 
     #[test]
-    fn test_chunk_item_u8_to_u8() {
-        let val = ChunkItemValue::U8(23u8);
-        if let ChunkItemValue::U8(x) = val {
-            assert_eq!(x, 23u8);
-        } else {
-            assert!(false, "failed");
-        }
-    }
-
-    #[test]
     fn test_copy_ascii_str_to_native() {
         let mut dest = [0u8; 16];
         let src: String = "I'm 16chars long".to_string();
@@ -865,7 +841,7 @@ mod tests {
         );
 
         let src: String = "Needs padding".to_string();
-        let result = copy_ascii_str_to_native(&src, &mut dest, "test_buffer", '.' as u8);
+        let result = copy_ascii_str_to_native(&src, &mut dest, "test_buffer", b'.');
         assert_eq!(result, Ok(()), "Testing padding. Should not return an Err.");
         assert_eq!(
             String::from_utf8(dest.to_vec())
@@ -906,7 +882,7 @@ mod tests {
             "Needs padding".as_bytes(),
             &mut dest,
             "test_buffer",
-            '.' as u8,
+            b'.',
         );
         assert_eq!(
             result,

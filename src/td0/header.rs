@@ -7,7 +7,7 @@ use std::{collections::HashMap, fmt};
 
 pub const SZ_HDR_CHUNK: usize = 16;
 pub const OFFSET_BYTES_REMAINING: u16 = 2;
-pub const TDO_MAGIC: [u8; 4] = [b'T', b'D', b'0', b'a'];
+pub const TDO_MAGIC: [u8; 4] = *b"TD0a";
 
 #[derive(FromBytes, Debug, Immutable, IntoBytes, KnownLayout)]
 #[repr(C, packed)]
@@ -23,7 +23,7 @@ impl fmt::Display for TD0IdChunk {
             f,
             "TD0IdChunk: bytes_remaining: {} magic: \"{}\" unknown: {:?}",
             self.bytes_remaining,
-            String::from_utf8_lossy(&self.magic).to_string(),
+            String::from_utf8_lossy(&self.magic),
             self.unknown
         )
     }
@@ -31,7 +31,7 @@ impl fmt::Display for TD0IdChunk {
 
 impl TD0IdChunk {
     pub fn get_bytes_remaining(&self) -> u16 {
-        return self.bytes_remaining.get();
+        self.bytes_remaining.get()
     }
 }
 
@@ -46,19 +46,19 @@ pub struct TD0ManifestTag {
 
 impl TD0ManifestTag {
     pub fn get_model(&self) -> String {
-        return String::from_utf8_lossy(&self.model).to_string();
+        String::from_utf8_lossy(&self.model).to_string()
     }
 
     pub fn get_tag(&self) -> String {
-        return String::from_utf8_lossy(&self.tag).to_string();
+        String::from_utf8_lossy(&self.tag).to_string()
     }
 
     pub fn get_pos(&self) -> u32 {
-        return self.pos.get();
+        self.pos.get()
     }
 
     pub fn get_length(&self) -> u32 {
-        return self.length.get();
+        self.length.get()
     }
 }
 
@@ -110,9 +110,9 @@ impl TD0Header {
         }
 
         Ok(Self {
-            id_chunk: id_chunk,
-            manifest: manifest,
-            tags: tags,
+            id_chunk,
+            manifest,
+            tags,
         })
     }
 
@@ -145,7 +145,7 @@ impl TD0Header {
         None
     }
 
-    pub fn len(&self) -> usize {
-        return self.id_chunk.bytes_remaining.get() as usize + OFFSET_BYTES_REMAINING as usize;
+    pub fn size(&self) -> usize {
+        self.id_chunk.bytes_remaining.get() as usize + OFFSET_BYTES_REMAINING as usize
     }
 }
