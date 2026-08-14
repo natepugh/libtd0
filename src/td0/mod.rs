@@ -1,282 +1,37 @@
-use std::collections::{HashMap, HashSet};
-
-use zerocopy::FromBytes;
-
-use crate::td0::{
-    chunks::{
-        CURaItem, Chunk, ChunkHeader, ChunkItem, HDRaItem, KITaItem, KITbItem, PVRaItem, STLaItem,
-        STPaItem, STPbItem, TGLaItem, TRGaItem, WVPaItem,
-    },
-    header::{OFFSET_BYTES_REMAINING, SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, TDO_MAGIC},
-};
+use crate::td0::header::{SZ_HDR_CHUNK, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
+use crate::td0::model::ssxp::common::SSXPTD0File;
+use libtd0_core::TD0File;
 use libtd0_core::result::{TD0Error, TD0Result};
 
-pub mod chunks;
 pub mod header;
-mod strings;
+mod model;
 mod tests;
 
-fn parse_manifest(bytes: &[u8]) -> TD0Result<Vec<TD0ManifestTag>> {
-    let mut manifest = Vec::<TD0ManifestTag>::new();
-    let mut pos: usize = 0;
-    while pos < bytes.len() {
-        manifest.push(
-            TD0ManifestTag::read_from_bytes(&bytes[pos..pos + SZ_HDR_CHUNK])
-                .map_err(|_| TD0Error::InvalidHeaderError)?,
-        );
-        pos += SZ_HDR_CHUNK;
+pub fn parse_td0_file(bytes: &[u8]) -> TD0Result<Box<dyn TD0File>> {
+    use zerocopy::FromBytes;
+
+    let id_chunk: TD0IdChunk = TD0IdChunk::read_from_bytes(&bytes[..SZ_HDR_CHUNK])
+        .map_err(|_| TD0Error::InvalidTD0File("unable to read first chunk."))?;
+    validate_id_tag(&id_chunk)
+        .map_err(|_| TD0Error::InvalidTD0File("invalid or missing `TD0a` id chunk."))?;
+    let pos: usize = size_of::<TD0IdChunk>();
+    let next_chunk: TD0ManifestTag =
+        TD0ManifestTag::read_from_bytes(&bytes[pos..pos + SZ_HDR_CHUNK])
+            .map_err(|_| TD0Error::InvalidTD0File("can't determine TD0 device model."))?;
+    // The model of the first chunk should be the model of the entire backup file.
+    // Verify that now and the backup file must validate further.
+    match next_chunk.model().as_str() {
+        "SSXP" => Ok(Box::new(SSXPTD0File::from_bytes(bytes.into())?)),
+        _ => Err(TD0Error::UnknownDeviceModel),
     }
-    Ok(manifest)
 }
 
-fn build_tag_indexes(tags: &[TD0ManifestTag]) -> TD0Result<HashMap<String, usize>> {
-    let mut indexes: HashMap<String, usize> = HashMap::<String, usize>::new();
-    for (idx, tag) in tags.iter().enumerate() {
-        // let tag_name = str::from_utf8(&tag.tag).map_err(|e| { TD0Error::InvalidTD0TagError })?;
-        let tag_name = String::from_utf8_lossy(&tag.tag);
-        indexes.insert(tag_name.to_string().to_owned(), idx);
-    }
-
-    Ok(indexes)
-}
-
-fn validate_id_tag(tag: &TD0IdChunk) -> TD0Result<()> {
-    if tag.magic == TDO_MAGIC {
+pub(crate) fn validate_id_tag(tag: &TD0IdChunk) -> TD0Result<()> {
+    if *tag.magic_raw() == TD0_MAGIC {
         Ok(())
     } else {
-        Err(TD0Error::InvalidTD0TagError)
-    }
-}
-
-fn validate_manifest(manifest: &[TD0ManifestTag]) -> TD0Result<()> {
-    let mut unique: HashSet<String> = HashSet::<String>::new();
-    for tag_name in manifest.iter().map(|tag| tag.get_tag()) {
-        if unique.contains(&tag_name) {
-            return Err(TD0Error::DuplicateChunkError {
-                chunk_name: tag_name,
-            });
-        }
-        unique.insert(tag_name);
-    }
-    Ok(())
-}
-
-pub struct TD0File {
-    buf: Vec<u8>,
-    // pub header: header::TD0Header,
-    // chunks: Vec<Box<dyn chunk::Chunk>>,
-    pub manifest: Vec<TD0ManifestTag>,
-    tag_indexes: HashMap<String, usize>,
-    chunk_headers: HashMap<String, ChunkHeader>,
-    pub chunks: HashMap<String, Chunk>,
-}
-
-impl TD0File {
-    pub fn from_bytes(bytes: Vec<u8>) -> TD0Result<Self> {
-        let id_tag = header::TD0IdChunk::read_from_bytes(&bytes[..header::SZ_HDR_CHUNK])
-            .map_err(|_| TD0Error::InvalidHeaderError)?;
-        validate_id_tag(&id_tag)?;
-
-        let manifest = parse_manifest(
-            &bytes[SZ_HDR_CHUNK
-                ..id_tag.get_bytes_remaining() as usize + OFFSET_BYTES_REMAINING as usize],
-        )?;
-        validate_manifest(&manifest)?;
-        let tag_indexes = build_tag_indexes(&manifest)?;
-
-        let mut chunk_headers: HashMap<String, ChunkHeader> = HashMap::new();
-        let mut chunks: HashMap<String, Chunk> = HashMap::new();
-
-        for tag in manifest.iter() {
-            let as_str = str::from_utf8(&tag.tag).map_err(|_| TD0Error::InvalidTD0TagError)?;
-            let tag_as_string = as_str.to_string();
-            let chunk_header = ChunkHeader::read_from_bytes(
-                &bytes[tag.get_pos() as usize..tag.get_pos() as usize + SZ_HDR_CHUNK],
-            )
-            .map_err(|_| TD0Error::InvalidChunkError {
-                chunk_name: tag.get_tag(),
-            })?;
-
-            chunks.insert(
-                tag_as_string.clone(),
-                Chunk {
-                    pos: tag.get_pos() as usize,
-                    first_item_pos: tag.get_pos() as usize
-                        + chunk_header.get_first_item_offset() as usize,
-                    num_items: chunk_header.get_num_items() as usize,
-                    sz_item: chunk_header.get_item_size() as usize,
-                },
-            );
-            chunk_headers.insert(tag_as_string, chunk_header);
-        }
-
-        Ok(Self {
-            buf: bytes,
-            manifest,
-            tag_indexes,
-            chunk_headers,
-            chunks,
-        })
-    }
-
-    pub fn get_tag(&self, tag: &str) -> Option<&TD0ManifestTag> {
-        if !self.tag_indexes.contains_key(tag) {
-            return None;
-        }
-
-        if let Some(tag_index) = self.tag_indexes.get(tag)
-            && let Some(tag_item) = self.manifest.get(*tag_index)
-        {
-            return Some(tag_item);
-        }
-
-        None
-    }
-
-    pub fn get_chunk_header(&self, chunk_tag: &TD0ManifestTag) -> TD0Result<Option<&ChunkHeader>> {
-        let tag_name = chunk_tag.get_tag();
-        if !self.tag_indexes.contains_key(&tag_name) {
-            return Ok(None);
-        }
-
-        Ok(self.chunk_headers.get(&tag_name))
-    }
-
-    pub fn get_chunk_item(
-        &self,
-        chunk_tag: &TD0ManifestTag,
-        item_index: usize,
-    ) -> TD0Result<Option<Box<dyn ChunkItem>>> {
-        let Some(chunk) = self.chunks.get(&chunk_tag.get_tag()) else {
-            return Ok(None);
-        };
-        if item_index >= chunk.num_items {
-            return Ok(None);
-        }
-        let Some(start) = chunk.item_pos(item_index) else {
-            return Ok(None);
-        };
-        let end: usize = start + chunk.sz_item;
-
-        match chunk_tag.get_tag().as_str() {
-            "HDRa" => Ok(Some(Box::new(HDRaItem::from_bytes(
-                &self.buf[start..end],
-                Some("HDRaItem"),
-            )?))),
-            "KITa" => Ok(Some(Box::new(KITaItem::from_bytes(
-                &self.buf[start..end],
-                Some("KITaItem"),
-            )?))),
-            "KITb" => Ok(Some(Box::new(KITbItem::from_bytes(
-                &self.buf[start..end],
-                Some("KITbItem"),
-            )?))),
-            "CURa" => Ok(Some(Box::new(CURaItem::from_bytes(
-                &self.buf[start..end],
-                Some("CURaItem"),
-            )?))),
-            "PVRa" => Ok(Some(Box::new(PVRaItem::from_bytes(
-                &self.buf[start..end],
-                Some("PVRaItem"),
-            )?))),
-            "STLa" => Ok(Some(Box::new(STLaItem::from_bytes(
-                &self.buf[start..end],
-                Some("STLaItem"),
-            )?))),
-            "STPa" => Ok(Some(Box::new(STPaItem::from_bytes(
-                &self.buf[start..end],
-                Some("STPaItem"),
-            )?))),
-            "STPb" => Ok(Some(Box::new(STPbItem::from_bytes(
-                &self.buf[start..end],
-                Some("STPbItem"),
-            )?))),
-            "TGLa" => Ok(Some(Box::new(TGLaItem::from_bytes(
-                &self.buf[start..end],
-                Some("TGLaItem"),
-            )?))),
-            "TRGa" => Ok(Some(Box::new(TRGaItem::from_bytes(
-                &self.buf[start..end],
-                Some("TRGaItem"),
-            )?))),
-            "WVPa" => Ok(Some(Box::new(WVPaItem::from_bytes(
-                &self.buf[start..end],
-                Some("WVPaItem"),
-            )?))),
-            _ => Ok(None),
-        }
-    }
-
-    pub fn get_chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
-        match chunk_name {
-            "HDRa" => Some(Box::new(HDRaItem::default())),
-            "KITa" => Some(Box::new(KITaItem::default())),
-            "KITb" => Some(Box::new(KITbItem::default())),
-            "CURa" => Some(Box::new(CURaItem::default())),
-            "PVRa" => Some(Box::new(PVRaItem::default())),
-            "STLa" => Some(Box::new(STLaItem::default())),
-            "STPa" => Some(Box::new(STPaItem::default())),
-            "STPb" => Some(Box::new(STPbItem::default())),
-            "TGLa" => Some(Box::new(TGLaItem::default())),
-            "TRGa" => Some(Box::new(TRGaItem::default())),
-            "WVPa" => Some(Box::new(WVPaItem::default())),
-            _ => None,
-        }
-    }
-
-    pub fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]> {
-        let chunk_tag = self.get_tag(chunk_name)?;
-        println!(
-            "chunk pos: {:04X} length: {:04X} end: {:04X}",
-            chunk_tag.get_pos() as usize,
-            chunk_tag.get_length() as usize,
-            chunk_tag.get_pos() as usize + chunk_tag.get_length() as usize,
-        );
-        Some(
-            &self.buf[chunk_tag.get_pos() as usize
-                ..chunk_tag.get_pos() as usize + chunk_tag.get_length() as usize],
-        )
-    }
-
-    pub fn get_chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> Option<&[u8]> {
-        let chunk_tag = self.get_tag(chunk_name)?;
-        match self.chunk_headers.get(chunk_name) {
-            Some(chunk_header) => {
-                if item_index >= chunk_header.get_num_items() as usize {
-                    return None;
-                }
-
-                let mut start = chunk_tag.get_pos() as usize;
-                start += chunk_header.get_first_item_offset() as usize
-                    + (chunk_header.get_item_size() as usize * item_index);
-                let end = start + chunk_header.get_item_size() as usize;
-                Some(&self.buf[start..end])
-            }
-            _ => None,
-        }
-    }
-}
-
-pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn ChunkItem>> {
-    match chunk_name {
-        "HDRa" => Some(Box::new(HDRaItem::default())),
-        "KITa" => Some(Box::new(KITaItem::default())),
-        "KITb" => Some(Box::new(KITbItem::default())),
-        "CURa" => Some(Box::new(CURaItem::default())),
-        "PVRa" => Some(Box::new(PVRaItem::default())),
-        "STLa" => Some(Box::new(STLaItem::default())),
-        "STPa" => Some(Box::new(STPaItem::default())),
-        "STPb" => Some(Box::new(STPbItem::default())),
-        "TGLa" => Some(Box::new(TGLaItem::default())),
-        "TRGa" => Some(Box::new(TRGaItem::default())),
-        "WVPa" => Some(Box::new(WVPaItem::default())),
-        _ => None,
-    }
-}
-
-pub fn get_chunk_item_fields(chunk_name: &str) -> Option<&'static [&'static str]> {
-    match get_default_chunk_item(chunk_name) {
-        Some(default_item) => Some(default_item.get_fields()),
-        None => None,
+        Err(TD0Error::InvalidTD0File(
+            "invalid or missing `TD0a` header chunk.",
+        ))
     }
 }

@@ -1,45 +1,37 @@
-use thiserror::Error;
-
-#[derive(Error, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TD0Error {
-    #[error("Checksum mismatch")]
-    ChecksumMismatchError,
-
-    #[error("Can't convert {field} to native type: {reason}")]
-    ConvertToNativeTypeError { field: String, reason: String },
-
-    #[error("Value out of range during conversion. Allowed: {min}...{max}")]
-    ConvertRangeError { min: i128, max: i128 },
-
-    #[error("Unable to convert to `{type_name}` from String value: `{value}`")]
-    ConvertFromStringError { type_name: String, value: String },
-
-    #[error("Duplicate chunk data for chunk {chunk_name}")]
-    DuplicateChunkError { chunk_name: String },
-
-    #[error("Firmware version {version} not implemented")]
-    FirmwareVersionNotImplementedError { version: String },
-
-    #[error("Invalid chunk data for chunk {chunk_name}")]
-    InvalidChunkError { chunk_name: String },
-
-    #[error("Invalid TD0 file header")]
-    InvalidHeaderError,
-
-    #[error("Invalid TD0 tag")]
-    InvalidTD0TagError,
-
-    #[error("{message}")]
-    InputError { message: String },
-
-    #[error("Invalid raw data for {field}")]
-    RawDataError { field: String },
-
-    #[error("Item index out of bounds: the len is {len} but the index is {index}")]
-    ItemIndexError { len: usize, index: usize },
-
-    #[error("TD0 tag not found: {tag_name}")]
-    TagNotFoundError { tag_name: String },
+    FirmwareVersionNotImplemented,
+    InvalidChunk(&'static str),
+    InvalidChunkItem,
+    InvalidFieldOrType,
+    InvalidInput,
+    InvalidInputWithMessage(String),
+    InvalidTD0File(&'static str),
+    OutOfRange,
+    ReadOnlyField,
+    UnknownChunk,
+    UnknownDeviceModel,
 }
 
 pub type TD0Result<T> = Result<T, TD0Error>;
+
+impl core::fmt::Display for TD0Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let repr: String = match self {
+            Self::FirmwareVersionNotImplemented => "firmware version not implemented".to_string(),
+            Self::InvalidChunk(err) => format!("invalid chunk `{err}`"),
+            Self::InvalidChunkItem => "invalid chunk item.".to_string(),
+            Self::InvalidFieldOrType => {
+                "unknown field or invalid input type for field.".to_string()
+            }
+            Self::InvalidInput => "input is invalid for field.".to_string(),
+            Self::InvalidInputWithMessage(err) => format!("invalid input: {err}"),
+            Self::InvalidTD0File(err) => format!("TD0 file invalid: {err}"),
+            Self::OutOfRange => "out of range.".to_string(),
+            Self::ReadOnlyField => "field is read only".to_string(),
+            Self::UnknownChunk => "unknown chunk.".to_string(),
+            Self::UnknownDeviceModel => "unknown device model.".to_string(),
+        };
+        write!(f, "{}", repr)
+    }
+}

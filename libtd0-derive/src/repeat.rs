@@ -86,11 +86,7 @@ pub fn repeat_fields(
             let mut new_attrs = field.attrs.clone();
             new_attrs.retain(|attr| {
                 // Keep all except "repeat" and its related attrs.
-                let attr_path_name = attr
-                    .path()
-                    .get_ident()
-                    .unwrap_or(&fake_ident)
-                    .to_string();
+                let attr_path_name = attr.path().get_ident().unwrap_or(&fake_ident).to_string();
                 !MY_ATTR_NAMES.contains(&attr_path_name.as_str())
             });
 
@@ -102,7 +98,11 @@ pub fn repeat_fields(
                 if section_attr.is_some() {
                     new_section_fields.named.push(fld);
                     if section_last_attr.is_some() {
-                        push_section_repeated(&mut new_fields, &new_section_fields, &section_attr.expect("Infallible"));
+                        push_section_repeated(
+                            &mut new_fields,
+                            &new_section_fields,
+                            &section_attr.expect("Infallible"),
+                        );
                         section_attr = None;
                         section_last_attr = None;
                     }
@@ -129,7 +129,11 @@ pub fn repeat_fields(
             }
 
             if section_last_attr.is_some() {
-                push_section_repeated(&mut new_fields, &new_section_fields, &section_attr.expect("Infallible"));
+                push_section_repeated(
+                    &mut new_fields,
+                    &new_section_fields,
+                    &section_attr.expect("Infallible"),
+                );
                 section_attr = None;
                 section_last_attr = None;
             }

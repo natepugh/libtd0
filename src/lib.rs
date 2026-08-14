@@ -1,25 +1,15 @@
-pub mod td0;
-use libtd0_core::result::{TD0Error, TD0Result};
-use md5::{Digest, Md5};
-// use anyhow::{Ok, Result};
+pub(crate) mod td0;
+pub use libtd0_core::result::{TD0Error, TD0Result};
+pub use libtd0_core::{
+    TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File, TD0Manifest, TD0Value, TD0ValueRaw,
+};
+pub use td0::parse_td0_file;
 
-use crate::td0::header::TD0ManifestTag;
+// use md5::{Digest, Md5};
 
-const SZ_MD5_DIGEST: usize = 16;
+// const SZ_MD5_DIGEST: usize = 16;
 
-#[derive(Debug)]
-pub enum TD0BackupType {
-    Kit,
-    System,
-    Unknown,
-}
-
-#[derive(Debug)]
-pub enum TD0DeviceModel {
-    SPDSXPro,
-    Unknown,
-}
-
+/*
 pub struct ManifestData {
     backup_size: usize,
     backup_type: TD0BackupType,
@@ -44,7 +34,7 @@ impl ManifestData {
         let checksum_calculated = hasher.finalize();
         //let Some(last_chunk_tag) = td0header.manifest.last() else {
         let Some(last_chunk_tag) = td0file.manifest.last() else {
-            return Err(TD0Error::InvalidTD0TagError);
+            return Err(TD0Error::UnknownChunkError);
         };
         let mut chunks: Vec<TD0ManifestTag> = td0file.manifest.clone();
         chunks.copy_from_slice(&td0file.manifest[..]);
@@ -98,3 +88,4 @@ impl std::fmt::Display for ManifestData {
         )
     }
 }
+ */

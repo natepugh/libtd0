@@ -210,7 +210,9 @@ pub fn validate_attr_list_required_attrs(
 
 pub fn push_arm_to_fn_match(func: &mut ImplItemFn, arm: &Arm) {
     for stmt in func.block.stmts.iter_mut() {
-        if let Stmt::Expr(expr, _) = stmt && let Expr::Match(match_stmt) = expr {
+        if let Stmt::Expr(expr, _) = stmt
+            && let Expr::Match(match_stmt) = expr
+        {
             match_stmt.arms.push(arm.clone());
         }
     }
@@ -273,7 +275,7 @@ pub fn get_field_native_type(field: &Field) -> Option<NativeType> {
                         && let Lit::Int(int_expr) = &type_expr.lit
                     {
                         Some(NativeType::Slice(NativeTypeSlice {
-                            size: int_expr.base10_parse().unwrap_or(0)
+                            size: int_expr.base10_parse().unwrap_or(0),
                         }))
                     } else {
                         None

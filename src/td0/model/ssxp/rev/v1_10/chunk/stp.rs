@@ -1,12 +1,11 @@
-use super::common::{ChunkItem, ChunkItemValue, ChunkItemValueRaw};
-use libtd0_derive::{TD0ChunkItem, repeat_fields};
+use libtd0_derive::{TD0ChunkItemDerive, repeat_fields};
 use zerocopy::{LittleEndian, U16};
 use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
 
 #[repeat_fields]
-#[derive(Clone, Copy, Debug, FromBytes, IntoBytes, KnownLayout, TD0ChunkItem)]
+#[derive(Clone, Copy, Debug, FromBytes, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
-pub struct STPbItem {
+pub struct STPaItem {
     #[td0_field(field_type = "Slice")]
     unknown_1: [u8; 248],
 
@@ -35,13 +34,4 @@ pub struct STPbItem {
     #[repeat_section_last]
     #[td0_field(field_type = "U16")]
     unknown: U16<LittleEndian>,
-
-    // Extra 128 bytes of something
-
-    // "Backup" on the sample I've seen.
-    #[td0_field(field_type = "Text", pad_byte = 0x20)]
-    unknown_name: [u8; 16],
-
-    #[td0_field(field_type = "Slice")]
-    unknown_2: [u8; 112],
 }

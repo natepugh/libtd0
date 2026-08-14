@@ -17,7 +17,8 @@ pub fn td0_struct_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     let source: ItemStruct = parse2(input).expect("Error parsing input struct!");
 
     let mut output: TokenStream = td0_struct_gen_impl_default(&source);
-    output.extend(td0_struct_gen_chunk_item_impl(&source));
+    output.extend(td0_struct_gen_td0_chunk_item_impl(&source));
+    output.extend(td0_struct_gen_from_u8_slice_impl(&source));
     output.into()
 }
 
@@ -399,9 +400,7 @@ impl TryFrom<&Field> for TD0Field {
             "I8" => TD0FieldType::I8(TD0FieldTypeMaybeBoundedI8::try_from(&attr)?),
             "Slice" => TD0FieldType::Slice(TD0FieldTypeNone {}),
             "Text" => TD0FieldType::Text(TD0FieldTypeText::try_from(&attr)?),
-            "TD0Decimal" => {
-                TD0FieldType::TD0Decimal(TD0FieldTypeTD0Decimal::try_from(&attr)?)
-            }
+            "TD0Decimal" => TD0FieldType::TD0Decimal(TD0FieldTypeTD0Decimal::try_from(&attr)?),
             "U16" => TD0FieldType::U16(TD0FieldTypeMaybeBoundedU16::try_from(&attr)?),
             "U32" => TD0FieldType::U32(TD0FieldTypeMaybeBoundedU32::try_from(&attr)?),
             "U8" => TD0FieldType::U8(TD0FieldTypeMaybeBoundedU8::try_from(&attr)?),
@@ -514,7 +513,7 @@ fn td0_struct_gen_impl_default(source: &ItemStruct) -> TokenStream {
     }
 
     quote! {
-        impl Default for #ident {
+        impl core::default::Default for #ident {
             fn default() -> Self {
                 Self {
                     #( #field_defs ),*
@@ -548,7 +547,21 @@ fn const_name_from_ident(val: &Ident) -> String {
     output
 }
 
-fn td0_struct_gen_chunk_item_impl(source: &ItemStruct) -> TokenStream {
+fn td0_struct_gen_from_u8_slice_impl(source: &ItemStruct) -> TokenStream {
+    let source_ident = &source.ident;
+    quote! {
+        impl core::convert::TryFrom<&[u8]> for #source_ident  {
+            type Error = libtd0_core::result::TD0Error;
+
+            fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+                use zerocopy::FromBytes;
+                Self::read_from_bytes(bytes).map_err(|_| libtd0_core::result::TD0Error::InvalidChunkItem)
+            }
+        }
+    }
+}
+
+fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
     let mut field_tokenstreams: Vec<String> = Vec::new();
     let source_ident = &source.ident;
     let mut td0fields: Vec<TD0Field> = Vec::new();
@@ -589,8 +602,8 @@ fn td0_struct_gen_chunk_item_impl(source: &ItemStruct) -> TokenStream {
 
     // Create an impl with get_fields().
     output.extend(quote!(
-        impl ChunkItem for #source_ident {
-            fn get_fields(&self) -> &'static [&'static str] { &#const_field_array_name }
+        impl libtd0_core::TD0ChunkItem for #source_ident {
+            fn list_fields(&self) -> &'static [&'static str] { &#const_field_array_name }
             #fn_get_value
             #fn_set_value
             #fn_get_value_raw
@@ -605,43 +618,41 @@ fn build_getter_expr(td0field: &TD0Field) -> Expr {
     let ident = &td0field.ident;
     match &td0field.attr {
         TD0FieldType::Slice(_) => parse_quote!(
-            Some(ChunkItemValue::Slice(Box::new(self.#ident.clone())))
+            Some(libtd0_core::TD0Value::Slice(Box::new(self.#ident.clone())))
         ),
         TD0FieldType::Text(attr) => {
             let pad_val: u8 = attr.pad_byte.unwrap_or(0);
-            parse_quote!(Some(ChunkItemValue::text_from_u8_array(&self.#ident, &#pad_val)))
+            parse_quote!(Some(libtd0_core::TD0Value::text_from_u8_array(&self.#ident, &#pad_val)))
         }
         TD0FieldType::I16(_) => {
-            parse_quote!(Some(ChunkItemValue::I16(self.#ident.get())))
+            parse_quote!(Some(libtd0_core::TD0Value::I16(self.#ident.get())))
         }
         TD0FieldType::U16(_) => {
-            parse_quote!(Some(ChunkItemValue::U16(self.#ident.get())))
+            parse_quote!(Some(libtd0_core::TD0Value::U16(self.#ident.get())))
         }
         TD0FieldType::U32(_) => {
-            parse_quote!(Some(ChunkItemValue::U32(self.#ident.get())))
+            parse_quote!(Some(libtd0_core::TD0Value::U32(self.#ident.get())))
         }
-        TD0FieldType::U8(_) => parse_quote!(Some(ChunkItemValue::U8(self.#ident))),
-        TD0FieldType::I8(_) => parse_quote!(Some(ChunkItemValue::I8(self.#ident))),
+        TD0FieldType::U8(_) => parse_quote!(Some(libtd0_core::TD0Value::U8(self.#ident))),
+        TD0FieldType::I8(_) => parse_quote!(Some(libtd0_core::TD0Value::I8(self.#ident))),
         TD0FieldType::TD0Decimal(_) => {
-            parse_quote!(
-                Some(
-                    ChunkItemValue::TD0Decimal(IntEncodedDecimal::from(self.#ident))
-                )
-            )
+            parse_quote!(Some(libtd0_core::TD0Value::Decimal(
+                libtd0_core::Decimal::from(libtd0_core::IntEncodedDecimal::from(self.#ident))
+            )))
         }
         TD0FieldType::Volume(_) => parse_quote!(
-            match Volume::try_from(self.#ident.get()) {
-                Ok(vol) => Some(ChunkItemValue::Volume(vol)),
+            match libtd0_core::Volume::try_from(self.#ident.get()) {
+                Ok(vol) => Some(libtd0_core::TD0Value::Decimal(libtd0_core::Decimal::from(vol))),
                 Err(_) => None
             }
         ),
         TD0FieldType::EnumStr(attr) => {
             let collection_ident = format_ident!("{}", &attr.collection);
-            parse_quote!(Some(ChunkItemValue::EnumStr(
+            parse_quote!(Some(libtd0_core::TD0Value::Text(String::from(
                 *#collection_ident
                     .get(self.#ident as usize)
                     .unwrap_or_else(|| &"INVALID")
-            )))
+            ))))
         }
     }
 }
@@ -649,14 +660,14 @@ fn build_getter_expr(td0field: &TD0Field) -> Expr {
 fn build_getter_expr_raw(td0field: &TD0Field) -> Expr {
     let ident = &td0field.ident;
     match td0field.native_type {
-        NativeType::I16 => parse_quote!(Some(ChunkItemValueRaw::I16(self.#ident.get()))),
-        NativeType::I8 => parse_quote!(Some(ChunkItemValueRaw::I8(self.#ident))),
+        NativeType::I16 => parse_quote!(Some(libtd0_core::TD0ValueRaw::I16(self.#ident.get()))),
+        NativeType::I8 => parse_quote!(Some(libtd0_core::TD0ValueRaw::I8(self.#ident))),
         NativeType::Slice(_) => {
-            parse_quote!(Some(ChunkItemValueRaw::Slice(Box::new(self.#ident.clone()))))
+            parse_quote!(Some(libtd0_core::TD0ValueRaw::Slice(Box::new(self.#ident.clone()))))
         }
-        NativeType::U16 => parse_quote!(Some(ChunkItemValueRaw::U16(self.#ident.get()))),
-        NativeType::U32 => parse_quote!(Some(ChunkItemValueRaw::U32(self.#ident.get()))),
-        NativeType::U8 => parse_quote!(Some(ChunkItemValueRaw::U8(self.#ident))),
+        NativeType::U16 => parse_quote!(Some(libtd0_core::TD0ValueRaw::U16(self.#ident.get()))),
+        NativeType::U32 => parse_quote!(Some(libtd0_core::TD0ValueRaw::U32(self.#ident.get()))),
+        NativeType::U8 => parse_quote!(Some(libtd0_core::TD0ValueRaw::U8(self.#ident))),
     }
 }
 
@@ -669,54 +680,32 @@ fn build_decimal_setter_expr(
     let attr_max: LitFloat = LitFloat::new(attr.max.to_string().as_str(), Span::call_site());
     let min: Expr = parse_quote!(fastnum::dec64!(#attr_min));
     let max: Expr = parse_quote!(fastnum::dec64!(#attr_max));
-    let min_i128 = attr
-        .min
-        .to_i128()
-        .expect("Field min must be in i128 range.");
-    let max_i128 = attr
-        .max
-        .to_i128()
-        .expect("Field max must be in i128 range.");
-    let ident_str = ident.to_string();
 
     let rhand: Expr = match native_type {
         NativeType::U8 => parse_quote!(
-            u8::try_from(*val).map_err(|_|
-                libtd0_core::result::TD0Error::ConvertToNativeTypeError{ field: #ident_str.to_string(), reason: "Out of range of u8".to_string()}
-            )?
+            u8::try_from(libtd0_core::IntEncodedDecimal::from(*val))
+                .map_err(|_| libtd0_core::result::TD0Error::OutOfRange)?
         ),
         NativeType::U16 => parse_quote!(
-            U16::try_from(*val).map_err(|_|
-                libtd0_core::result::TD0Error::ConvertToNativeTypeError{ field: #ident_str.to_string(), reason: "Out of range of u16".to_string()}
-            )?
+            U16::try_from(libtd0_core::IntEncodedDecimal::from(*val))
+                .map_err(|_| libtd0_core::result::TD0Error::OutOfRange)?
         ),
         NativeType::I8 => parse_quote!(
-            i8::try_from(*val).map_err(|_|
-                libtd0_core::result::TD0Error::ConvertToNativeTypeError{ field: #ident_str.to_string(), reason: "Out of range of i8".to_string()}
-            )?
+            i8::try_from(libtd0_core::IntEncodedDecimal::from(*val))
+                .map_err(|_| libtd0_core::result::TD0Error::OutOfRange)?
         ),
         NativeType::I16 => parse_quote!(
-            I16::try_from(*val).map_err(|_|
-                libtd0_core::result::TD0Error::ConvertToNativeTypeError{ field: #ident_str.to_string(), reason: "Out of range of i16".to_string()}
-            )?
+            I16::try_from(libtd0_core::IntEncodedDecimal::from(*val))
+                .map_err(|_| libtd0_core::result::TD0Error::OutOfRange)?
         ),
         _ => parse_quote!(val.clone()),
     };
 
-    /*
     parse_quote!(
-        if libtd0_core::in_range_inclusive(&fastnum::D64::from(*val), Some(&#min), Some(&#max)) {
+        if libtd0_core::in_range_inclusive(libtd0_core::IntEncodedDecimal::from(*val).get_val(), Some(&#min), Some(&#max)) {
             self.#ident = #rhand;
         } else {
-            return Err(libtd0_core::result::TD0Error::ConvertRangeError{ min: #min_i128, max: #max_i128 });
-        }
-    )
-    */
-    parse_quote!(
-        if libtd0_core::in_range_inclusive(IntEncodedDecimal::from(*val).get_val(), Some(&#min), Some(&#max)) {
-            self.#ident = #rhand;
-        } else {
-            return Err(libtd0_core::result::TD0Error::ConvertRangeError{ min: #min_i128, max: #max_i128 });
+            return Err(libtd0_core::result::TD0Error::OutOfRange)
         }
     )
 }
@@ -729,17 +718,17 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
         TD0FieldType::Text(attr) => {
             let pad_byte = attr.pad_byte.unwrap_or(0u8);
             parse_quote!(
-                (#ident_str, ChunkItemValue::Text(val)) => {
-                    crate::td0::chunks::common::copy_ascii_str_to_native(val, &mut self.#ident, field, #pad_byte)
+                (#ident_str, libtd0_core::TD0Value::Text(val)) => {
+                    libtd0_core::copy_ascii_str_to_u8_slice(val, &mut self.#ident, #pad_byte)
                 }
             )
         }
         TD0FieldType::EnumStr(attr) => {
             let collection = format_ident!("{}", &attr.collection);
             parse_quote!(
-                (#ident_str, ChunkItemValue::EnumStr(val)) => {
-                    let pos : &usize = &#collection.iter().position(|item| item == val)
-                        .ok_or_else(|| libtd0_core::result::TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("Invalid value: {}", val)})?;
+                (#ident_str, libtd0_core::TD0Value::Text(val)) => {
+                    let pos : &usize = &#collection.iter().position(|item| *item == val.as_str())
+                        .ok_or_else(|| libtd0_core::result::TD0Error::InvalidInput)?;
                     self.#ident = u8::try_from(*pos).expect("Collection index must be in range.");
                     Ok(())
                 }
@@ -749,7 +738,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             let inner: Stmt = build_decimal_setter_expr(attr, &td0field.native_type, ident);
 
             parse_quote!(
-                (#ident_str, ChunkItemValue::TD0Decimal(val)) => {
+                (#ident_str, libtd0_core::TD0Value::Decimal(val)) => {
                     #inner
                     Ok(())
                 }
@@ -757,21 +746,16 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
         }
         TD0FieldType::Volume(_) => {
             parse_quote!(
-                (#ident_str, ChunkItemValue::Volume(val)) => {
-                    val.validate()?;
-                    self.#ident = val.clone().try_into().map_err(|err|
-                        libtd0_core::result::TD0Error::ConvertToNativeTypeError{field: #ident_str.to_string(), reason: ::std::format!("{}", err)}
-                    )?;
+                (#ident_str, libtd0_core::TD0Value::Decimal(val)) => {
+                    let tmp = libtd0_core::Volume::try_from(*val)?;
+                    self.#ident = tmp.try_into().map_err(|_| libtd0_core::result::TD0Error::OutOfRange)?;
                     Ok(())
                 }
             )
         }
         TD0FieldType::Slice(_) => parse_quote!(
             (#ident_str, ..) => {
-                Err(libtd0_core::result::TD0Error::ConvertToNativeTypeError {
-                    field: field.to_string(),
-                    reason: "Field may not be set.".to_string(),
-                })
+                Err(libtd0_core::result::TD0Error::ReadOnlyField)
             }
         ),
         TD0FieldType::I16(attr) => {
@@ -786,10 +770,14 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             };
 
             parse_quote!(
-                (#ident_str, ChunkItemValue::I16(val)) => {
-                    crate::td0::chunks::common::validate_is_in_range(*val, #min_expr, #max_expr)?;
-                    self.#ident = val.clone().into();
-                    Ok(())
+                (#ident_str, libtd0_core::TD0Value::I16(val)) => {
+                    if libtd0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
+                        self.#ident = val.clone().into();
+                        Ok(())
+                    }
+                    else {
+                        Err(libtd0_core::result::TD0Error::OutOfRange)
+                    }
                 }
             )
         }
@@ -805,10 +793,14 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             };
 
             parse_quote!(
-                (#ident_str, ChunkItemValue::U16(val)) => {
-                    crate::td0::chunks::common::validate_is_in_range(*val, #min_expr, #max_expr)?;
-                    self.#ident = val.clone().into();
-                    Ok(())
+                (#ident_str, libtd0_core::TD0Value::U16(val)) => {
+                    if libtd0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
+                        self.#ident = val.clone().into();
+                        Ok(())
+                    }
+                    else {
+                        Err(libtd0_core::result::TD0Error::OutOfRange)
+                    }
                 }
             )
         }
@@ -824,10 +816,14 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             };
 
             parse_quote!(
-                (#ident_str, ChunkItemValue::U32(val)) => {
-                    crate::td0::chunks::common::validate_is_in_range(*val, #min_expr, #max_expr)?;
-                    self.#ident = val.clone().into();
-                    Ok(())
+                (#ident_str, libtd0_core::TD0Value::U32(val)) => {
+                    if libtd0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
+                        self.#ident = val.clone().into();
+                        Ok(())
+                    }
+                    else {
+                        Err(libtd0_core::result::TD0Error::OutOfRange)
+                    }
                 }
             )
         }
@@ -843,10 +839,14 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             };
 
             parse_quote!(
-                (#ident_str, ChunkItemValue::U8(val)) => {
-                    crate::td0::chunks::common::validate_is_in_range(*val, #min_expr, #max_expr)?;
-                    self.#ident = val.clone();
-                    Ok(())
+                (#ident_str, libtd0_core::TD0Value::U8(val)) => {
+                    if libtd0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
+                        self.#ident = val.clone().into();
+                        Ok(())
+                    }
+                    else {
+                        Err(libtd0_core::result::TD0Error::OutOfRange)
+                    }
                 }
             )
         }
@@ -862,10 +862,14 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             };
 
             parse_quote!(
-                (#ident_str, ChunkItemValue::I8(val)) => {
-                    crate::td0::chunks::common::validate_is_in_range(*val, #min_expr, #max_expr)?;
-                    self.#ident = val.clone();
-                    Ok(())
+                (#ident_str, libtd0_core::TD0Value::I8(val)) => {
+                    if libtd0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
+                        self.#ident = val.clone().into();
+                        Ok(())
+                    }
+                    else {
+                        Err(libtd0_core::result::TD0Error::OutOfRange)
+                    }
                 }
             )
         }
@@ -879,34 +883,34 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
     match td0field.native_type {
         NativeType::I16 => {
             parse_quote!(
-                (#ident_str, ChunkItemValueRaw::I16(val)) => {
+                (#ident_str, libtd0_core::TD0ValueRaw::I16(val)) => {
                     self.#ident = I16::from(val.clone());
                     Ok(())
                 }
             )
         }
         NativeType::I8 => parse_quote!(
-            (#ident_str, ChunkItemValueRaw::I8(val)) => {
+            (#ident_str, libtd0_core::TD0ValueRaw::I8(val)) => {
                 self.#ident = val.clone();
                 Ok(())
             }
         ),
         NativeType::U8 => parse_quote!(
-            (#ident_str, ChunkItemValueRaw::U8(val)) => {
+            (#ident_str, libtd0_core::TD0ValueRaw::U8(val)) => {
                 self.#ident = val.clone();
                 Ok(())
             }
         ),
         NativeType::U16 => {
             parse_quote!(
-                (#ident_str, ChunkItemValueRaw::U16(val)) => {
+                (#ident_str, libtd0_core::TD0ValueRaw::U16(val)) => {
                     self.#ident = U16::from(val.clone());
                     Ok(())
                 }
             )
         }
         NativeType::U32 => parse_quote!(
-            (#ident_str, ChunkItemValueRaw::U32(val)) => {
+            (#ident_str, libtd0_core::TD0ValueRaw::U32(val)) => {
                 self.#ident = U32::from(val.clone());
                 Ok(())
             }
@@ -915,14 +919,14 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
             let inner: Stmt = match &td0field.attr {
                 TD0FieldType::Text(attr) => {
                     let pad = attr.pad_byte.unwrap_or(0);
-                    parse_quote!(crate::td0::chunks::common::copy_slice_to_native_padded(val, &mut self.#ident, #ident_str, #pad)?;)
+                    parse_quote!(libtd0_core::copy_slice_to_native_padded(val, &mut self.#ident, #pad)?;)
                 }
                 _ => {
-                    parse_quote!(crate::td0::chunks::common::copy_slice_to_native(val, &mut self.#ident, #ident_str)?;)
+                    parse_quote!(libtd0_core::copy_slice_to_native(val, &mut self.#ident)?;)
                 }
             };
             parse_quote!(
-                (#ident_str, ChunkItemValueRaw::Slice(val)) => {
+                (#ident_str, libtd0_core::TD0ValueRaw::Slice(val)) => {
                     #inner
                     Ok(())
                 }
@@ -933,7 +937,7 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
 
 fn build_chunkitem_get_value(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
-        fn get_value(&self, field: &str) -> Option<ChunkItemValue> {
+        fn get_value(&self, field: &str) -> Option<libtd0_core::TD0Value> {
             match field {}
         }
     );
@@ -956,7 +960,7 @@ fn build_chunkitem_get_value(td0fields: &[TD0Field]) -> ImplItemFn {
 
 fn build_chunkitem_get_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
-        fn get_value_raw(&self, field: &str) -> Option<ChunkItemValueRaw> {
+        fn get_value_raw(&self, field: &str) -> Option<libtd0_core::TD0ValueRaw> {
             match field {}
         }
     );
@@ -982,7 +986,7 @@ fn build_chunkitem_set_value(td0fields: &[TD0Field]) -> ImplItemFn {
         fn set_value(
             &mut self,
             field: &str,
-            value: &ChunkItemValue,
+            value: &libtd0_core::TD0Value,
         ) -> libtd0_core::result::TD0Result<()> {
             match (field, value) {}
         }
@@ -990,10 +994,7 @@ fn build_chunkitem_set_value(td0fields: &[TD0Field]) -> ImplItemFn {
 
     let mut set_fields_clauses: Vec<Arm> = td0fields.iter().map(build_setter_expr).collect();
     set_fields_clauses.push(parse_quote!(
-        _ => Err(libtd0_core::result::TD0Error::ConvertToNativeTypeError {
-            field: field.to_string(),
-            reason: "Unknown field or improper value type.".to_string(),
-        })
+        _ => Err(libtd0_core::result::TD0Error::InvalidFieldOrType)
     ));
 
     for arm in set_fields_clauses.iter() {
@@ -1007,18 +1008,15 @@ fn build_chunkitem_set_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
         fn set_value_raw(
             &mut self,
             field: &str,
-            value: &ChunkItemValueRaw,
+            value: &libtd0_core::TD0ValueRaw,
         ) -> libtd0_core::result::TD0Result<()> {
             match (field, value) {}
         }
     );
 
-    let mut set_fields_clauses: Vec<Arm> = td0fields
-        .iter()
-        .map(build_setter_expr_raw)
-        .collect();
+    let mut set_fields_clauses: Vec<Arm> = td0fields.iter().map(build_setter_expr_raw).collect();
     set_fields_clauses.push(parse_quote!(
-        _ => Err(libtd0_core::result::TD0Error::RawDataError{ field: field.to_string() })
+        _ => Err(libtd0_core::result::TD0Error::InvalidInput)
     ));
 
     for arm in set_fields_clauses.iter() {
@@ -1038,8 +1036,16 @@ mod tests {
             min: dec64!(-60.0),
             max: dec64!(6.0),
         };
-        assert_eq!(field.clamp_i16(-600i16), -600i16, "Doesn't clamp at min value.");
-        assert_eq!(field.clamp_i16(-601i16), -600i16, "Does clamp at < min value.");
+        assert_eq!(
+            field.clamp_i16(-600i16),
+            -600i16,
+            "Doesn't clamp at min value."
+        );
+        assert_eq!(
+            field.clamp_i16(-601i16),
+            -600i16,
+            "Does clamp at < min value."
+        );
         assert_eq!(field.clamp_i16(60i16), 60i16, "Doesn't clamp at max value.");
         assert_eq!(field.clamp_i16(61i16), 60i16, "Does clamp at > max value.");
 
