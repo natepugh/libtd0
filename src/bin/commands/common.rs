@@ -27,11 +27,11 @@ fn validate_fields(
     fields: &[String],
     chunk_name: &str,
 ) -> TD0Result<()> {
-    let all_fields: IndexSet<&str> = chunk_item.list_fields().iter().map(|f| *f).collect();
+    let all_fields: IndexSet<&str> = chunk_item.list_fields().iter().copied().collect();
     let requested_fields: IndexSet<&str> = fields.iter().map(|fld| fld.as_str()).collect();
 
     let unknown_fields = requested_fields.difference(&all_fields);
-    let unknown_fields_str = unknown_fields.map(|f| *f).collect::<Vec<&str>>().join(",");
+    let unknown_fields_str = unknown_fields.copied().collect::<Vec<&str>>().join(",");
 
     if !unknown_fields_str.is_empty() {
         return Err(TD0Error::InvalidInputWithMessage(format!(
@@ -64,13 +64,13 @@ pub fn command_dump_chunk_item<'a>(
     chunk_name: &'a str,
     item_num: usize,
 ) -> TD0Result<&'a [u8]> {
-    Ok(td0file.get_chunk_item_raw(chunk_name, item_num)?)
+    td0file.get_chunk_item_raw(chunk_name, item_num)
 }
 
 pub fn command_dump_chunk<'a>(td0file: &'a dyn TD0File, chunk_name: &str) -> TD0Result<&'a [u8]> {
-    Ok(td0file
+    td0file
         .get_chunk_raw(chunk_name)
-        .ok_or(TD0Error::UnknownChunk)?)
+        .ok_or(TD0Error::UnknownChunk)
 }
 
 pub fn command_dump_chunk_values(
@@ -122,20 +122,20 @@ pub fn command_compare_chunk_items(
     let chunk_2_item = td0file.get_chunk_item(chunk_name_2, item_num)?;
 
     let chunk_1_fields: IndexSet<&str> =
-        IndexSet::from_iter(chunk_1_item.list_fields().iter().map(|fld| *fld));
+        IndexSet::from_iter(chunk_1_item.list_fields().iter().copied());
     let chunk_2_fields: IndexSet<&str> =
-        IndexSet::from_iter(chunk_2_item.list_fields().iter().map(|fld| *fld));
+        IndexSet::from_iter(chunk_2_item.list_fields().iter().copied());
 
     let mut all_fields: IndexSet<&str> = chunk_1_fields.clone();
     all_fields.extend(chunk_2_fields.iter());
 
     let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();
     for field in all_fields.iter() {
-        let c1_val = chunk_1_item.get_value(*field);
-        let c2_val = chunk_2_item.get_value(*field);
+        let c1_val = chunk_1_item.get_value(field);
+        let c2_val = chunk_2_item.get_value(field);
         if c1_val != c2_val {
             diffs.push(ChunkFieldDiffItem {
-                field: *field,
+                field,
                 left: c1_val,
                 right: c2_val,
             });

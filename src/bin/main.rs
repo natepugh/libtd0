@@ -93,7 +93,7 @@ fn main() {
     match &cli.command {
         Commands::DisplayManifest {} => {
             // TODO: Determine the output format and support CSV.
-            if cli.output_format == OutputFormat::CSV {
+            if cli.output_format == OutputFormat::Csv {
                 exit_err(
                     "--output-format=csv not supported for display-manifest.",
                     ERR_UNKNOWN,
@@ -102,10 +102,10 @@ fn main() {
             let td0file = parse_td0_file_or_exit(&cli.file);
             let manifest_data = td0file.manifest();
             let text_output = match cli.output_format {
-                OutputFormat::JSON => {
+                OutputFormat::Json => {
                     serde_json::to_string(&manifest_data).expect("Could not serialize output.")
                 }
-                OutputFormat::CSV => {
+                OutputFormat::Csv => {
                     todo!();
                 }
                 OutputFormat::Text => format!("{manifest_data}"),
@@ -241,9 +241,9 @@ fn main() {
                 exit_td0_err(&TD0Error::UnknownChunk, ERR_INVALID_CHUNK);
             };
             let text_output = match cli.output_format {
-                OutputFormat::JSON => serde_json::to_string(&chunk_item.list_fields())
+                OutputFormat::Json => serde_json::to_string(&chunk_item.list_fields())
                     .expect("Could not serialize output."),
-                OutputFormat::CSV => {
+                OutputFormat::Csv => {
                     let mut writer = csv::Writer::from_writer(std::io::stdout());
                     writer
                         .write_record(chunk_item.list_fields().iter())

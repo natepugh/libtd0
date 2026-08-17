@@ -49,10 +49,8 @@ impl TD0Chunk for Chunk {
     }
 
     fn item_range(&self, item_index: usize) -> Option<::core::ops::Range<usize>> {
-        match self.item_pos(item_index) {
-            Some(pos) => Some((pos..pos + self.item_size).into()),
-            None => None,
-        }
+        self.item_pos(item_index)
+            .map(|pos| pos..pos + self.item_size)
     }
 
     fn item_size(&self) -> usize {
@@ -200,7 +198,7 @@ impl SSXPTD0File {
     }
 
     fn validate_manifest_tags_all_same_model(&self) -> TD0Result<()> {
-        if self.manifest.len() > 0 {
+        if !self.manifest.is_empty() {
             let mut man_iter = self.manifest.iter();
             let model = man_iter.next().unwrap().model();
             for tag in man_iter {
@@ -249,8 +247,7 @@ impl TD0File for SSXPTD0File {
         validate_id_tag(&id_tag)?;
 
         let manifest = parse_manifest(
-            &bytes
-                [SZ_HDR_CHUNK..id_tag.bytes_remaining() as usize + OFFSET_BYTES_REMAINING as usize],
+            &bytes[SZ_HDR_CHUNK..id_tag.bytes_remaining() + OFFSET_BYTES_REMAINING],
         )?;
         validate_manifest(&manifest)?;
         let tag_indexes = build_tag_indexes(&manifest)?;
@@ -300,14 +297,14 @@ impl TD0File for SSXPTD0File {
     }
 
     fn get_chunk(&self, chunk_name: &str) -> Option<Box<dyn TD0Chunk>> {
-        match self.chunks.get(&chunk_name.to_string()) {
-            Some(ch) => Some(Box::new(ch.clone())),
+        match self.chunks.get(chunk_name) {
+            Some(ch) => Some(Box::new(*ch)),
             None => None,
         }
     }
 
     fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]> {
-        match self.chunks.get(&chunk_name.to_string()) {
+        match self.chunks.get(chunk_name) {
             Some(ch) => Some(&self.buf[ch.pos..(ch.pos + ch.size())]),
             None => None,
         }
@@ -365,7 +362,7 @@ impl TD0File for SSXPTD0File {
 
         TD0Manifest {
             backup_type: self.get_backup_type(),
-            checksum_actual: checksum_actual,
+            checksum_actual,
             checksum_calculated: hasher.finalize().into(),
             device_model: TD0DeviceModel::SPDSXPro,
             size_actual: self.buf.len(),

@@ -4,14 +4,13 @@ use super::commands::IndexedItemValues;
 use crate::commands::ChunkFieldDiffItem;
 use clap::ValueEnum;
 use libtd0_core::TD0Chunk;
-use serde_json;
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum OutputFormat {
-    CSV,
+    Csv,
     #[default]
     Text,
-    JSON,
+    Json,
 }
 
 type FormatResult = core::result::Result<String, &'static str>;
@@ -23,7 +22,7 @@ pub fn fmt_hex_dump(bytes: &[u8], hexout_settings: &HexOutSettings) -> String {
 pub fn create_hexout_settings(chunk: &dyn TD0Chunk) -> HexOutSettings {
     HexOutSettings {
         address_origin: chunk.pos(),
-        address_width: if chunk.pos() + chunk.size() as usize <= 0xFFFF {
+        address_width: if chunk.pos() + chunk.size() <= 0xFFFF {
             4
         } else {
             8
@@ -72,7 +71,7 @@ pub fn fmt_chunk_item_compare_result(
                     .join("\n"))
             }
         }
-        OutputFormat::JSON => {
+        OutputFormat::Json => {
             Ok(serde_json::to_string(&diffs).map_err(|_| "unable to format JSON.")?)
         }
         _ => Err("--output-format: Only `text` and `json` are supported for this command."),
@@ -91,7 +90,7 @@ fn header_and_rows_from_values_result<'a>(
         return (header, rows);
     }
 
-    header.push(&IDX_HEADER);
+    header.push(IDX_HEADER);
     let (_, first) = vals.first().unwrap();
     header.extend(first.keys().map(|key| key.as_str()));
 
@@ -122,11 +121,11 @@ pub fn fmt_chunk_values_result(vals: &IndexedItemValues, format: &OutputFormat) 
             }
             Ok(lines.join(","))
         }
-        OutputFormat::JSON => {
+        OutputFormat::Json => {
             Ok(serde_json::to_string(&vals).map_err(|_| "unable to format JSON.")?)
         }
-        OutputFormat::CSV => {
-            let (header, rows) = header_and_rows_from_values_result(&vals);
+        OutputFormat::Csv => {
+            let (header, rows) = header_and_rows_from_values_result(vals);
             let mut output: Vec<u8> = Vec::new();
             let mut writer = csv::Writer::from_writer(&mut output);
             writer

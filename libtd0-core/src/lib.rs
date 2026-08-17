@@ -307,7 +307,7 @@ where
     if !in_range_inclusive(val, Some(min), Some(max)) {
         None
     } else {
-        Some(val.clone())
+        Some(val)
     }
 }
 
