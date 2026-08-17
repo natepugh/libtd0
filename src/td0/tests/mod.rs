@@ -522,7 +522,7 @@ fn test_setters() {
             "space_padded_text",
             &libtd0_core::TD0Value::Text("One char too long".to_string())
         ),
-        Err(TD0Error::InvalidInput),
+        Err(TD0Error::OutOfRange),
         "`space_padded_text` Setter should Error if string too long."
     );
     assert_eq!(

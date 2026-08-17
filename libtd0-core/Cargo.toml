@@ -5,5 +5,9 @@ edition = "2024"
 
 [dependencies]
 fastnum = "0.7.5"
-thiserror = "2.0.19"
 zerocopy = { version = "0.8.55", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"], optional = true }
+
+[features]
+default = []
+serde = ["dep:serde", "serde/derive", "fastnum/serde"]

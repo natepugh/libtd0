@@ -1,9 +1,12 @@
 pub mod result;
 pub mod traits;
 
+use crate::result::TD0Error;
 pub use fastnum::D64 as Decimal;
 use fastnum::decimal::Context as DecimalContext;
 use result::TD0Result;
+#[cfg(feature = "serde")]
+use serde::Serializer;
 use traits::HasMinAndMax;
 use zerocopy::{ByteOrder, I16, U16};
 
@@ -12,10 +15,12 @@ pub const VOLUME_MIN: Decimal = Decimal::from_i8(-60i8);
 pub const VOLUME_MAX: Decimal = Decimal::from_i8(6i8);
 pub const VOLUME_MINUS_INF_DECIMAL: Decimal = Decimal::NEG_INFINITY;
 pub const VOLUME_MINUS_INF_I16: i16 = -601;
-pub const VOLUME_MINUS_INF_DISPLAY: &str = "-Inf";
+pub const VOLUME_MINUS_INF_DISPLAY: &str = "-inf";
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
 pub enum TD0Value {
+    #[cfg_attr(feature = "serde", serde(serialize_with = "serialize_as_f64"))]
     Decimal(Decimal),
     I16(i16),
     I8(i8),
@@ -27,6 +32,7 @@ pub enum TD0Value {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
 pub enum TD0ValueRaw {
     I16(i16),
     I8(i8),
@@ -36,19 +42,83 @@ pub enum TD0ValueRaw {
     U8(u8),
 }
 
+#[cfg(feature = "serde")]
+pub fn serialize_as_f64<S>(value: &Decimal, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_f64(value.to_f64())
+}
+
+/*
+impl Serialize for TD0Value {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            TD0Value::Decimal(val) => val.serialize(serializer),
+            TD0Value::I16(val) => serializer.serialize_i16(*val),
+            TD0Value::I8(val) => serializer.serialize_i8(*val),
+            TD0Value::Slice(val) => serializer.serialize_bytes(val),
+            TD0Value::Text(val) => serializer.serialize_str(val),
+            TD0Value::U16(val) => serializer.serialize_u16(*val),
+            TD0Value::U32(val) => serializer.serialize_u32(*val),
+            TD0Value::U8(val) => serializer.serialize_u8(*val),
+        }
+    }
+}
+ */
+
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum TD0DeviceModel {
     SPDSXPro,
     Unknown,
 }
 
+impl TryFrom<&str> for TD0DeviceModel {
+    type Error = TD0Error;
+
+    fn try_from(val: &str) -> Result<Self, Self::Error> {
+        match val {
+            "SPDSXPro" => Ok(Self::SPDSXPro),
+            "Unknown" => Ok(Self::Unknown),
+            _ => Err(TD0Error::InvalidInput),
+        }
+    }
+}
+
+impl core::fmt::Display for TD0DeviceModel {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let strval = match self {
+            Self::SPDSXPro => "SPDSXPro",
+            Self::Unknown => "Unknown",
+        };
+        write!(f, "{strval}")
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum TD0BackupType {
     Kit,
     System,
     Unknown,
 }
 
+impl core::fmt::Display for TD0BackupType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let strval = match self {
+            Self::Kit => "Kit",
+            Self::System => "System",
+            Self::Unknown => "Unknown",
+        };
+        write!(f, "{strval}")
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ChunkManifest {
     pub name: String,
     pub pos: usize,
@@ -67,14 +137,34 @@ impl core::fmt::Display for ChunkManifest {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct TD0Manifest {
     pub backup_type: TD0BackupType,
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "serde_checksum_bytes_to_string")
+    )]
     pub checksum_actual: [u8; 16],
     pub checksum_calculated: [u8; 16],
     pub device_model: TD0DeviceModel,
     pub size_actual: usize,
     pub size_calculated: usize,
     pub chunks: Vec<ChunkManifest>,
+}
+
+#[allow(dead_code)]
+pub(crate) fn checksum_bytes_to_string(val: &[u8]) -> String {
+    val.iter()
+        .map(|byte| format!("{:02x}", byte))
+        .collect::<String>()
+}
+
+#[cfg(feature = "serde")]
+fn serde_checksum_bytes_to_string<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(checksum_bytes_to_string(bytes).as_str())
 }
 
 impl core::fmt::Display for TD0Manifest {
@@ -90,14 +180,8 @@ impl core::fmt::Display for TD0Manifest {
              Chunks:
     {}",
             self.backup_type,
-            self.checksum_actual
-                .iter()
-                .map(|byte| format!("{:02x}", byte))
-                .collect::<String>(),
-            self.checksum_calculated
-                .iter()
-                .map(|byte| format!("{:02x}", byte))
-                .collect::<String>(),
+            checksum_bytes_to_string(&self.checksum_actual),
+            checksum_bytes_to_string(&self.checksum_calculated),
             self.device_model,
             self.size_actual,
             self.size_calculated,
@@ -165,7 +249,7 @@ impl core::fmt::Display for TD0Value {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let repr: String = match self {
             Self::Slice(val) => format!("{val:?}"),
-            Self::Decimal(val) => val.to_string(),
+            Self::Decimal(val) => val.to_f64().to_string(),
             Self::I16(val) => val.to_string(),
             Self::I8(val) => val.to_string(),
             Self::Text(val) => val.to_string(),
@@ -187,7 +271,7 @@ where
 
 pub fn copy_ascii_str_to_u8_slice(src: &String, dest: &mut [u8], pad_byte: u8) -> TD0Result<()> {
     if src.len() > dest.len() {
-        return Err(result::TD0Error::InvalidInput);
+        return Err(result::TD0Error::OutOfRange);
     }
     if !src.is_ascii() {
         return Err(result::TD0Error::InvalidInput);
@@ -691,5 +775,32 @@ mod tests {
             Err(result::TD0Error::InvalidInput),
             "Error if source slice is too long."
         );
+    }
+
+    #[test]
+    fn test_td0_value_display_impl() {
+        let val = TD0Value::Slice(Box::new([0u8, 1u8, 23u8, 27u8, 5u8]));
+        assert_eq!(val.to_string().as_str(), "[0, 1, 23, 27, 5]");
+
+        let val = TD0Value::Decimal(dec64!(91.1));
+        assert_eq!(val.to_string().as_str(), "91.1");
+
+        let val = TD0Value::I16(-512);
+        assert_eq!(val.to_string().as_str(), "-512");
+
+        let val = TD0Value::I8(-12i8);
+        assert_eq!(val.to_string().as_str(), "-12");
+
+        let val = TD0Value::Text("This is a test.".to_string());
+        assert_eq!(val.to_string().as_str(), "This is a test.");
+
+        let val = TD0Value::U16(544);
+        assert_eq!(val.to_string().as_str(), "544");
+
+        let val = TD0Value::U8(221);
+        assert_eq!(val.to_string().as_str(), "221");
+
+        let val = TD0Value::U32(299000);
+        assert_eq!(val.to_string().as_str(), "299000");
     }
 }
