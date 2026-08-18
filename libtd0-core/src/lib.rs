@@ -189,9 +189,11 @@ pub trait TD0ChunkItem {
 }
 
 pub trait TD0File {
+    fn as_bytes(&self) -> &[u8];
     fn from_bytes(bytes: Vec<u8>) -> TD0Result<Self>
     where
         Self: Sized;
+    fn into_bytes(self) -> Vec<u8>;
     fn get_chunk(&self, chunk_name: &str) -> Option<Box<dyn TD0Chunk>>;
     fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]>;
     fn get_chunk_item(

@@ -239,6 +239,10 @@ impl SSXPTD0File {
 }
 
 impl TD0File for SSXPTD0File {
+    fn as_bytes(&self) -> &[u8] {
+        &self.buf
+    }
+
     fn from_bytes(bytes: Vec<u8>) -> TD0Result<Self> {
         let id_tag = TD0IdChunk::read_from_bytes(&bytes[..SZ_HDR_CHUNK])
             .map_err(|_| TD0Error::InvalidTD0File("invalid or missing `TD0a` header chunk"))?;
@@ -341,6 +345,10 @@ impl TD0File for SSXPTD0File {
         Ok(&self.buf[chunk
             .item_range(item_index)
             .ok_or(TD0Error::InvalidChunkItem)?])
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        self.buf
     }
 
     fn manifest(&self) -> TD0Manifest {
