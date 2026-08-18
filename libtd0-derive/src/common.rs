@@ -18,6 +18,25 @@ impl Parse for AttrKeyValue {
     }
 }
 
+impl TryFrom<&AttrKeyValue> for f32 {
+    type Error = syn::Error;
+
+    fn try_from(kv_pair: &AttrKeyValue) -> Result<Self, <Self as TryFrom<&AttrKeyValue>>::Error> {
+        match &kv_pair.val {
+            Lit::Int(lit_int) => lit_int
+                .base10_parse()
+                .map_err(|err| syn::Error::new_spanned(lit_int, err.to_string())),
+            Lit::Float(lit_float) => lit_float
+                .base10_parse()
+                .map_err(|err| syn::Error::new_spanned(lit_float, err.to_string())),
+            _ => Err(syn::Error::new_spanned(
+                &kv_pair.val,
+                "Must be an decimal number.",
+            )),
+        }
+    }
+}
+
 impl TryFrom<&AttrKeyValue> for u8 {
     type Error = syn::Error;
 
@@ -93,22 +112,6 @@ impl TryFrom<&AttrKeyValue> for i16 {
             _ => Err(syn::Error::new_spanned(
                 &kv_pair.val,
                 "Must be an Integer type.",
-            )),
-        }
-    }
-}
-
-impl TryFrom<&AttrKeyValue> for f64 {
-    type Error = syn::Error;
-
-    fn try_from(kv_pair: &AttrKeyValue) -> Result<Self, <Self as TryFrom<&AttrKeyValue>>::Error> {
-        match &kv_pair.val {
-            Lit::Float(lit_float) => lit_float
-                .base10_parse()
-                .map_err(|err| syn::Error::new_spanned(lit_float, err.to_string())),
-            _ => Err(syn::Error::new_spanned(
-                &kv_pair.val,
-                "Must be an decimal number.",
             )),
         }
     }

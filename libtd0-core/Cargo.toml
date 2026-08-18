@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-fastnum = "0.7.5"
 zerocopy = { version = "0.8.55", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"], optional = true }
+num-traits = "0.2.19"
 
 [features]
 default = []
-serde = ["dep:serde", "serde/derive", "fastnum/serde"]
+serde = ["dep:serde", "serde/derive"]

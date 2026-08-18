@@ -20,7 +20,6 @@ const BACKUP_TAG_KIT: &str = "SSXPROKT";
 const BACKUP_TAG_SYSTEM: &str = "SSXPROBK";
 const SZ_HDR_EXTRA_DATA: usize = 4;
 
-
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Chunk {
     pub pos: usize,

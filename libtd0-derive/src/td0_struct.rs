@@ -1,7 +1,8 @@
 use core::convert::Into;
-use fastnum::D64 as Decimal;
+use num_traits::Bounded;
 use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote};
+use std::ops::Mul;
 use syn::{Arm, Expr, LitFloat, Stmt, parse_quote};
 use syn::{Attribute, Field, Ident, ImplItemFn, ItemStruct, parse2};
 
@@ -113,58 +114,8 @@ impl TryFrom<&Attribute> for TD0FieldTypeEnumStr {
 
 #[derive(Clone, Debug, PartialEq)]
 struct TD0FieldTypeTD0Decimal {
-    min: Decimal,
-    max: Decimal,
-}
-
-#[allow(dead_code)]
-impl TD0FieldTypeTD0Decimal {
-    pub fn clamp_u8(&self, val: u8) -> u8 {
-        // Convert raw val to a Decimal. Each u8 increment has a Decimal value of 0.1.
-        let val_as_decimal = Decimal::from(val).div(Decimal::TEN);
-        // Clamp, then multiply by 10 to convert back to u8.
-        val_as_decimal
-            .clamp(self.min, self.max)
-            .mul(Decimal::TEN)
-            .to_u8()
-            .expect("Field min / max must be within u8 bounds.")
-    }
-
-    pub fn clamp_u16(&self, val: u16) -> u16 {
-        // Convert raw val to a Decimal. Each u16 increment has a Decimal value of 0.1.
-        let val_as_decimal = Decimal::from(val).div(Decimal::TEN);
-        val_as_decimal
-            .clamp(self.min, self.max)
-            .mul(Decimal::TEN)
-            .to_u16()
-            .expect("Field min / max must be within u16 bounds.")
-    }
-
-    pub fn clamp_i8(&self, val: i8) -> i8 {
-        // Convert raw val to a Decimal. Each i8 increment has a Decimal value of 0.1.
-        let val_as_decimal = Decimal::from(val).div(Decimal::TEN);
-        // Clamp, then multiply by 10 to convert back to u8.
-        val_as_decimal
-            .clamp(self.min, self.max)
-            .mul(Decimal::TEN)
-            .to_i8()
-            .expect("Field min / max must be within i8 bounds.")
-    }
-
-    pub fn clamp_i16(&self, val: i16) -> i16 {
-        // Convert raw val to a Decimal. Each i16 increment has a Decimal value of 0.1.
-        let val_as_decimal = Decimal::from(val).div(Decimal::TEN);
-        val_as_decimal
-            .clamp(self.min, self.max)
-            .mul(Decimal::TEN)
-            .to_i16()
-            .expect("Field min / max must be within i16 bounds.")
-    }
-
-    pub fn clamp_decimal(&self, val: Decimal) -> Decimal {
-        // Clamp function that scales val to the expected TD0Decimal range before clamping.
-        val.clamp(self.min, self.max)
-    }
+    min: f32,
+    max: f32,
 }
 
 impl TryFrom<&Attribute> for TD0FieldTypeTD0Decimal {
@@ -175,18 +126,31 @@ impl TryFrom<&Attribute> for TD0FieldTypeTD0Decimal {
         static VALID_NAMES: [&str; 2] = ["min", "max"];
 
         let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
-        let min: f64 = kv_list
+        let min: f32 = kv_list
             .find_by_name("min")
             .expect("Guarded above.")
             .try_into()?;
-        let max: f64 = kv_list
+        let max: f32 = kv_list
             .find_by_name("max")
             .expect("Guarded above.")
             .try_into()?;
-        Ok(Self {
-            min: Decimal::from(min).round(1),
-            max: Decimal::from(max).round(1),
-        })
+        Ok(Self { min, max })
+    }
+}
+
+impl TD0FieldTypeTD0Decimal {
+    pub fn clamp<T>(&self, val: T) -> Result<T, &'static str>
+    where
+        T: Ord + Bounded + TryFrom<i64>,
+        f32: From<T>,
+    {
+        // Scale min and max to the native value scale (x10).
+        let min: T = T::try_from(self.min.mul(10.0f32).round() as i64)
+            .map_err(|_| "value must be convertable to field type.")?;
+        let max: T = T::try_from(self.max.mul(10.0f32).round() as i64)
+            .map_err(|_| "value must be convertable to field type.")?;
+
+        Ok(num_traits::clamp(val, min, max))
     }
 }
 
@@ -469,7 +433,12 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         NativeType::U16 => {
             let u16_default: u16 = match TD0Field::try_from(field) {
                 Ok(td0field) => match td0field.attr {
-                    TD0FieldType::TD0Decimal(field_type) => field_type.clamp_u16(0),
+                    TD0FieldType::TD0Decimal(field_type) => match field_type.clamp(0u16) {
+                        Ok(val) => val,
+                        Err(err) => {
+                            return syn::Error::new_spanned(field, err).into_compile_error();
+                        }
+                    },
                     TD0FieldType::U16(field_type) => field_type.clamp(0),
                     _ => 0,
                 },
@@ -636,13 +605,15 @@ fn build_getter_expr(td0field: &TD0Field) -> Expr {
         TD0FieldType::U8(_) => parse_quote!(Some(libtd0_core::TD0Value::U8(self.#ident))),
         TD0FieldType::I8(_) => parse_quote!(Some(libtd0_core::TD0Value::I8(self.#ident))),
         TD0FieldType::TD0Decimal(_) => {
-            parse_quote!(Some(libtd0_core::TD0Value::Decimal(
-                libtd0_core::Decimal::from(libtd0_core::IntEncodedDecimal::from(self.#ident))
-            )))
+            parse_quote!(Some(
+                libtd0_core::TD0Value::Decimal(f32::from(
+                    libtd0_core::IntEncodedDecimal::from(self.#ident)
+                ))
+            ))
         }
         TD0FieldType::Volume(_) => parse_quote!(
             match libtd0_core::Volume::try_from(self.#ident.get()) {
-                Ok(vol) => Some(libtd0_core::TD0Value::Decimal(libtd0_core::Decimal::from(vol))),
+                Ok(vol) => Some(libtd0_core::TD0Value::Decimal(vol.into())),
                 Err(_) => None
             }
         ),
@@ -678,8 +649,8 @@ fn build_decimal_setter_expr(
 ) -> Stmt {
     let attr_min: LitFloat = LitFloat::new(attr.min.to_string().as_str(), Span::call_site());
     let attr_max: LitFloat = LitFloat::new(attr.max.to_string().as_str(), Span::call_site());
-    let min: Expr = parse_quote!(fastnum::dec64!(#attr_min));
-    let max: Expr = parse_quote!(fastnum::dec64!(#attr_max));
+    let min: Expr = parse_quote!(#attr_min as f32);
+    let max: Expr = parse_quote!(#attr_max as f32);
 
     let rhand: Expr = match native_type {
         NativeType::U8 => parse_quote!(
@@ -702,7 +673,7 @@ fn build_decimal_setter_expr(
     };
 
     parse_quote!(
-        if libtd0_core::in_range_inclusive(libtd0_core::IntEncodedDecimal::from(*val).get_val(), Some(&#min), Some(&#max)) {
+        if libtd0_core::in_range_inclusive(libtd0_core::IntEncodedDecimal::from(*val).get_val(), Some(#min), Some(#max)) {
             self.#ident = #rhand;
         } else {
             return Err(libtd0_core::result::TD0Error::OutOfRange)
@@ -1028,34 +999,33 @@ fn build_chunkitem_set_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fastnum::dec64;
 
     #[test]
-    fn test_td0_decimal_clamp() {
+    fn test_td0_f32_clamp() {
         let field = TD0FieldTypeTD0Decimal {
-            min: dec64!(-60.0),
-            max: dec64!(6.0),
+            min: -60.0f32,
+            max: 6.0f32,
         };
         assert_eq!(
-            field.clamp_i16(-600i16),
-            -600i16,
+            field.clamp(-600i16),
+            Ok(-600i16),
             "Doesn't clamp at min value."
         );
         assert_eq!(
-            field.clamp_i16(-601i16),
-            -600i16,
+            field.clamp(-601i16),
+            Ok(-600i16),
             "Does clamp at < min value."
         );
-        assert_eq!(field.clamp_i16(60i16), 60i16, "Doesn't clamp at max value.");
-        assert_eq!(field.clamp_i16(61i16), 60i16, "Does clamp at > max value.");
+        assert_eq!(field.clamp(60i16), Ok(60i16), "Doesn't clamp at max value.");
+        assert_eq!(field.clamp(61i16), Ok(60i16), "Does clamp at > max value.");
 
         let field = TD0FieldTypeTD0Decimal {
-            min: dec64!(2.3),
-            max: dec64!(12.0),
+            min: 2.3f32,
+            max: 12.0f32,
         };
-        assert_eq!(field.clamp_i8(23i8), 23i8, "Doesn't clamp at min value.");
-        assert_eq!(field.clamp_i8(22i8), 23i8, "Does clamp at < min value.");
-        assert_eq!(field.clamp_i8(120i8), 120i8, "Doesn't clamp at max value.");
-        assert_eq!(field.clamp_i8(121i8), 120i8, "Does clamp at > max value.");
+        assert_eq!(field.clamp(23i8), Ok(23i8), "Doesn't clamp at min value.");
+        assert_eq!(field.clamp(22i8), Ok(23i8), "Does clamp at < min value.");
+        assert_eq!(field.clamp(120i8), Ok(120i8), "Doesn't clamp at max value.");
+        assert_eq!(field.clamp(121i8), Ok(120i8), "Does clamp at > max value.");
     }
 }
