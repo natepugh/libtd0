@@ -36,21 +36,31 @@ pub fn create_hexout_settings(chunk: &dyn TD0Chunk) -> HexOutSettings {
 
 impl core::fmt::Display for ChunkFieldDiffItem {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let left_name = self.left_name.clone().unwrap_or_else(|| "left".to_string());
+        let right_name = self
+            .right_name
+            .clone()
+            .unwrap_or_else(|| "right".to_string());
+
         match (&self.left, &self.right) {
-            (Some(_), None) => write!(f, "`{}`: Field not present on right.", self.field),
-            (None, Some(_)) => write!(f, "`{}`: Field not present on left.", self.field),
+            (Some(_), None) => write!(f, "`{}`: Field not present in {right_name}.", self.field),
+            (None, Some(_)) => write!(f, "`{}`: Field not present in {left_name}.", self.field),
             (Some(left), Some(right)) => {
                 if left == right {
-                    write!(f, "`{}`: Both sides are identical.", self.field)
+                    write!(f, "{}: Both sides are identical.", self.field)
                 } else {
                     write!(
                         f,
-                        "`{}`: left = '{}' | right = '{}'",
+                        "{}: {left_name} = '{}' | {right_name} = '{}'",
                         self.field, left, right
                     )
                 }
             }
-            (None, None) => write!(f, "{}: Field not present in left or right.", self.field),
+            (None, None) => write!(
+                f,
+                "{}: Field not present in {left_name} or {right_name}.",
+                self.field
+            ),
         }
     }
 }

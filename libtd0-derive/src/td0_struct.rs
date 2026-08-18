@@ -336,7 +336,8 @@ enum TD0FieldType {
 #[derive(Clone, Debug, PartialEq)]
 struct TD0Field {
     ident: Ident,
-    attr: TD0FieldType,
+    field_type: TD0FieldType,
+    field_type_name: String,
     native_type: NativeType,
 }
 
@@ -386,7 +387,8 @@ impl TryFrom<&Field> for TD0Field {
 
         Ok(Self {
             ident,
-            attr: parsed_field_attr,
+            field_type: parsed_field_attr,
+            field_type_name,
             native_type,
         })
     }
@@ -402,7 +404,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
     output.extend(match native_type {
         NativeType::I16 => {
             let i16_default: i16 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.attr {
+                Ok(td0field) => match td0field.field_type {
                     TD0FieldType::I16(field_type) => field_type.clamp(0),
                     _ => 0,
                 },
@@ -412,7 +414,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         }
         NativeType::I8 => {
             let i8_default: i8 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.attr {
+                Ok(td0field) => match td0field.field_type {
                     TD0FieldType::I8(field_type) => field_type.clamp(0),
                     _ => 0,
                 },
@@ -422,7 +424,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         }
         NativeType::U8 => {
             let u8_default: u8 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.attr {
+                Ok(td0field) => match td0field.field_type {
                     TD0FieldType::U8(field_type) => field_type.clamp(0),
                     _ => 0,
                 },
@@ -432,7 +434,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         }
         NativeType::U16 => {
             let u16_default: u16 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.attr {
+                Ok(td0field) => match td0field.field_type {
                     TD0FieldType::TD0Decimal(field_type) => match field_type.clamp(0u16) {
                         Ok(val) => val,
                         Err(err) => {
@@ -448,7 +450,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         }
         NativeType::U32 => {
             let u32_default: u32 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.attr {
+                Ok(td0field) => match td0field.field_type {
                     TD0FieldType::U32(field_type) => field_type.clamp(0),
                     _ => 0,
                 },
@@ -459,7 +461,7 @@ fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
         NativeType::Slice(slice) => {
             let size = slice.size;
             let slice_default: u8 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.attr {
+                Ok(td0field) => match td0field.field_type {
                     TD0FieldType::Text(attr) => attr.pad_byte.unwrap_or(0),
                     _ => 0,
                 },
@@ -536,10 +538,15 @@ fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
     let mut td0fields: Vec<TD0Field> = Vec::new();
 
     for field in source.fields.iter() {
-        if let Some(ident) = &field.ident {
-            field_tokenstreams.push(ident.to_string());
-        }
+        let field_ident = match &field.ident {
+            Some(val) => val,
+            None => {
+                return syn::Error::new_spanned(field, "Anonymous fields are not supported.")
+                    .into_compile_error();
+            }
+        };
 
+        field_tokenstreams.push(field_ident.to_string());
         // TODO:  Make this more efficient:
         //        TD0Field.try_from(field) calls get_named_attr, which we're
         //        already call here and discarding the result.
@@ -568,6 +575,7 @@ fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
     let fn_set_value: ImplItemFn = build_chunkitem_set_value(&td0fields);
     let fn_get_value_raw: ImplItemFn = build_chunkitem_get_value_raw(&td0fields);
     let fn_set_value_raw: ImplItemFn = build_chunkitem_set_value_raw(&td0fields);
+    let fn_get_field_type: ImplItemFn = build_chunkitem_get_field_type(&td0fields);
 
     // Create an impl with get_fields().
     output.extend(quote!(
@@ -577,6 +585,7 @@ fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
             #fn_set_value
             #fn_get_value_raw
             #fn_set_value_raw
+            #fn_get_field_type
         }
     ));
 
@@ -585,7 +594,7 @@ fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
 
 fn build_getter_expr(td0field: &TD0Field) -> Expr {
     let ident = &td0field.ident;
-    match &td0field.attr {
+    match &td0field.field_type {
         TD0FieldType::Slice(_) => parse_quote!(
             Some(libtd0_core::TD0Value::Slice(Box::new(self.#ident.clone())))
         ),
@@ -685,7 +694,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
     let ident = &td0field.ident;
     let ident_str = ident.to_string();
 
-    match &td0field.attr {
+    match &td0field.field_type {
         TD0FieldType::Text(attr) => {
             let pad_byte = attr.pad_byte.unwrap_or(0u8);
             parse_quote!(
@@ -887,7 +896,7 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
             }
         ),
         NativeType::Slice(_) => {
-            let inner: Stmt = match &td0field.attr {
+            let inner: Stmt = match &td0field.field_type {
                 TD0FieldType::Text(attr) => {
                     let pad = attr.pad_byte.unwrap_or(0);
                     parse_quote!(libtd0_core::copy_slice_to_native_padded(val, &mut self.#ident, #pad)?;)
@@ -994,6 +1003,26 @@ fn build_chunkitem_set_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
         push_arm_to_fn_match(&mut fn_skel, arm);
     }
     fn_skel
+}
+
+fn build_chunkitem_get_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
+    let arms: Vec<Arm> = td0fields
+        .iter()
+        .map(|field| {
+            let field_name_str = field.ident.to_string();
+            let field_type_str = &field.field_type_name;
+            parse_quote!( #field_name_str => Some(#field_type_str) )
+        })
+        .collect();
+
+    parse_quote!(
+        fn get_field_type(&self, field: &str) -> Option<&'static str> {
+            match field {
+                #( #arms, )*
+                _ => None
+            }
+        }
+    )
 }
 
 #[cfg(test)]

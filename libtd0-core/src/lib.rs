@@ -183,6 +183,7 @@ pub trait TD0Chunk {
 pub trait TD0ChunkItem {
     fn get_value(&self, field: &str) -> Option<TD0Value>;
     fn get_value_raw(&self, field: &str) -> Option<TD0ValueRaw>;
+    fn get_field_type(&self, field: &str) -> Option<&'static str>;
     fn list_fields(&self) -> &'static [&'static str];
     fn set_value(&mut self, field: &str, value: &TD0Value) -> TD0Result<()>;
     fn set_value_raw(&mut self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;

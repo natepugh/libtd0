@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use libtd0::{TD0Error, TD0File, parse_td0_file};
 
+use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 use std::process::exit;
@@ -8,7 +9,7 @@ use std::process::exit;
 mod commands;
 use commands::{
     IndexedItemValues, command_compare_chunk_items, command_dump_chunk, command_dump_chunk_item,
-    command_dump_chunk_values,
+    command_dump_chunk_values, command_set_chunk_item_values,
 };
 
 mod format;
@@ -37,6 +38,31 @@ fn parse_td0_file_or_exit(file_path: &PathBuf) -> Box<dyn TD0File> {
         Ok(td0file) => td0file,
         Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
     }
+}
+
+fn reindex_item_num_or_exit(val: usize) -> usize {
+    // TD0 devices show the user 1-based indexes, while libtd0 uses 0-based indexes.
+    // Convert the indexing to match the lib call here.
+    if val == 0 {
+        exit_err(
+            "Item index out of bounds. Must be 1 - ? inclusive.",
+            ERR_INVALID_ITEM_INDEX,
+        );
+    }
+    val - 1
+}
+
+fn parse_key_val<T, U>(s: &str) -> Result<(T, U), Box<dyn Error + Send + Sync + 'static>>
+where
+    T: std::str::FromStr,
+    T::Err: Error + Send + Sync + 'static,
+    U: std::str::FromStr,
+    U::Err: Error + Send + Sync + 'static,
+{
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("no `=` found in `{s}`"))?;
+    Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
 }
 
 #[derive(Parser)]
@@ -69,6 +95,13 @@ enum Commands {
         chunk_name_2: String,
         #[arg(short, long)]
         item_num: usize,
+    },
+    SetChunkItemValues {
+        chunk_name: String,
+        #[arg(short, long)]
+        item_num: usize,
+        #[arg(short = 'v', long = "values", value_name = "key=value", value_parser = parse_key_val::<String, String>)]
+        values: Vec<(String, String)>,
     },
     ChunkValues {
         chunk_name: String,
@@ -117,12 +150,7 @@ fn main() {
             chunk_name_2,
             item_num,
         } => {
-            let Some(inum_reindexed) = item_num.checked_sub(1) else {
-                exit_err(
-                    "Item index out of bounds. Must be 1 - ? inclusive.",
-                    ERR_INVALID_ITEM_INDEX,
-                );
-            };
+            let inum_reindexed = reindex_item_num_or_exit(*item_num);
             let td0file = parse_td0_file_or_exit(&cli.file);
             let diff =
                 command_compare_chunk_items(&*td0file, chunk_name_1, chunk_name_2, inum_reindexed)
@@ -152,12 +180,8 @@ fn main() {
                 Some(inum) => {
                     // TD0 devices show the user 1-based indexes, while libtd0 uses 0-based indexes.
                     // Convert the indexing to match the lib call here.
-                    let Some(inum_reindexed) = inum.checked_sub(1) else {
-                        exit_err(
-                            "Item index out of bounds. Must be 1 - ? inclusive.",
-                            ERR_INVALID_ITEM_INDEX,
-                        );
-                    };
+                    let inum_reindexed = reindex_item_num_or_exit(*inum);
+
                     command_dump_chunk_values(
                         &bytes,
                         chunk_name,
@@ -254,6 +278,24 @@ fn main() {
                 OutputFormat::Text => format!("{:?}", chunk_item.list_fields()),
             };
             println!("{}", text_output);
+        }
+        Commands::SetChunkItemValues {
+            chunk_name,
+            item_num,
+            values,
+        } => {
+            let td0file = parse_td0_file_or_exit(&cli.file);
+            let inum_reindexed = reindex_item_num_or_exit(*item_num);
+            let diffs =
+                command_set_chunk_item_values(&*td0file, chunk_name, inum_reindexed, values)
+                    .unwrap_or_else(|err| {
+                        exit_td0_err(&err, ERR_UNKNOWN);
+                    });
+
+            let output = fmt_chunk_item_compare_result(&diffs, &cli.output_format)
+                .unwrap_or_else(|err| exit_err(err, ERR_UNKNOWN));
+
+            println!("{}", output);
         }
     }
 }

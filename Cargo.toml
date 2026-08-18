@@ -39,3 +39,15 @@ serde_json = { version = "1.0.151", optional = true }
 csv = { version = "1.4.0", optional = true }
 serde_with = { version = "3.22.0", optional = true }
 indexmap = { version = "2.14.0", optional = true }
+
+## TODO: Uncomment these clippy configs once major features are added.
+#[lints.clippy]
+#all = { level = "warn", priority = -1 }
+#pedantic = { level = "warn", priority = -1 }
+#nursery = { level = "warn", priority = -1 }
+#restriction = { level = "warn", priority = -1 }
+
+# Disable conflicting or overly pedantic restriction lints here:
+#blanket_clippy_restriction_lints = "allow"
+#implicit_return = "allow"
+#pub_with_shorthand = "allow"

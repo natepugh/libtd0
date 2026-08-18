@@ -107,9 +107,11 @@ pub fn command_dump_chunk_values(
 
 #[derive(Serialize)]
 pub struct ChunkFieldDiffItem {
-    pub field: &'static str,
+    pub field: String,
     pub left: Option<TD0Value>,
     pub right: Option<TD0Value>,
+    pub left_name: Option<String>,
+    pub right_name: Option<String>,
 }
 
 pub fn command_compare_chunk_items(
@@ -135,12 +137,77 @@ pub fn command_compare_chunk_items(
         let c2_val = chunk_2_item.get_value(field);
         if c1_val != c2_val {
             diffs.push(ChunkFieldDiffItem {
-                field,
+                field: field.to_string(),
                 left: c1_val,
                 right: c2_val,
+                left_name: Some(chunk_name_1.to_string()),
+                right_name: Some(chunk_name_2.to_string()),
             });
         }
     }
 
+    Ok(diffs)
+}
+
+pub fn parse_chunk_item_field_value(
+    chunk_item: &dyn TD0ChunkItem,
+    field: &str,
+    val: &str,
+) -> TD0Result<TD0Value> {
+    match chunk_item.get_field_type(field) {
+        Some("TD0Decimal") | Some("Volume") => Ok(TD0Value::Decimal(
+            val.parse().map_err(|_| TD0Error::InvalidInput)?,
+        )),
+        Some("I16") => Ok(TD0Value::I16(
+            val.parse().map_err(|_| TD0Error::InvalidInput)?,
+        )),
+        Some("Text") | Some("EnumStr") => Ok(TD0Value::Text(val.to_string())),
+        Some("I8") => Ok(TD0Value::I8(
+            val.parse().map_err(|_| TD0Error::InvalidInput)?,
+        )),
+        // Slice parsing from String not implemented.
+        Some("U8") => Ok(TD0Value::U8(
+            val.parse().map_err(|_| TD0Error::InvalidInput)?,
+        )),
+        Some("U16") => Ok(TD0Value::U16(
+            val.parse().map_err(|_| TD0Error::InvalidInput)?,
+        )),
+        Some("U32") => Ok(TD0Value::U32(
+            val.parse().map_err(|_| TD0Error::InvalidInput)?,
+        )),
+        _ => Err(TD0Error::InvalidFieldOrType),
+    }
+}
+
+pub fn command_set_chunk_item_values(
+    td0file: &dyn TD0File,
+    chunk_name: &str,
+    item_num: usize,
+    values: &[(String, String)],
+) -> TD0Result<Vec<ChunkFieldDiffItem>> {
+    let mut chunk_item = td0file.get_chunk_item(chunk_name, item_num)?;
+    let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();
+    let before_buf = td0file.as_bytes().to_vec();
+    for (field, value) in values.iter() {
+        let parsed_value = parse_chunk_item_field_value(&*chunk_item, field, value)?;
+        let Some(before) = chunk_item.get_value(field) else {
+            return Err(TD0Error::InvalidFieldOrType);
+        };
+
+        chunk_item.set_value(field, &parsed_value)?;
+        let Some(after) = chunk_item.get_value(field) else {
+            println!("field: `{field}` not found in chunk item.");
+            return Err(TD0Error::InvalidFieldOrType);
+        };
+        diffs.push(ChunkFieldDiffItem {
+            field: chunk_name.to_string(),
+            left: Some(before),
+            right: Some(after),
+            left_name: Some("before".to_string()),
+            right_name: Some("after".to_string()),
+        });
+    }
+    let after_buf = td0file.as_bytes();
+    assert_ne!(before_buf, after_buf, "shouldn't actually be equal");
     Ok(diffs)
 }
