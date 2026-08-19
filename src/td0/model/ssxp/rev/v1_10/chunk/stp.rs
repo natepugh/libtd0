@@ -1,9 +1,9 @@
 use libtd0_derive::{TD0ChunkItemDerive, repeat_fields};
 use zerocopy::{LittleEndian, U16};
-use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
+use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 #[repeat_fields]
-#[derive(Clone, Copy, Debug, FromBytes, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
+#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
 pub struct STPaItem {
     #[td0_field(field_type = "Slice")]

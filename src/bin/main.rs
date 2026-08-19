@@ -284,10 +284,10 @@ fn main() {
             item_num,
             values,
         } => {
-            let td0file = parse_td0_file_or_exit(&cli.file);
+            let mut td0file = parse_td0_file_or_exit(&cli.file);
             let inum_reindexed = reindex_item_num_or_exit(*item_num);
             let diffs =
-                command_set_chunk_item_values(&*td0file, chunk_name, inum_reindexed, values)
+                command_set_chunk_item_values(&mut *td0file, chunk_name, inum_reindexed, values)
                     .unwrap_or_else(|err| {
                         exit_td0_err(&err, ERR_UNKNOWN);
                     });

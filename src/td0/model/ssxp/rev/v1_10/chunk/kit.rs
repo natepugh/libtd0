@@ -1,6 +1,6 @@
 use libtd0_derive::{TD0ChunkItemDerive, repeat_fields};
 use zerocopy::{I16, LittleEndian, U16};
-use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
+use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 use crate::td0::model::ssxp::strings::{
     CLICK_MODES, CLICK_SOUNDS, DELAYSYNC_VALUES, DIRECT_ROUTES, EQ_HI_FREQS, EQ_LOW_FREQS,
@@ -34,7 +34,7 @@ use crate::td0::model::ssxp::strings::{
 //
 
 #[repeat_fields]
-#[derive(Clone, Copy, Debug, FromBytes, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
+#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
 pub struct KITaItem {
     #[td0_field(field_type = "Text", pad_byte = 0x20)]

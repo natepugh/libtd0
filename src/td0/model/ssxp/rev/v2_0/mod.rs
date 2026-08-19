@@ -5,23 +5,44 @@ use crate::td0::model::ssxp::common::HDRaItem;
 use chunk::{KITbItem, PVRaItem, STPbItem};
 use libtd0_core::TD0ChunkItem;
 use libtd0_core::result::{TD0Error, TD0Result};
+use zerocopy::TryFromBytes;
 
-pub(crate) fn chunk_item_from_bytes(
+pub(crate) fn chunk_item_from_bytes<'b>(
     chunk_name: &str,
-    bytes: &[u8],
-) -> TD0Result<Box<dyn TD0ChunkItem>> {
+    bytes: &'b [u8],
+) -> TD0Result<&'b dyn TD0ChunkItem> {
     match chunk_name {
-        "HDRa" => Ok(Box::new(HDRaItem::try_from(bytes)?)),
-        "KITa" => Ok(Box::new(KITaItem::try_from(bytes)?)),
-        "KITb" => Ok(Box::new(KITbItem::try_from(bytes)?)),
-        "CURa" => Ok(Box::new(CURaItem::try_from(bytes)?)),
-        "PVRa" => Ok(Box::new(PVRaItem::try_from(bytes)?)),
-        "STLa" => Ok(Box::new(STLaItem::try_from(bytes)?)),
-        "STPa" => Ok(Box::new(STPaItem::try_from(bytes)?)),
-        "STPb" => Ok(Box::new(STPbItem::try_from(bytes)?)),
-        "TGLa" => Ok(Box::new(TGLaItem::try_from(bytes)?)),
-        "TRGa" => Ok(Box::new(TRGaItem::try_from(bytes)?)),
-        "WVPa" => Ok(Box::new(WVPaItem::try_from(bytes)?)),
+        "HDRa" => Ok(HDRaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "KITa" => Ok(KITaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "KITb" => Ok(KITbItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "CURa" => Ok(CURaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "PVRa" => Ok(PVRaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "STLa" => Ok(STLaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "STPa" => Ok(STPaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "STPb" => Ok(STPbItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "TGLa" => Ok(TGLaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "TRGa" => Ok(TRGaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "WVPa" => Ok(WVPaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        _ => Err(TD0Error::UnknownChunk),
+    }
+}
+
+pub(crate) fn chunk_item_from_bytes_mut<'b>(
+    chunk_name: &str,
+    bytes: &'b mut [u8],
+) -> TD0Result<&'b mut dyn TD0ChunkItem> {
+    match chunk_name {
+        "HDRa" => Ok(HDRaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "KITa" => Ok(KITaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "KITb" => Ok(KITbItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "CURa" => Ok(CURaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "PVRa" => Ok(PVRaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "STLa" => Ok(STLaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "STPa" => Ok(STPaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "STPb" => Ok(STPbItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "TGLa" => Ok(TGLaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "TRGa" => Ok(TRGaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
+        "WVPa" => Ok(WVPaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::InvalidChunkItem)?),
         _ => Err(TD0Error::UnknownChunk),
     }
 }

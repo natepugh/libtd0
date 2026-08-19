@@ -1,7 +1,7 @@
 use libtd0_derive::TD0ChunkItemDerive;
-use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
+use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-#[derive(Clone, Copy, Debug, FromBytes, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
+#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
 pub struct TGLaItem {
     /* Represents a tag in the tag library. */

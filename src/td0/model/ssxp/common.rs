@@ -1,7 +1,9 @@
 use crate::td0::header::{OFFSET_BYTES_REMAINING, TD0IdChunk};
 use crate::td0::model::ssxp::rev::v1_10::chunk_item_from_bytes as v1_10_chunk_item_from_bytes;
+use crate::td0::model::ssxp::rev::v1_10::chunk_item_from_bytes_mut as v1_10_chunk_item_from_bytes_mut;
 use crate::td0::model::ssxp::rev::v1_10::get_default_chunk_item as v1_10_get_default_chunk_item;
 use crate::td0::model::ssxp::rev::v2_0::chunk_item_from_bytes as v2_0_chunk_item_from_bytes;
+use crate::td0::model::ssxp::rev::v2_0::chunk_item_from_bytes_mut as v2_0_chunk_item_from_bytes_mut;
 use crate::td0::model::ssxp::rev::v2_0::get_default_chunk_item as v2_0_get_default_chunk_item;
 use crate::td0::{SZ_HDR_CHUNK, TD0ManifestTag, validate_id_tag};
 use core::fmt;
@@ -13,8 +15,8 @@ use libtd0_core::{
 use libtd0_derive::TD0ChunkItemDerive;
 use md5::Digest;
 use std::collections::{HashMap, HashSet};
-use zerocopy::{FromBytes, LittleEndian, U32};
-use zerocopy_derive::{IntoBytes, KnownLayout};
+use zerocopy::{FromBytes, LittleEndian, TryFromBytes, U32};
+use zerocopy_derive::{Immutable, IntoBytes, KnownLayout};
 
 const BACKUP_TAG_KIT: &str = "SSXPROKT";
 const BACKUP_TAG_SYSTEM: &str = "SSXPROBK";
@@ -113,7 +115,7 @@ impl fmt::Display for ChunkHeader {
     }
 }
 
-#[derive(Clone, Copy, Debug, FromBytes, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
+#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
 pub struct HDRaItem {
     #[td0_field(field_type = "Text", pad_byte = 0x2e)] // 0x2e = '.', ASCII period.
@@ -208,7 +210,7 @@ impl SSXPTD0File {
         Ok(())
     }
 
-    fn get_backup_chunk_item(&self) -> TD0Result<HDRaItem> {
+    fn get_backup_chunk_item(&self) -> TD0Result<&HDRaItem> {
         let hdr_a_chunk = self
             .chunks
             .get("HDRa")
@@ -216,8 +218,8 @@ impl SSXPTD0File {
         let item_range = hdr_a_chunk
             .item_range(0)
             .ok_or(TD0Error::InvalidChunk("backup chunk invalid."))?;
-        HDRaItem::read_from_bytes(&self.buf[item_range])
-            .map_err(|_| TD0Error::InvalidChunk("backup chunk invalid."))
+        Ok(HDRaItem::try_ref_from_bytes(&self.buf[item_range])
+            .map_err(|_| TD0Error::InvalidChunk("backup chunk invalid."))?)
     }
 
     fn get_backup_type(&self) -> TD0BackupType {
@@ -312,11 +314,34 @@ impl TD0File for SSXPTD0File {
         }
     }
 
-    fn get_chunk_item(
-        &self,
+    fn get_chunk_item_mut(
+        &mut self,
         chunk_name: &str,
         item_index: usize,
-    ) -> TD0Result<Box<dyn TD0ChunkItem>> {
+    ) -> TD0Result<&mut dyn TD0ChunkItem> {
+        let Some(chunk) = self.chunks.get(chunk_name) else {
+            return Err(TD0Error::UnknownChunk);
+        };
+        if item_index >= chunk.num_items {
+            return Err(TD0Error::OutOfRange);
+        }
+        let Some(item_range) = chunk.item_range(item_index) else {
+            return Err(TD0Error::InvalidChunk("invalid chunk format."));
+        };
+
+        match self.firmware_version.as_str() {
+            "2.00" => Ok(v2_0_chunk_item_from_bytes_mut(
+                chunk_name,
+                &mut self.buf[item_range],
+            )?),
+            "1.10" => Ok(v1_10_chunk_item_from_bytes_mut(
+                chunk_name,
+                &mut self.buf[item_range],
+            )?),
+            _ => Err(TD0Error::FirmwareVersionNotImplemented),
+        }
+    }
+    fn get_chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem> {
         let Some(chunk) = self.chunks.get(chunk_name) else {
             return Err(TD0Error::UnknownChunk);
         };

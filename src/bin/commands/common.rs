@@ -180,14 +180,13 @@ pub fn parse_chunk_item_field_value(
 }
 
 pub fn command_set_chunk_item_values(
-    td0file: &dyn TD0File,
+    td0file: &mut dyn TD0File,
     chunk_name: &str,
     item_num: usize,
     values: &[(String, String)],
 ) -> TD0Result<Vec<ChunkFieldDiffItem>> {
-    let mut chunk_item = td0file.get_chunk_item(chunk_name, item_num)?;
+    let chunk_item = td0file.get_chunk_item_mut(chunk_name, item_num)?;
     let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();
-    let before_buf = td0file.as_bytes().to_vec();
     for (field, value) in values.iter() {
         let parsed_value = parse_chunk_item_field_value(&*chunk_item, field, value)?;
         let Some(before) = chunk_item.get_value(field) else {
@@ -196,7 +195,6 @@ pub fn command_set_chunk_item_values(
 
         chunk_item.set_value(field, &parsed_value)?;
         let Some(after) = chunk_item.get_value(field) else {
-            println!("field: `{field}` not found in chunk item.");
             return Err(TD0Error::InvalidFieldOrType);
         };
         diffs.push(ChunkFieldDiffItem {
@@ -207,7 +205,5 @@ pub fn command_set_chunk_item_values(
             right_name: Some("after".to_string()),
         });
     }
-    let after_buf = td0file.as_bytes();
-    assert_ne!(before_buf, after_buf, "shouldn't actually be equal");
     Ok(diffs)
 }

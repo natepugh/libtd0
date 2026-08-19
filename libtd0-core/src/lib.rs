@@ -197,11 +197,12 @@ pub trait TD0File {
     fn into_bytes(self) -> Vec<u8>;
     fn get_chunk(&self, chunk_name: &str) -> Option<Box<dyn TD0Chunk>>;
     fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]>;
-    fn get_chunk_item(
-        &self,
+    fn get_chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem>;
+    fn get_chunk_item_mut(
+        &mut self,
         chunk_name: &str,
         item_index: usize,
-    ) -> TD0Result<Box<dyn TD0ChunkItem>>;
+    ) -> TD0Result<&mut dyn TD0ChunkItem>;
     fn get_chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>>;
     fn get_chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]>;
     fn manifest(&self) -> TD0Manifest;
