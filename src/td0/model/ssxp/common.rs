@@ -245,6 +245,97 @@ impl TD0File for SSXPTD0File {
         &self.buf
     }
 
+    fn chunk_items_copy(
+        &mut self,
+        chunk_name: &str,
+        source_index: usize,
+        dest_index: usize,
+    ) -> TD0Result<()> {
+        let Some(chunk) = self.get_chunk(chunk_name) else {
+            return Err(TD0Error::UnknownChunk);
+        };
+        let Some(source_range) = chunk.item_range(source_index) else {
+            return Err(TD0Error::InvalidChunkItem);
+        };
+        let Some(dest_range) = chunk.item_range(dest_index) else {
+            return Err(TD0Error::InvalidChunkItem);
+        };
+        self.buf.copy_within(source_range, dest_range.start);
+        Ok(())
+    }
+
+    fn chunk_items_swap(
+        &mut self,
+        chunk_name: &str,
+        index_1: usize,
+        index_2: usize,
+    ) -> TD0Result<()> {
+        let Some(chunk) = self.get_chunk(chunk_name) else {
+            return Err(TD0Error::UnknownChunk);
+        };
+        let Some(item_1_range) = chunk.item_range(index_1) else {
+            return Err(TD0Error::InvalidChunkItem);
+        };
+        let Some(item_2_range) = chunk.item_range(index_2) else {
+            return Err(TD0Error::InvalidChunkItem);
+        };
+
+        // Copy item_1 to tmp
+        let mut tmp: Vec<u8> = Vec::new();
+        tmp.copy_from_slice(&self.buf[item_1_range.clone()]);
+        // Copy item_2 to item_1
+        self.buf
+            .copy_within(item_2_range.clone(), item_1_range.start);
+        // Copy tmp (formerly item_1) to item_2.
+        self.buf[item_2_range].copy_from_slice(&tmp);
+        Ok(())
+    }
+
+    fn chunk_items_reorder(&mut self, chunk_name: &str, new_order: &[usize]) -> TD0Result<()> {
+        let Some(chunk) = self.get_chunk(chunk_name) else {
+            return Err(TD0Error::UnknownChunk);
+        };
+
+        // Ensure that 1) the length of new_order matches the number of chunk items
+        //             2) All indexes from 0 to length - 1 are visited exactly once.
+        let expected: Vec<usize> = Vec::from_iter(0..chunk.num_items());
+        let mut new_order_test = new_order.to_vec();
+        new_order_test.sort();
+        if expected != new_order_test {
+            return Err(TD0Error::InvalidInputWithMessage(format!(
+                "The new order must contain each number from 0 - {} exactly once, in any order.",
+                chunk.num_items() - 1
+            )));
+        }
+
+        let first_item_pos = chunk
+            .item_pos(0)
+            .ok_or(TD0Error::InvalidChunk("Chunk must have at least one item."))?;
+
+        // Copy items to a temp buffer in the correct order, then copy back to self.buf.
+        //
+        // TODO: This is inefficient, especially in cases where there are only a few changes.
+        //       Put some thought into a more clever solution that minimizes the amount of
+        //       data copied.
+        let mut reordered_items: Vec<u8> = Vec::new();
+        reordered_items.resize(chunk.item_size() * chunk.num_items(), 0u8);
+        let reordered_bytes: &mut [u8] = reordered_items.as_mut_slice();
+
+        let mut dest_pos: usize = 0;
+        let item_size = chunk.item_size();
+        for source_index in new_order.iter() {
+            reordered_bytes[dest_pos..dest_pos + item_size].copy_from_slice(
+                &self.buf[chunk
+                    .item_range(*source_index)
+                    .expect("Pre-verified indexes are all in range.")],
+            );
+            dest_pos += item_size;
+        }
+
+        self.buf[first_item_pos..chunk.pos() + chunk.size()].copy_from_slice(reordered_bytes);
+        Ok(())
+    }
+
     fn from_bytes(bytes: Vec<u8>) -> TD0Result<Self> {
         let id_tag = TD0IdChunk::read_from_bytes(&bytes[..SZ_HDR_CHUNK])
             .map_err(|_| TD0Error::InvalidTD0File("invalid or missing `TD0a` header chunk"))?;

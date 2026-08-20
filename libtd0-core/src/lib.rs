@@ -15,7 +15,7 @@ pub const VOLUME_MINUS_INF_FLOAT: f32 = f32::NEG_INFINITY;
 pub const VOLUME_MINUS_INF_I16: i16 = -601;
 pub const VOLUME_MINUS_INF_DISPLAY: &str = "-inf";
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
 pub enum TD0Value {
     /// This value is rounded to one decimal place (0.1) upon display and
@@ -32,7 +32,7 @@ pub enum TD0Value {
     U8(u8),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
 pub enum TD0ValueRaw {
     I16(i16),
@@ -180,6 +180,7 @@ pub trait TD0Chunk {
     fn set_value(&self, field: &str, value: &TD0Value) -> TD0Result<()>;
     fn set_value_raw(&self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
 }
+
 pub trait TD0ChunkItem {
     fn get_value(&self, field: &str) -> Option<TD0Value>;
     fn get_value_raw(&self, field: &str) -> Option<TD0ValueRaw>;
@@ -191,6 +192,19 @@ pub trait TD0ChunkItem {
 
 pub trait TD0File {
     fn as_bytes(&self) -> &[u8];
+    fn chunk_items_copy(
+        &mut self,
+        chunk_name: &str,
+        source_index: usize,
+        dest_index: usize,
+    ) -> TD0Result<()>;
+    fn chunk_items_swap(
+        &mut self,
+        chunk_name: &str,
+        index_1: usize,
+        index_2: usize,
+    ) -> TD0Result<()>;
+    fn chunk_items_reorder(&mut self, chunk_name: &str, new_order: &[usize]) -> TD0Result<()>;
     fn from_bytes(bytes: Vec<u8>) -> TD0Result<Self>
     where
         Self: Sized;

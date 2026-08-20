@@ -9,7 +9,7 @@ use std::process::exit;
 mod commands;
 use commands::{
     IndexedItemValues, command_compare_chunk_items, command_dump_chunk, command_dump_chunk_item,
-    command_dump_chunk_values, command_set_chunk_item_values,
+    command_dump_chunk_values, command_set_chunk_item_values, command_reorder_chunk_items,
 };
 
 mod format;
@@ -95,6 +95,12 @@ enum Commands {
         chunk_name_2: String,
         #[arg(short, long)]
         item_num: usize,
+    },
+    ChunkItemsReorder {
+        chunk_name: String,
+        display_field: String,
+        #[arg(value_delimiter = ',')]
+        new_order: Vec<usize>,
     },
     SetChunkItemValues {
         chunk_name: String,
@@ -288,6 +294,23 @@ fn main() {
             let inum_reindexed = reindex_item_num_or_exit(*item_num);
             let diffs =
                 command_set_chunk_item_values(&mut *td0file, chunk_name, inum_reindexed, values)
+                    .unwrap_or_else(|err| {
+                        exit_td0_err(&err, ERR_UNKNOWN);
+                    });
+
+            let output = fmt_chunk_item_compare_result(&diffs, &cli.output_format)
+                .unwrap_or_else(|err| exit_err(err, ERR_UNKNOWN));
+
+            println!("{}", output);
+        }
+        Commands::ChunkItemsReorder {
+            chunk_name,
+            display_field,
+            new_order,
+        } => {
+            let mut td0file = parse_td0_file_or_exit(&cli.file);
+            let diffs =
+                command_reorder_chunk_items(&mut *td0file, chunk_name, new_order, display_field)
                     .unwrap_or_else(|err| {
                         exit_td0_err(&err, ERR_UNKNOWN);
                     });

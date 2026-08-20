@@ -207,3 +207,47 @@ pub fn command_set_chunk_item_values(
     }
     Ok(diffs)
 }
+
+pub fn command_reorder_chunk_items(
+    td0file: &mut dyn TD0File,
+    chunk_name: &str,
+    new_order: &[usize],
+    display_field: &str,
+) -> TD0Result<Vec<ChunkFieldDiffItem>> {
+    let chunk = td0file
+        .get_chunk(chunk_name)
+        .ok_or(TD0Error::UnknownChunk)?;
+    let mut before: Vec<TD0Value> = Vec::new();
+    for idx in 0..chunk.num_items() {
+        before.push(
+            td0file
+                .get_chunk_item(chunk_name, idx)?
+                .get_value(&display_field)
+                .ok_or_else(|| TD0Error::InvalidChunkItem)?,
+        )
+    }
+
+    td0file.chunk_items_reorder(chunk_name, new_order)?;
+
+    let mut after: Vec<TD0Value> = Vec::new();
+    for idx in 0..chunk.num_items() {
+        after.push(
+            td0file
+                .get_chunk_item(chunk_name, idx)?
+                .get_value(&display_field)
+                .ok_or_else(|| TD0Error::InvalidChunkItem)?,
+        )
+    }
+
+    let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();
+    for (idx, (before, after)) in before.iter().zip(&after).enumerate() {
+        diffs.push(ChunkFieldDiffItem {
+            field: idx.to_string(),
+            left: Some(before.clone()),
+            right: Some(after.clone()),
+            left_name: Some("before".to_string()),
+            right_name: Some("after".to_string()),
+        });
+    }
+    Ok(diffs)
+}
