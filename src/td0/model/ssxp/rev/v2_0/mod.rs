@@ -1,4 +1,4 @@
-pub(crate) mod chunk;
+pub mod chunk;
 
 use super::v1_10::chunk::{CURaItem, KITaItem, STLaItem, STPaItem, TGLaItem, TRGaItem, WVPaItem};
 use crate::td0::model::ssxp::common::HDRaItem;
@@ -7,7 +7,7 @@ use libtd0_core::TD0ChunkItem;
 use libtd0_core::result::{TD0Error, TD0Result};
 use zerocopy::TryFromBytes;
 
-pub(crate) fn chunk_item_from_bytes<'b>(
+pub fn chunk_item_from_bytes<'b>(
     chunk_name: &str,
     bytes: &'b [u8],
 ) -> TD0Result<&'b dyn TD0ChunkItem> {
@@ -27,7 +27,7 @@ pub(crate) fn chunk_item_from_bytes<'b>(
     }
 }
 
-pub(crate) fn chunk_item_from_bytes_mut<'b>(
+pub fn chunk_item_from_bytes_mut<'b>(
     chunk_name: &str,
     bytes: &'b mut [u8],
 ) -> TD0Result<&'b mut dyn TD0ChunkItem> {
@@ -47,7 +47,7 @@ pub(crate) fn chunk_item_from_bytes_mut<'b>(
     }
 }
 
-pub(crate) fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>> {
+pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>> {
     match chunk_name {
         "HDRa" => Some(Box::new(HDRaItem::default())),
         "KITa" => Some(Box::new(KITaItem::default())),

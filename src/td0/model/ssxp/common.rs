@@ -6,6 +6,7 @@ use crate::td0::model::ssxp::rev::v2_0::chunk_item_from_bytes as v2_0_chunk_item
 use crate::td0::model::ssxp::rev::v2_0::chunk_item_from_bytes_mut as v2_0_chunk_item_from_bytes_mut;
 use crate::td0::model::ssxp::rev::v2_0::get_default_chunk_item as v2_0_get_default_chunk_item;
 use crate::td0::{SZ_HDR_CHUNK, TD0ManifestTag, validate_id_tag};
+use ::core::ops::Range;
 use core::fmt;
 use libtd0_core::result::{TD0Error, TD0Result};
 use libtd0_core::{
@@ -13,33 +14,37 @@ use libtd0_core::{
     TD0Manifest, TD0Value, TD0ValueRaw,
 };
 use libtd0_derive::TD0ChunkItemDerive;
-use md5::Digest;
+use md5::Digest as _;
 use std::collections::{HashMap, HashSet};
-use zerocopy::{FromBytes, LittleEndian, TryFromBytes, U32};
+use zerocopy::TryFromBytes as _;
+use zerocopy::{FromBytes, LittleEndian, U32};
 use zerocopy_derive::{Immutable, IntoBytes, KnownLayout};
 
+/// Backup header tag for a single-kit backup.
 const BACKUP_TAG_KIT: &str = "SSXPROKT";
+/// Backup header tag for whole system backup.
 const BACKUP_TAG_SYSTEM: &str = "SSXPROBK";
-const SZ_HDR_EXTRA_DATA: usize = 4;
 
+/// Represents a section of a `TD0File` containing a specific subtype of data.
+/// (e.g. Kit configuration or LED colors.)
+///
+/// See the `TD0Chunk` docs for more information.
+#[expect(clippy::arbitrary_source_item_ordering)] // ordering must match the binary format.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Chunk {
-    pub pos: usize,
-    pub size: usize,
-    pub first_item_pos: usize,
-    pub num_items: usize,
-    pub item_size: usize,
+    /// Absolute chunk position in the file.
+    pos: usize,
+    /// The size of the chunk in bytes.
+    size: usize,
+    /// The absolute position of the first item in the chunk.
+    first_item_pos: usize,
+    /// The total number of items in the chunk.
+    num_items: usize,
+    /// The size in bytes of an individual chunk item.
+    item_size: usize,
 }
 
 impl TD0Chunk for Chunk {
-    fn pos(&self) -> usize {
-        self.pos
-    }
-
-    fn size(&self) -> usize {
-        self.size
-    }
-
     fn item_pos(&self, item_index: usize) -> Option<usize> {
         if item_index >= self.num_items {
             None
@@ -48,21 +53,13 @@ impl TD0Chunk for Chunk {
         }
     }
 
-    fn item_range(&self, item_index: usize) -> Option<::core::ops::Range<usize>> {
+    fn item_range(&self, item_index: usize) -> Option<Range<usize>> {
         self.item_pos(item_index)
             .map(|pos| pos..pos + self.item_size)
     }
 
     fn item_size(&self) -> usize {
         self.item_size
-    }
-
-    fn value(&self, _field: &str) -> Option<TD0Value> {
-        None
-    }
-
-    fn value_raw(&self, _field: &str) -> Option<TD0ValueRaw> {
-        None
     }
 
     fn list_fields(&self) -> Vec<String> {
@@ -73,6 +70,10 @@ impl TD0Chunk for Chunk {
         self.num_items
     }
 
+    fn pos(&self) -> usize {
+        self.pos
+    }
+
     fn set_value(&self, _field: &str, _value: &TD0Value) -> TD0Result<()> {
         Err(TD0Error::InvalidFieldOrType)
     }
@@ -80,28 +81,48 @@ impl TD0Chunk for Chunk {
     fn set_value_raw(&self, _field: &str, _raw_value: &TD0ValueRaw) -> TD0Result<()> {
         Err(TD0Error::InvalidFieldOrType)
     }
+
+    fn size(&self) -> usize {
+        self.size
+    }
+
+    fn value(&self, _field: &str) -> Option<TD0Value> {
+        None
+    }
+
+    fn value_raw(&self, _field: &str) -> Option<TD0ValueRaw> {
+        None
+    }
 }
 
+/// The header of a `TD0Chunk` in a `TD0File`.
 #[derive(FromBytes, IntoBytes, KnownLayout)]
 #[repr(C, packed)]
 pub struct ChunkHeader {
-    pub num_items: U32<LittleEndian>,
-    pub item_size: U32<LittleEndian>,
-    pub first_item_offset: U32<LittleEndian>,
-    unknown_header_data: [u8; SZ_HDR_EXTRA_DATA],
+    /// The number of items contained in the chunk.
+    num_items: U32<LittleEndian>,
+
+    /// The size of an individual chunk item.
+    item_size: U32<LittleEndian>,
+
+    /// The offset of the first item, relative to the first byte of the chunk header.
+    first_item_offset: U32<LittleEndian>,
+
+    /// Additional chunk header data of unknown purpose.
+    unknown_header_data: [u8; 4],
 }
 
 impl ChunkHeader {
-    pub fn num_items(&self) -> usize {
-        libtd0_core::usize_from_u32(self.num_items.get())
+    pub fn first_item_offset(&self) -> usize {
+        libtd0_core::usize_from_u32(self.first_item_offset.get())
     }
 
     pub fn item_size(&self) -> usize {
         libtd0_core::usize_from_u32(self.item_size.get())
     }
 
-    pub fn first_item_offset(&self) -> usize {
-        libtd0_core::usize_from_u32(self.first_item_offset.get())
+    pub fn num_items(&self) -> usize {
+        libtd0_core::usize_from_u32(self.num_items.get())
     }
 }
 
@@ -145,25 +166,28 @@ fn parse_manifest(bytes: &[u8]) -> TD0Result<Vec<TD0ManifestTag>> {
     let mut pos: usize = 0;
     while pos < bytes.len() {
         manifest.push(
-            TD0ManifestTag::read_from_bytes(&bytes[pos..pos + SZ_HDR_CHUNK])
-                .map_err(|_| TD0Error::InvalidTD0File("invalid manifest tag."))?,
+            TD0ManifestTag::read_from_bytes(
+                bytes
+                    .get(pos..pos + SZ_HDR_CHUNK)
+                    .ok_or(TD0Error::InvalidTD0File("invalid manifest tag."))?,
+            )
+            .map_err(|_| TD0Error::InvalidTD0File("invalid manifest tag."))?,
         );
         pos += SZ_HDR_CHUNK;
     }
     Ok(manifest)
 }
 
-fn build_tag_indexes(tags: &[TD0ManifestTag]) -> TD0Result<HashMap<String, usize>> {
-    Ok(tags
-        .iter()
+fn build_tag_indexes(tags: &[TD0ManifestTag]) -> HashMap<String, usize> {
+    tags.iter()
         .enumerate()
         .map(|(idx, tag)| (tag.tag(), idx))
-        .collect())
+        .collect()
 }
 
 fn validate_manifest(manifest: &[TD0ManifestTag]) -> TD0Result<()> {
     let mut unique: HashSet<String> = HashSet::<String>::new();
-    for tag_name in manifest.iter().map(|tag| tag.tag()) {
+    for tag_name in manifest.iter().map(TD0ManifestTag::tag) {
         if unique.contains(&tag_name) {
             return Err(TD0Error::InvalidTD0File("duplicate manifest chunk"));
         }
@@ -218,8 +242,12 @@ impl SSXPTD0File {
         let item_range = hdr_a_chunk
             .item_range(0)
             .ok_or(TD0Error::InvalidChunk("backup chunk invalid."))?;
-        Ok(HDRaItem::try_ref_from_bytes(&self.buf[item_range])
-            .map_err(|_| TD0Error::InvalidChunk("backup chunk invalid."))?)
+        HDRaItem::try_ref_from_bytes(
+            self.buf
+                .get(item_range)
+                .ok_or(TD0Error::InvalidChunk("backup chunk invalid."))?,
+        )
+        .map_err(|_| TD0Error::InvalidChunk("backup chunk invalid."))
     }
 
     fn get_backup_type(&self) -> TD0BackupType {
@@ -282,12 +310,19 @@ impl TD0File for SSXPTD0File {
 
         // Copy item_1 to tmp
         let mut tmp: Vec<u8> = Vec::new();
-        tmp.copy_from_slice(&self.buf[item_1_range.clone()]);
+        tmp.copy_from_slice(
+            self.buf
+                .get(item_1_range.clone())
+                .expect("buffer is larger than this slice."),
+        );
         // Copy item_2 to item_1
         self.buf
             .copy_within(item_2_range.clone(), item_1_range.start);
         // Copy tmp (formerly item_1) to item_2.
-        self.buf[item_2_range].copy_from_slice(&tmp);
+        self.buf
+            .get_mut(item_2_range)
+            .expect("buffer is larger than this slice")
+            .copy_from_slice(&tmp);
         Ok(())
     }
 
@@ -298,9 +333,9 @@ impl TD0File for SSXPTD0File {
 
         // Ensure that 1) the length of new_order matches the number of chunk items
         //             2) All indexes from 0 to length - 1 are visited exactly once.
-        let expected: Vec<usize> = Vec::from_iter(0..chunk.num_items());
+        let expected: Vec<usize> = (0..chunk.num_items()).collect();
         let mut new_order_test = new_order.to_vec();
-        new_order_test.sort();
+        new_order_test.sort_unstable();
         if expected != new_order_test {
             return Err(TD0Error::InvalidInputWithMessage(format!(
                 "The new order must contain each number from 0 - {} exactly once, in any order.",
@@ -317,45 +352,62 @@ impl TD0File for SSXPTD0File {
         // TODO: This is inefficient, especially in cases where there are only a few changes.
         //       Put some thought into a more clever solution that minimizes the amount of
         //       data copied.
-        let mut reordered_items: Vec<u8> = Vec::new();
-        reordered_items.resize(chunk.item_size() * chunk.num_items(), 0u8);
+        let mut reordered_items: Vec<u8> = vec![0; chunk.item_size() * chunk.num_items()];
         let reordered_bytes: &mut [u8] = reordered_items.as_mut_slice();
 
         let mut dest_pos: usize = 0;
         let item_size = chunk.item_size();
-        for source_index in new_order.iter() {
-            reordered_bytes[dest_pos..dest_pos + item_size].copy_from_slice(
-                &self.buf[chunk
-                    .item_range(*source_index)
-                    .expect("Pre-verified indexes are all in range.")],
-            );
+        for source_index in new_order {
+            reordered_bytes
+                .get_mut(dest_pos..dest_pos + item_size)
+                .expect("range is valid or math is wrong.")
+                .copy_from_slice(
+                    self.buf
+                        .get(
+                            chunk
+                                .item_range(*source_index)
+                                .expect("Pre-verified indexes are all in range."),
+                        )
+                        .expect("chunk range must be within whole file buffer range."),
+                );
             dest_pos += item_size;
         }
 
-        self.buf[first_item_pos..chunk.pos() + chunk.size()].copy_from_slice(reordered_bytes);
+        self.buf
+            .get_mut(first_item_pos..chunk.pos() + chunk.size())
+            .expect("calculated size is smaller than file buffer size.")
+            .copy_from_slice(reordered_bytes);
         Ok(())
     }
 
     fn from_bytes(bytes: Vec<u8>) -> TD0Result<Self> {
-        let id_tag = TD0IdChunk::read_from_bytes(&bytes[..SZ_HDR_CHUNK])
-            .map_err(|_| TD0Error::InvalidTD0File("invalid or missing `TD0a` header chunk"))?;
+        let id_tag = TD0IdChunk::read_from_bytes(bytes.get(..SZ_HDR_CHUNK).ok_or(
+            TD0Error::InvalidTD0File("invalid or missing `TD0a` header chunk"),
+        )?)
+        .map_err(|_| TD0Error::InvalidTD0File("invalid or missing `TD0a` header chunk"))?;
         validate_id_tag(&id_tag)?;
 
         let manifest = parse_manifest(
-            &bytes[SZ_HDR_CHUNK..id_tag.bytes_remaining() + OFFSET_BYTES_REMAINING],
+            bytes
+                .get(SZ_HDR_CHUNK..id_tag.bytes_remaining() + OFFSET_BYTES_REMAINING)
+                .ok_or(TD0Error::InvalidTD0File(
+                    "incomplete `TD0a` manifest section.",
+                ))?,
         )?;
         validate_manifest(&manifest)?;
-        let tag_indexes = build_tag_indexes(&manifest)?;
+        let tag_indexes = build_tag_indexes(&manifest);
 
         let mut chunk_headers: HashMap<String, ChunkHeader> = HashMap::new();
         let mut chunks: HashMap<String, Chunk> = HashMap::new();
 
-        for tag in manifest.iter() {
+        for tag in &manifest {
             let as_str =
                 str::from_utf8(tag.tag_raw()).map_err(|_| TD0Error::InvalidChunk("unknown tag"))?;
             let tag_as_string = as_str.to_string();
             let chunk_header = ChunkHeader::read_from_bytes(
-                &bytes[tag.chunk_pos()..tag.chunk_pos() + SZ_HDR_CHUNK],
+                bytes
+                    .get(tag.chunk_pos()..tag.chunk_pos() + SZ_HDR_CHUNK)
+                    .ok_or(TD0Error::InvalidTD0File("missing chunk header"))?,
             )
             .map_err(|_| TD0Error::InvalidChunk("invalid chunk"))?;
 
@@ -378,8 +430,12 @@ impl TD0File for SSXPTD0File {
         let item_range = hdr_a_chunk
             .item_range(0)
             .ok_or(TD0Error::InvalidChunk("backup chunk invalid."))?;
-        let hdr_item = HDRaItem::read_from_bytes(&bytes[item_range])
-            .map_err(|_| TD0Error::InvalidChunk("backup chunk invalid."))?;
+        let hdr_item = HDRaItem::read_from_bytes(
+            bytes
+                .get(item_range)
+                .ok_or(TD0Error::InvalidChunk("backup chunk invalid."))?,
+        )
+        .map_err(|_| TD0Error::InvalidChunk("backup chunk invalid."))?;
 
         Ok(Self {
             buf: bytes,
@@ -392,17 +448,14 @@ impl TD0File for SSXPTD0File {
     }
 
     fn get_chunk(&self, chunk_name: &str) -> Option<Box<dyn TD0Chunk>> {
-        match self.chunks.get(chunk_name) {
-            Some(ch) => Some(Box::new(*ch)),
-            None => None,
-        }
+        self.chunks
+            .get(chunk_name)
+            .map(|ch| Box::new(*ch) as Box<dyn TD0Chunk>)
     }
 
     fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]> {
-        match self.chunks.get(chunk_name) {
-            Some(ch) => Some(&self.buf[ch.pos..(ch.pos + ch.size())]),
-            None => None,
-        }
+        let chunk = self.chunks.get(chunk_name)?;
+        self.buf.get(chunk.pos..(chunk.pos + chunk.size()))
     }
 
     fn get_chunk_item_mut(
@@ -423,13 +476,17 @@ impl TD0File for SSXPTD0File {
         match self.firmware_version.as_str() {
             "2.00" => Ok(v2_0_chunk_item_from_bytes_mut(
                 chunk_name,
-                &mut self.buf[item_range],
+                self.buf
+                    .get_mut(item_range)
+                    .ok_or(TD0Error::InvalidTD0File("chunk item out of file bounds"))?,
             )?),
             "1.10" => Ok(v1_10_chunk_item_from_bytes_mut(
                 chunk_name,
-                &mut self.buf[item_range],
+                self.buf
+                    .get_mut(item_range)
+                    .ok_or(TD0Error::InvalidTD0File("chunk item out of file bounds"))?,
             )?),
-            _ => Err(TD0Error::FirmwareVersionNotImplemented),
+            _ => Err(TD0Error::UnsupportedFirmwareVersion),
         }
     }
     fn get_chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem> {
@@ -446,21 +503,29 @@ impl TD0File for SSXPTD0File {
         match self.firmware_version.as_str() {
             "2.00" => Ok(v2_0_chunk_item_from_bytes(
                 chunk_name,
-                &self.buf[item_range],
+                self.buf
+                    .get(item_range)
+                    .ok_or(TD0Error::InvalidTD0File("chunk item out of file bounds"))?,
             )?),
             "1.10" => Ok(v1_10_chunk_item_from_bytes(
                 chunk_name,
-                &self.buf[item_range],
+                self.buf
+                    .get(item_range)
+                    .ok_or(TD0Error::InvalidTD0File("chunk item out of file bounds"))?,
             )?),
-            _ => Err(TD0Error::FirmwareVersionNotImplemented),
+            _ => Err(TD0Error::UnsupportedFirmwareVersion),
         }
     }
 
     fn get_chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]> {
         let chunk = self.get_chunk(chunk_name).ok_or(TD0Error::UnknownChunk)?;
-        Ok(&self.buf[chunk
-            .item_range(item_index)
-            .ok_or(TD0Error::InvalidChunkItem)?])
+        self.buf
+            .get(
+                chunk
+                    .item_range(item_index)
+                    .ok_or(TD0Error::InvalidChunkItem)?,
+            )
+            .ok_or(TD0Error::InvalidTD0File("chunk item out of file bounds"))
     }
 
     fn into_bytes(self) -> Vec<u8> {
@@ -470,10 +535,10 @@ impl TD0File for SSXPTD0File {
     fn manifest(&self) -> TD0Manifest {
         let sz_backup = self.buf.len() - SZ_MD5_DIGEST;
         let mut hasher: md5::Md5 = md5::Md5::new();
-        hasher.update(&self.buf[0..sz_backup]);
+        hasher.update(self.buf.get(0..sz_backup).unwrap());
 
         let mut checksum_actual: [u8; SZ_MD5_DIGEST] = [0; SZ_MD5_DIGEST];
-        checksum_actual.clone_from_slice(&self.buf[sz_backup..]);
+        checksum_actual.clone_from_slice(self.buf.get(sz_backup..).unwrap());
 
         let last_tag = self
             .manifest
@@ -510,7 +575,7 @@ impl TD0File for SSXPTD0File {
     }
 
     fn list_chunks(&self) -> Vec<String> {
-        self.manifest.iter().map(|tag| tag.tag()).collect()
+        self.manifest.iter().map(TD0ManifestTag::tag).collect()
     }
 
     fn get_chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>> {

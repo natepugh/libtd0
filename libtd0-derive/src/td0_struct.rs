@@ -484,6 +484,7 @@ fn td0_struct_gen_impl_default(source: &ItemStruct) -> TokenStream {
     }
 
     quote! {
+        #[automatically_derived]
         impl core::default::Default for #ident {
             fn default() -> Self {
                 Self {
@@ -521,6 +522,7 @@ fn const_name_from_ident(val: &Ident) -> String {
 fn td0_struct_gen_from_u8_slice_impl(source: &ItemStruct) -> TokenStream {
     let source_ident = &source.ident;
     quote! {
+        #[automatically_derived]
         impl core::convert::TryFrom<&[u8]> for #source_ident  {
             type Error = libtd0_core::result::TD0Error;
 
@@ -579,6 +581,7 @@ fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
 
     // Create an impl with get_fields().
     output.extend(quote!(
+        #[automatically_derived]
         impl libtd0_core::TD0ChunkItem for #source_ident {
             fn list_fields(&self) -> &'static [&'static str] { &#const_field_array_name }
             #fn_get_value

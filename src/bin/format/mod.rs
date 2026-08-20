@@ -67,8 +67,12 @@ impl core::fmt::Display for ChunkFieldDiffItem {
 
 pub fn fmt_chunk_item_compare_result(
     diffs: &[ChunkFieldDiffItem],
-    format: &OutputFormat,
+    format: OutputFormat,
 ) -> FormatResult {
+    #[expect(
+        clippy::match_wildcard_for_single_variants,
+        reason = "This is the desired behavior."
+    )]
     match format {
         OutputFormat::Text => {
             if diffs.is_empty() {
@@ -76,7 +80,7 @@ pub fn fmt_chunk_item_compare_result(
             } else {
                 Ok(diffs
                     .iter()
-                    .map(|diff| diff.to_string())
+                    .map(ChunkFieldDiffItem::to_string)
                     .collect::<Vec<String>>()
                     .join("\n"))
             }
@@ -102,9 +106,9 @@ fn header_and_rows_from_values_result<'a>(
 
     header.push(IDX_HEADER);
     let (_, first) = vals.first().unwrap();
-    header.extend(first.keys().map(|key| key.as_str()));
+    header.extend(first.keys().map(String::as_str));
 
-    for (idx, item) in vals.iter() {
+    for (idx, item) in vals {
         let mut row: Vec<String> = Vec::new();
         row.push(idx.to_string());
         for value in item.values() {
@@ -116,11 +120,11 @@ fn header_and_rows_from_values_result<'a>(
     (header, rows)
 }
 
-pub fn fmt_chunk_values_result(vals: &IndexedItemValues, format: &OutputFormat) -> FormatResult {
+pub fn fmt_chunk_values_result(vals: &IndexedItemValues, format: OutputFormat) -> FormatResult {
     match format {
         OutputFormat::Text => {
             let mut lines: Vec<String> = Vec::new();
-            for (idx, item) in vals.iter() {
+            for (idx, item) in vals {
                 // let item_str : String = item.iter().map(|(field, val)| format!("{field}={val}").collect::<Vec<String>>().join("  "));
                 let item_string = item
                     .iter()

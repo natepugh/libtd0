@@ -8,10 +8,9 @@ pub type ItemValues = IndexMap<String, TD0Value>;
 pub type IndexedItemValues = IndexMap<usize, ItemValues>;
 
 fn get_chunk_or_error(td0file: &dyn TD0File, chunk_name: &str) -> TD0Result<Box<dyn TD0Chunk>> {
-    match td0file.get_chunk(chunk_name) {
-        Some(chunk) => Ok(chunk),
-        None => Err(TD0Error::UnknownChunk),
-    }
+    td0file
+        .get_chunk(chunk_name)
+        .map_or_else(|| Err(TD0Error::UnknownChunk), Ok)
 }
 
 fn validate_chunk_item_range(range: &Range<usize>, chunk: &dyn TD0Chunk) -> TD0Result<()> {
@@ -28,7 +27,7 @@ fn validate_fields(
     chunk_name: &str,
 ) -> TD0Result<()> {
     let all_fields: IndexSet<&str> = chunk_item.list_fields().iter().copied().collect();
-    let requested_fields: IndexSet<&str> = fields.iter().map(|fld| fld.as_str()).collect();
+    let requested_fields: IndexSet<&str> = fields.iter().map(String::as_str).collect();
 
     let unknown_fields = requested_fields.difference(&all_fields);
     let unknown_fields_str = unknown_fields.copied().collect::<Vec<&str>>().join(",");
@@ -41,6 +40,10 @@ fn validate_fields(
     Ok(())
 }
 
+#[expect(
+    clippy::ref_option,
+    reason = "Accepts &Option directly from clap command."
+)]
 fn requested_fields_or_all<'a>(
     td0file: &'a dyn TD0File,
     chunk_name: &str,
@@ -53,7 +56,7 @@ fn requested_fields_or_all<'a>(
     match fields {
         Some(flds) => {
             validate_fields(&*default_item, flds, chunk_name)?;
-            Ok(flds.iter().map(|st| st.as_str()).collect())
+            Ok(flds.iter().map(String::as_str).collect())
         }
         None => Ok(default_item.list_fields().into()),
     }
@@ -73,6 +76,10 @@ pub fn command_dump_chunk<'a>(td0file: &'a dyn TD0File, chunk_name: &str) -> TD0
         .ok_or(TD0Error::UnknownChunk)
 }
 
+#[expect(
+    clippy::ref_option,
+    reason = "Accepts &Option directly from clap command."
+)]
 pub fn command_dump_chunk_values(
     bytes: &[u8],
     chunk_name: &str,
@@ -90,7 +97,7 @@ pub fn command_dump_chunk_values(
     for idx in item_range {
         if let Ok(item) = td0file.get_chunk_item(chunk_name, idx) {
             let mut vals: ItemValues = ItemValues::new();
-            for field in fields.iter() {
+            for field in &fields {
                 vals.insert(
                     field.to_string(),
                     item.get_value(field)
@@ -123,16 +130,14 @@ pub fn command_compare_chunk_items(
     let chunk_1_item = td0file.get_chunk_item(chunk_name_1, item_num)?;
     let chunk_2_item = td0file.get_chunk_item(chunk_name_2, item_num)?;
 
-    let chunk_1_fields: IndexSet<&str> =
-        IndexSet::from_iter(chunk_1_item.list_fields().iter().copied());
-    let chunk_2_fields: IndexSet<&str> =
-        IndexSet::from_iter(chunk_2_item.list_fields().iter().copied());
+    let chunk_1_fields: IndexSet<&str> = chunk_1_item.list_fields().iter().copied().collect();
+    let chunk_2_fields: IndexSet<&str> = chunk_2_item.list_fields().iter().copied().collect();
 
     let mut all_fields: IndexSet<&str> = chunk_1_fields.clone();
     all_fields.extend(chunk_2_fields.iter());
 
     let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();
-    for field in all_fields.iter() {
+    for field in &all_fields {
         let c1_val = chunk_1_item.get_value(field);
         let c2_val = chunk_2_item.get_value(field);
         if c1_val != c2_val {
@@ -155,13 +160,13 @@ pub fn parse_chunk_item_field_value(
     val: &str,
 ) -> TD0Result<TD0Value> {
     match chunk_item.get_field_type(field) {
-        Some("TD0Decimal") | Some("Volume") => Ok(TD0Value::Decimal(
+        Some("TD0Decimal" | "Volume") => Ok(TD0Value::Decimal(
             val.parse().map_err(|_| TD0Error::InvalidInput)?,
         )),
         Some("I16") => Ok(TD0Value::I16(
             val.parse().map_err(|_| TD0Error::InvalidInput)?,
         )),
-        Some("Text") | Some("EnumStr") => Ok(TD0Value::Text(val.to_string())),
+        Some("Text" | "EnumStr") => Ok(TD0Value::Text(val.to_string())),
         Some("I8") => Ok(TD0Value::I8(
             val.parse().map_err(|_| TD0Error::InvalidInput)?,
         )),
@@ -187,7 +192,7 @@ pub fn command_set_chunk_item_values(
 ) -> TD0Result<Vec<ChunkFieldDiffItem>> {
     let chunk_item = td0file.get_chunk_item_mut(chunk_name, item_num)?;
     let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();
-    for (field, value) in values.iter() {
+    for (field, value) in values {
         let parsed_value = parse_chunk_item_field_value(&*chunk_item, field, value)?;
         let Some(before) = chunk_item.get_value(field) else {
             return Err(TD0Error::InvalidFieldOrType);
@@ -222,9 +227,9 @@ pub fn command_reorder_chunk_items(
         before.push(
             td0file
                 .get_chunk_item(chunk_name, idx)?
-                .get_value(&display_field)
-                .ok_or_else(|| TD0Error::InvalidChunkItem)?,
-        )
+                .get_value(display_field)
+                .ok_or(TD0Error::InvalidChunkItem)?,
+        );
     }
 
     td0file.chunk_items_reorder(chunk_name, new_order)?;
@@ -234,9 +239,9 @@ pub fn command_reorder_chunk_items(
         after.push(
             td0file
                 .get_chunk_item(chunk_name, idx)?
-                .get_value(&display_field)
-                .ok_or_else(|| TD0Error::InvalidChunkItem)?,
-        )
+                .get_value(display_field)
+                .ok_or(TD0Error::InvalidChunkItem)?,
+        );
     }
 
     let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();

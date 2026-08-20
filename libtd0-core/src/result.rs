@@ -1,6 +1,5 @@
 #[derive(Clone, Debug, PartialEq)]
 pub enum TD0Error {
-    FirmwareVersionNotImplemented,
     InvalidChunk(&'static str),
     InvalidChunkItem,
     InvalidFieldOrType,
@@ -10,7 +9,8 @@ pub enum TD0Error {
     OutOfRange,
     ReadOnlyField,
     UnknownChunk,
-    UnknownDeviceModel,
+    UnsupportedDeviceModel,
+    UnsupportedFirmwareVersion,
 }
 
 pub type TD0Result<T> = Result<T, TD0Error>;
@@ -18,7 +18,6 @@ pub type TD0Result<T> = Result<T, TD0Error>;
 impl core::fmt::Display for TD0Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let repr: String = match self {
-            Self::FirmwareVersionNotImplemented => "firmware version not implemented".to_string(),
             Self::InvalidChunk(err) => format!("invalid chunk `{err}`"),
             Self::InvalidChunkItem => "invalid chunk item.".to_string(),
             Self::InvalidFieldOrType => {
@@ -30,7 +29,10 @@ impl core::fmt::Display for TD0Error {
             Self::OutOfRange => "out of range.".to_string(),
             Self::ReadOnlyField => "field is read only".to_string(),
             Self::UnknownChunk => "unknown chunk.".to_string(),
-            Self::UnknownDeviceModel => "unknown device model.".to_string(),
+            Self::UnsupportedDeviceModel => "unknown device model.".to_string(),
+            Self::UnsupportedFirmwareVersion => {
+                "firmware version not supported for this model.".to_string()
+            }
         };
         write!(f, "{}", repr)
     }

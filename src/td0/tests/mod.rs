@@ -69,7 +69,7 @@ pub struct TestStruct {
     #[td0_field(field_type = "U32")]
     u32_unbounded: U32<LittleEndian>,
 
-    #[td0_field(field_type = "U32", min = 65537, max = 655377)]
+    #[td0_field(field_type = "U32", min = 65537, max = 655_377)]
     u32_bounded: U32<LittleEndian>,
 
     #[td0_field(field_type = "U8")]
@@ -178,7 +178,7 @@ fn test_expected_defaults() {
     );
     assert_eq!(
         ts.get_value("space_padded_text"),
-        Some(libtd0_core::TD0Value::Text("".to_string())),
+        Some(libtd0_core::TD0Value::Text(String::new())),
         "Default is pad byte (' '), which should be trimmed."
     );
     assert_eq!(
@@ -187,7 +187,7 @@ fn test_expected_defaults() {
     );
     assert_eq!(
         ts.get_value("zero_padded_text"),
-        Some(libtd0_core::TD0Value::Text("".to_string())),
+        Some(libtd0_core::TD0Value::Text(String::new())),
         "Default is pad byte ('\\0'), which should be trimmed."
     );
     assert_eq!(
@@ -302,6 +302,7 @@ fn test_repeat_fields() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn test_setters() {
     let mut ts = TestStruct::default();
     // enumstr_field: #[td0_field(field_type = "EnumStr", ...)]
@@ -535,14 +536,14 @@ fn test_setters() {
     assert_matches!(
         ts.set_value(
             "space_padded_text",
-            &libtd0_core::TD0Value::Text("".to_string())
+            &libtd0_core::TD0Value::Text(String::new())
         ),
         Ok { .. },
         "`space_padded_text` Setter should set value on an empty string."
     );
     assert_eq!(
         ts.get_value("space_padded_text"),
-        Some(libtd0_core::TD0Value::Text("".to_string())),
+        Some(libtd0_core::TD0Value::Text(String::new())),
         "`space_padded_text` Getter should return empty string."
     );
     assert_eq!(
@@ -609,20 +610,20 @@ fn test_setters() {
         "`u16_bounded` Setter should not change value on Error."
     );
 
-    // u32_bounded: #[td0_field(field_type = "U16", min = 65537, max = 655377)]
+    // u32_bounded: #[td0_field(field_type = "U16", min = 65537, max = 655_377)]
     assert_matches!(
         ts.set_value("u32_bounded", &libtd0_core::TD0Value::U32(65537)),
         Ok { .. },
         "`u32_bounded` Bounded field setter should accept min value."
     );
     assert_matches!(
-        ts.set_value("u32_bounded", &libtd0_core::TD0Value::U32(655377)),
+        ts.set_value("u32_bounded", &libtd0_core::TD0Value::U32(655_377)),
         Ok { .. },
         "`u32_bounded` Bounded field setter should accept max value."
     );
     assert_eq!(
         ts.get_value("u32_bounded"),
-        Some(libtd0_core::TD0Value::U32(655377)),
+        Some(libtd0_core::TD0Value::U32(655_377)),
         "`u32_bounded` Setter/Getter round-trip should return the same value."
     );
     let val_before = ts.get_value("u32_bounded");
@@ -632,7 +633,7 @@ fn test_setters() {
         "`u32_bounded` Bounded field setter should Error if less than min."
     );
     assert_matches!(
-        ts.set_value("u32_bounded", &libtd0_core::TD0Value::U32(655378)),
+        ts.set_value("u32_bounded", &libtd0_core::TD0Value::U32(655_378)),
         Err(TD0Error::OutOfRange),
         "`u32_bounded` Bounded field setter should Error if greater than max."
     );

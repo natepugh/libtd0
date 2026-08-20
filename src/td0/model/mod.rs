@@ -1,1 +1,1 @@
-pub(crate) mod ssxp;
+pub mod ssxp;

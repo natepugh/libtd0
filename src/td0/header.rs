@@ -8,7 +8,7 @@ pub const TD0_MAGIC: [u8; 4] = *b"TD0a";
 
 #[derive(Clone, Copy, Debug, Default, FromBytes, Immutable, IntoBytes, KnownLayout)]
 #[repr(C, packed)]
-pub(crate) struct TD0IdChunk {
+pub struct TD0IdChunk {
     bytes_remaining: U16<LittleEndian>,
     magic: [u8; 4],
     unknown: [u8; 10],
@@ -31,24 +31,24 @@ impl TD0IdChunk {
         usize_from_u32(self.bytes_remaining.get().into())
     }
 
-    pub fn magic_raw(&self) -> &[u8; 4] {
+    pub const fn magic_raw(&self) -> &[u8; 4] {
         &self.magic
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn magic(&self) -> String {
         String::from_utf8_lossy(&self.magic).into()
     }
 
-    #[allow(dead_code)]
-    pub fn unknown(&self) -> &[u8; 10] {
+    #[expect(dead_code)]
+    pub const fn unknown(&self) -> &[u8; 10] {
         &self.unknown
     }
 }
 
 #[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout)]
 #[repr(C, packed)]
-pub(crate) struct TD0ManifestTag {
+pub struct TD0ManifestTag {
     tag: [u8; 4],
     model: [u8; 4],
     chunk_pos: U32<LittleEndian>,
@@ -64,7 +64,7 @@ impl TD0ManifestTag {
         String::from_utf8_lossy(&self.tag).to_string()
     }
 
-    pub fn tag_raw(&self) -> &[u8; 4] {
+    pub const fn tag_raw(&self) -> &[u8; 4] {
         &self.tag
     }
 
@@ -76,7 +76,7 @@ impl TD0ManifestTag {
         usize::try_from(self.chunk_size.get()).expect("platform usize is >= 32 bits")
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn chunk_range(&self) -> ::core::ops::Range<usize> {
         self.chunk_pos()..self.chunk_pos() + self.chunk_size()
     }

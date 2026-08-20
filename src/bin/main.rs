@@ -9,7 +9,7 @@ use std::process::exit;
 mod commands;
 use commands::{
     IndexedItemValues, command_compare_chunk_items, command_dump_chunk, command_dump_chunk_item,
-    command_dump_chunk_values, command_set_chunk_item_values, command_reorder_chunk_items,
+    command_dump_chunk_values, command_reorder_chunk_items, command_set_chunk_item_values,
 };
 
 mod format;
@@ -62,6 +62,7 @@ where
     let pos = s
         .find('=')
         .ok_or_else(|| format!("no `=` found in `{s}`"))?;
+    #[expect(clippy::string_slice, reason = "Position is retrieved above.")]
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
 }
 
@@ -126,6 +127,7 @@ enum Commands {
     },
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() {
     let cli = Cli::parse();
 
@@ -140,6 +142,7 @@ fn main() {
             }
             let td0file = parse_td0_file_or_exit(&cli.file);
             let manifest_data = td0file.manifest();
+            #[expect(clippy::todo, reason = "todo is unreachable, checked for above.")]
             let text_output = match cli.output_format {
                 OutputFormat::Json => {
                     serde_json::to_string(&manifest_data).expect("Could not serialize output.")
@@ -171,10 +174,10 @@ fn main() {
                         exit_td0_err(&err, code);
                     });
 
-            let output = fmt_chunk_item_compare_result(&diff, &cli.output_format)
+            let output = fmt_chunk_item_compare_result(&diff, cli.output_format)
                 .unwrap_or_else(|err| exit_err(err, ERR_UNKNOWN));
 
-            println!("{}", output);
+            println!("{output}");
         }
         Commands::ChunkValues {
             chunk_name,
@@ -182,11 +185,10 @@ fn main() {
             fields,
         } => {
             let bytes: Vec<u8> = fs::read(cli.file).expect("Could not read input file.");
-            let chunk_data_result = match item_num {
-                Some(inum) => {
-                    // TD0 devices show the user 1-based indexes, while libtd0 uses 0-based indexes.
-                    // Convert the indexing to match the lib call here.
-                    let inum_reindexed = reindex_item_num_or_exit(*inum);
+            let chunk_data_result = item_num.map_or_else(
+                || command_dump_chunk_values(&bytes, chunk_name, None, fields),
+                |inum| {
+                    let inum_reindexed = reindex_item_num_or_exit(inum);
 
                     command_dump_chunk_values(
                         &bytes,
@@ -194,9 +196,8 @@ fn main() {
                         Some(inum_reindexed..inum_reindexed + 1),
                         fields,
                     )
-                }
-                None => command_dump_chunk_values(&bytes, chunk_name, None, fields),
-            };
+                },
+            );
 
             let chunk_data = match chunk_data_result {
                 Ok(data) => data,
@@ -219,10 +220,10 @@ fn main() {
             let chunk_data = reindex_chunk_values_for_output(chunk_data);
 
             let output =
-                fmt_chunk_values_result(&chunk_data, &cli.output_format).unwrap_or_else(|err| {
+                fmt_chunk_values_result(&chunk_data, cli.output_format).unwrap_or_else(|err| {
                     exit_err(err, ERR_UNKNOWN);
                 });
-            println!("{}", output);
+            println!("{output}");
         }
         Commands::DumpChunk {
             chunk_name,
@@ -235,8 +236,9 @@ fn main() {
 
             // TD0 devices show the user 1-based indexes, while libtd0 uses 0-based indexes.
             // Convert the indexing to match the lib call here.
-            let chunk_data_result = match item_num {
-                Some(inum) => {
+            let chunk_data_result = item_num.as_ref().map_or_else(
+                || command_dump_chunk(&*td0file, chunk_name),
+                |inum| {
                     let Some(inum_reindexed) = inum.checked_sub(1) else {
                         exit_err(
                             "Item index out of bounds. Must be 1 - ? inclusive.",
@@ -244,9 +246,8 @@ fn main() {
                         );
                     };
                     command_dump_chunk_item(&*td0file, chunk_name, inum_reindexed)
-                }
-                None => command_dump_chunk(&*td0file, chunk_name),
-            };
+                },
+            );
 
             let chunk_data = match chunk_data_result {
                 Ok(data) => data,
@@ -283,7 +284,7 @@ fn main() {
                 }
                 OutputFormat::Text => format!("{:?}", chunk_item.list_fields()),
             };
-            println!("{}", text_output);
+            println!("{text_output}");
         }
         Commands::SetChunkItemValues {
             chunk_name,
@@ -298,10 +299,10 @@ fn main() {
                         exit_td0_err(&err, ERR_UNKNOWN);
                     });
 
-            let output = fmt_chunk_item_compare_result(&diffs, &cli.output_format)
+            let output = fmt_chunk_item_compare_result(&diffs, cli.output_format)
                 .unwrap_or_else(|err| exit_err(err, ERR_UNKNOWN));
 
-            println!("{}", output);
+            println!("{output}");
         }
         Commands::ChunkItemsReorder {
             chunk_name,
@@ -315,10 +316,10 @@ fn main() {
                         exit_td0_err(&err, ERR_UNKNOWN);
                     });
 
-            let output = fmt_chunk_item_compare_result(&diffs, &cli.output_format)
+            let output = fmt_chunk_item_compare_result(&diffs, cli.output_format)
                 .unwrap_or_else(|err| exit_err(err, ERR_UNKNOWN));
 
-            println!("{}", output);
+            println!("{output}");
         }
     }
 }
