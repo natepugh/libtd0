@@ -1,0 +1,19 @@
+[package]
+name = "multi-model"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+model-spdsx-pro = [
+    "model-ssxp",
+]
+
+[dependencies]
+# Internal crates
+libtd0-core = { path = "../libtd0-core" }
+libtd0-derive = { path = "../libtd0-derive" }
+model-ssxp = { path = "../model-ssxp", optional = true }
+
+# External dependencies
+zerocopy = "0.8.52"
+zerocopy-derive = "0.8.52"

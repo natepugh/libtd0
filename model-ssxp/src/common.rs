@@ -1,10 +1,10 @@
-use crate::td0::model::ssxp::rev::v1_10::chunk_item_from_bytes as v1_10_chunk_item_from_bytes;
-use crate::td0::model::ssxp::rev::v1_10::chunk_item_from_bytes_mut as v1_10_chunk_item_from_bytes_mut;
-use crate::td0::model::ssxp::rev::v1_10::get_default_chunk_item as v1_10_get_default_chunk_item;
-use crate::td0::model::ssxp::rev::v2_0::chunk_item_from_bytes as v2_0_chunk_item_from_bytes;
-use crate::td0::model::ssxp::rev::v2_0::chunk_item_from_bytes_mut as v2_0_chunk_item_from_bytes_mut;
-use crate::td0::model::ssxp::rev::v2_0::get_default_chunk_item as v2_0_get_default_chunk_item;
-use crate::td0::{SZ_HDR_CHUNK, TD0ManifestTag, validate_id_tag};
+use crate::rev::v1_10::chunk_item_from_bytes as v1_10_chunk_item_from_bytes;
+use crate::rev::v1_10::chunk_item_from_bytes_mut as v1_10_chunk_item_from_bytes_mut;
+use crate::rev::v1_10::get_default_chunk_item as v1_10_get_default_chunk_item;
+use crate::rev::v2_0::chunk_item_from_bytes as v2_0_chunk_item_from_bytes;
+use crate::rev::v2_0::chunk_item_from_bytes_mut as v2_0_chunk_item_from_bytes_mut;
+use crate::rev::v2_0::get_default_chunk_item as v2_0_get_default_chunk_item;
+use libtd0_core::header::{SZ_HDR_CHUNK, TD0ManifestTag, validate_id_tag};
 use ::core::ops::Range;
 use core::fmt;
 use libtd0_core::result::{TD0Error, TD0Result};
@@ -439,7 +439,7 @@ impl TD0File for SSXPTD0File {
 
         Ok(Self {
             buf: bytes,
-            manifest,
+            manifest: manifest.into(),
             tag_indexes,
             chunk_headers,
             chunks,

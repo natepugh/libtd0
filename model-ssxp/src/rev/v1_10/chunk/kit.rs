@@ -2,7 +2,7 @@ use libtd0_derive::{TD0ChunkItemDerive, repeat_fields};
 use zerocopy::{I16, LittleEndian, U16};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-use crate::td0::model::ssxp::strings::{
+use crate::strings::{
     CLICK_MODES, CLICK_SOUNDS, DELAYSYNC_VALUES, DIRECT_ROUTES, EQ_HI_FREQS, EQ_LOW_FREQS,
     EQ_MID_FREQS, EQ_Q_VALS, EXP_PARAMS, EXP_PEDAL_MIDI_CHANNELS, EXP_PEDAL_MODES, LED_COLORS,
     LED_MODES, LOOP_MODES, MFX, MFX_ROUTES, MIDI_CHANNELS, OFF_ON, OUTPUT_ROUTES,

@@ -8,7 +8,7 @@ use libtd0_core::{
 use zerocopy::{I16, LittleEndian, U16, U32};
 use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
 
-use crate::td0::model::ssxp::strings::{LED_COLORS, SYS_KIT_SWITCH};
+use model_ssxp::strings::{LED_COLORS, SYS_KIT_SWITCH};
 use libtd0_core::result::{TD0Error, TD0Result};
 use libtd0_derive::TD0ChunkItemDerive;
 use libtd0_derive::repeat_fields;

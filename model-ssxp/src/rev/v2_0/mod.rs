@@ -1,7 +1,7 @@
 pub mod chunk;
 
 use super::v1_10::chunk::{CURaItem, KITaItem, STLaItem, STPaItem, TGLaItem, TRGaItem, WVPaItem};
-use crate::td0::model::ssxp::common::HDRaItem;
+use crate::common::HDRaItem;
 use chunk::{KITbItem, PVRaItem, STPbItem};
 use libtd0_core::TD0ChunkItem;
 use libtd0_core::result::{TD0Error, TD0Result};

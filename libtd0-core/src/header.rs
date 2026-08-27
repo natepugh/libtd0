@@ -1,4 +1,5 @@
 use super::usize_from_u32;
+use super::result::{TD0Error, TD0Result};
 use zerocopy::{FromBytes, LittleEndian, U16, U32};
 use zerocopy_derive::{Immutable, IntoBytes, KnownLayout};
 
@@ -41,6 +42,16 @@ impl TD0IdChunk {
 
     pub const fn unknown(&self) -> &[u8; 10] {
         &self.unknown
+    }
+}
+
+pub fn validate_id_tag(tag: &TD0IdChunk) -> TD0Result<()> {
+    if *tag.magic_raw() == TD0_MAGIC {
+        Ok(())
+    } else {
+        Err(TD0Error::InvalidTD0File(
+            "invalid or missing `TD0a` header chunk.",
+        ))
     }
 }
 
