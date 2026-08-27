@@ -7,6 +7,7 @@ edition = "2024"
 zerocopy = { version = "0.8.55", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"], optional = true }
 num-traits = "0.2.19"
+zerocopy-derive = "0.8.56"
 
 [features]
 default = []

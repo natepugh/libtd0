@@ -1,4 +1,4 @@
-use libtd0_core::usize_from_u32;
+use super::usize_from_u32;
 use zerocopy::{FromBytes, LittleEndian, U16, U32};
 use zerocopy_derive::{Immutable, IntoBytes, KnownLayout};
 
@@ -35,12 +35,10 @@ impl TD0IdChunk {
         &self.magic
     }
 
-    #[expect(dead_code)]
     pub fn magic(&self) -> String {
         String::from_utf8_lossy(&self.magic).into()
     }
 
-    #[expect(dead_code)]
     pub const fn unknown(&self) -> &[u8; 10] {
         &self.unknown
     }
@@ -76,7 +74,6 @@ impl TD0ManifestTag {
         usize::try_from(self.chunk_size.get()).expect("platform usize is >= 32 bits")
     }
 
-    #[expect(dead_code)]
     pub fn chunk_range(&self) -> ::core::ops::Range<usize> {
         self.chunk_pos()..self.chunk_pos() + self.chunk_size()
     }

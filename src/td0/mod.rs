@@ -1,10 +1,9 @@
-use crate::td0::header::{SZ_HDR_CHUNK, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
 use crate::td0::model::ssxp::common::SSXPTD0File;
 use libtd0_core::TD0File;
+use libtd0_core::header::{SZ_HDR_CHUNK, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
 use libtd0_core::result::TD0Error::InvalidTD0File;
 use libtd0_core::result::{TD0Error, TD0Result};
 
-pub mod header;
 mod model;
 mod tests;
 
