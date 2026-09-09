@@ -8,12 +8,10 @@ mod pytd0 {
         ChunkManifest as Impl_ChunkManifest, TD0BackupType as Impl_TD0BackupType,
         TD0ChunkItem as Impl_TD0ChunkItem, TD0DeviceModel as Impl_TD0DeviceModel,
         TD0File as Impl_TD0File, TD0Manifest as Impl_TD0Manifest, TD0Value as Impl_TD0Value,
-        TD0ValueRaw as Impl_TD0ValueRaw,
-        checksum_bytes_to_string,
-        result::TD0Error,
+        TD0ValueRaw as Impl_TD0ValueRaw, checksum_bytes_to_string, result::TD0Error,
     };
     use multi_model::{new_td0_file, parse_td0_file};
-    use pyo3::{exceptions::{PyKeyError, PyRuntimeError, PyValueError}};
+    use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
 
     fn map_chunk_item_error(err: TD0Error) -> PyErr {
         match err {

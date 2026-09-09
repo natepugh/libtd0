@@ -1,7 +1,7 @@
-use libtd0_core::{TD0DeviceModel, TD0File};
 use libtd0_core::header::{SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, validate_id_tag};
 use libtd0_core::result::TD0Error::InvalidTD0File;
 use libtd0_core::result::{TD0Error, TD0Result};
+use libtd0_core::{TD0DeviceModel, TD0File};
 #[cfg(feature = "model-ssxp")]
 use model_ssxp::common::SSXPTD0File;
 

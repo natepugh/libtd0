@@ -3,8 +3,8 @@
 use std::assert_matches;
 
 use libtd0_core::{
-    TD0ChunkItem, VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DISPLAY,
-    VOLUME_MINUS_INF_FLOAT, VOLUME_MINUS_INF_I16, Volume,
+    TD0ChunkItem, VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DISPLAY, VOLUME_MINUS_INF_FLOAT,
+    VOLUME_MINUS_INF_I16, Volume,
 };
 use zerocopy::{I16, LittleEndian, U16, U32};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes};

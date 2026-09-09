@@ -1,5 +1,5 @@
-use super::usize_from_u32;
 use super::result::{TD0Error, TD0Result};
+use super::usize_from_u32;
 use zerocopy::{FromBytes, LittleEndian, U16, U32};
 use zerocopy_derive::{Immutable, IntoBytes, KnownLayout};
 
@@ -19,9 +19,9 @@ impl Default for TD0IdChunk {
     fn default() -> Self {
         let magic: [u8; 4] = *b"TD0a";
         Self {
-            bytes_remaining: U16::from(14),        
+            bytes_remaining: U16::from(14),
             magic,
-            unknown: [0; 10]
+            unknown: [0; 10],
         }
     }
 }
@@ -110,7 +110,9 @@ impl TD0ManifestTag {
 
     pub fn set_model(&mut self, model: &str) -> TD0Result<()> {
         if !model.is_ascii() {
-            return Err(TD0Error::InvalidInputWithMessage("model must be ASCII only.".to_string()));
+            return Err(TD0Error::InvalidInputWithMessage(
+                "model must be ASCII only.".to_string(),
+            ));
         }
 
         if model.len() != 4 {
@@ -123,7 +125,9 @@ impl TD0ManifestTag {
 
     pub fn set_tag(&mut self, tag: &str) -> TD0Result<()> {
         if !tag.is_ascii() {
-            return Err(TD0Error::InvalidInputWithMessage("tag must be ASCII only.".to_string()));
+            return Err(TD0Error::InvalidInputWithMessage(
+                "tag must be ASCII only.".to_string(),
+            ));
         }
 
         if tag.len() != 4 {

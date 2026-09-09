@@ -187,7 +187,7 @@ impl core::fmt::Display for TD0Manifest {
     }
 }
 
-pub trait TD0ChunkItem : Send + Sync {
+pub trait TD0ChunkItem: Send + Sync {
     fn as_bytes(&self) -> &[u8];
     fn get_value(&self, field: &str) -> Option<TD0Value>;
     fn get_value_raw(&self, field: &str) -> Option<TD0ValueRaw>;
@@ -197,7 +197,7 @@ pub trait TD0ChunkItem : Send + Sync {
     fn set_value_raw(&mut self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
 }
 
-pub trait TD0File : Send + Sync {
+pub trait TD0File: Send + Sync {
     fn chunk_items_copy(
         &mut self,
         chunk_name: &str,
@@ -222,7 +222,11 @@ pub trait TD0File : Send + Sync {
         chunk_name: &str,
         item_index: usize,
     ) -> TD0Result<&mut dyn TD0ChunkItem>;
-    fn get_chunk_item_owned(&self, chunk_name: &str, item_index: usize) -> TD0Result<Box<dyn TD0ChunkItem>>;
+    fn get_chunk_item_owned(
+        &self,
+        chunk_name: &str,
+        item_index: usize,
+    ) -> TD0Result<Box<dyn TD0ChunkItem>>;
     fn get_chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>>;
     fn get_chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]>;
     fn get_chunk_num_items(&self, chunk_name: &str) -> Option<usize>;
@@ -231,7 +235,9 @@ pub trait TD0File : Send + Sync {
     fn get_chunk_size(&self, chunk_name: &str) -> Option<usize>;
     fn list_chunks(&self) -> Vec<String>;
     fn manifest(&self) -> TD0Result<TD0Manifest>;
-    fn new() -> TD0Result<Self> where Self: Sized;
+    fn new() -> TD0Result<Self>
+    where
+        Self: Sized;
     fn to_bytes(&self) -> Vec<u8>;
     fn validate_load(&self) -> TD0Result<()>;
     fn validate_save(&self) -> TD0Result<()>;
@@ -554,18 +560,14 @@ pub fn usize_from_u32(val: u32) -> usize {
     usize::try_from(val).expect("platform usize is >= 32 bits")
 }
 
-pub fn calc_range_overlap<T>(r1: Range<T>, r2: Range<T>) -> Option<Range<T>> 
-    where T: Ord
+pub fn calc_range_overlap<T>(r1: Range<T>, r2: Range<T>) -> Option<Range<T>>
+where
+    T: Ord,
 {
     let start = r1.start.max(r2.start);
     let end = r1.end.min(r2.end);
 
-    if start > end {
-        None
-    } else {
-        Some(start..end)
-    }
-
+    if start > end { None } else { Some(start..end) }
 }
 
 #[cfg(test)]
