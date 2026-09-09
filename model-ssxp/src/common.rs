@@ -771,10 +771,22 @@ impl TD0File for SSXPTD0File {
             .collect();
 
         Ok(TD0Manifest {
+            backup_name: backup_chunk
+                .get_value("name")
+                .map_or("Unknown".to_string(), |val| val.to_string()),
             backup_type,
             checksum_actual,
             checksum_calculated: self.calc_checksum(),
             device_model: device_model_from_tag_value(backup_tag.model().as_str()),
+            device_firmware_build: backup_chunk
+                .get_value("build")
+                .map_or("Unknown".to_string(), |val| val.to_string()),
+            device_firmware_version: backup_chunk
+                .get_value("firmware")
+                .map_or("Unknown".to_string(), |val| val.to_string()),
+            device_serial: backup_chunk
+                .get_value("device_serial")
+                .map_or("Unknown".to_string(), |val| val.to_string()),
             size_actual: self.buf.len(),
             size_calculated: self.calc_expected_size(),
             chunks,

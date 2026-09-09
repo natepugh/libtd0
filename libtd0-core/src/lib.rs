@@ -115,14 +115,24 @@ impl core::fmt::Display for ChunkManifest {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Clone)]
 pub struct TD0Manifest {
+    pub backup_name: String,
     pub backup_type: TD0BackupType,
+
     #[cfg_attr(
         feature = "serde",
         serde(serialize_with = "serde_checksum_bytes_to_string")
     )]
     pub checksum_actual: [u8; 16],
+
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "serde_checksum_bytes_to_string")
+    )]
     pub checksum_calculated: [u8; 16],
     pub device_model: TD0DeviceModel,
+    pub device_firmware_version: String,
+    pub device_firmware_build: String,
+    pub device_serial: String,
     pub size_actual: usize,
     pub size_calculated: usize,
     pub chunks: Vec<ChunkManifest>,
@@ -146,18 +156,26 @@ impl core::fmt::Display for TD0Manifest {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "Backup Type: {:?}\n\
+            "Backup Name: {}\n\
+             Backup Type: {:?}\n\
              Checksum from File   : {}\n\
              Checksum (calculated): {}\n\
-             Device Model: {:?}\n\
+             Device Model: {}\n\
+             Device Firmware: {}\n\
+             Device Firmware Build: {}\n\
+             Device Serial: {}\n\
              Actual Size: {}\n\
              Calculated Size: {}\n\
              Chunks:
     {}",
+            self.backup_name,
             self.backup_type,
             checksum_bytes_to_string(&self.checksum_actual),
             checksum_bytes_to_string(&self.checksum_calculated),
             self.device_model,
+            self.device_firmware_version,
+            self.device_firmware_build,
+            self.device_serial,
             self.size_actual,
             self.size_calculated,
             self.chunks

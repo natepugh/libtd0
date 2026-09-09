@@ -149,6 +149,11 @@ mod pytd0 {
     #[pymethods]
     impl TD0Manifest {
         #[getter]
+        fn backup_name(&self) -> PyResult<String> {
+            Ok(self.0.backup_name.clone())
+        }
+
+        #[getter]
         fn backup_type(&self) -> PyResult<TD0BackupType> {
             Ok(TD0BackupType::from(self.0.backup_type))
         }
@@ -166,6 +171,21 @@ mod pytd0 {
         #[getter]
         fn device_model(&self) -> PyResult<TD0DeviceModel> {
             Ok(TD0DeviceModel::from(self.0.device_model))
+        }
+
+        #[getter]
+        fn device_firmware_version(&self) -> PyResult<String> {
+            Ok(self.0.device_firmware_version.clone())
+        }
+
+        #[getter]
+        fn device_firmware_build(&self) -> PyResult<String> {
+            Ok(self.0.device_firmware_build.clone())
+        }
+
+        #[getter]
+        fn device_serial(&self) -> PyResult<String> {
+            Ok(self.0.device_serial.clone())
         }
 
         #[getter]
@@ -190,6 +210,16 @@ mod pytd0 {
 
         fn __str__(&self) -> String {
             self.0.to_string()
+        }
+
+        fn __repr__(&self) -> String {
+            format!(
+                "TD0Manifest(backup_name={:?}, backup_type={:?}, device_model={:?}, num_chunks={})",
+                self.0.backup_name,
+                self.0.backup_type,
+                self.0.device_model,
+                self.0.chunks.len()
+            )
         }
     }
 
