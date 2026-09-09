@@ -1,15 +1,15 @@
-#![allow(unused)]
+#![cfg(test)]
+
 use std::assert_matches;
 
 use libtd0_core::{
-    IntEncodedDecimal, TD0ChunkItem, VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DISPLAY,
+    TD0ChunkItem, VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DISPLAY,
     VOLUME_MINUS_INF_FLOAT, VOLUME_MINUS_INF_I16, Volume,
 };
 use zerocopy::{I16, LittleEndian, U16, U32};
-use zerocopy_derive::{FromBytes, IntoBytes, KnownLayout};
+use zerocopy_derive::{FromBytes, Immutable, IntoBytes};
 
-use model_ssxp::strings::{LED_COLORS, SYS_KIT_SWITCH};
-use libtd0_core::result::{TD0Error, TD0Result};
+use libtd0_core::result::TD0Error;
 use libtd0_derive::TD0ChunkItemDerive;
 use libtd0_derive::repeat_fields;
 
@@ -24,7 +24,7 @@ const ENUM_STR_VALUES: [&str; 5] = [
 const TEST_BROKEN: &str = "Test broken if failed.";
 
 #[repeat_fields]
-#[derive(Clone, Copy, Debug, FromBytes, IntoBytes, TD0ChunkItemDerive)]
+#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, TD0ChunkItemDerive)]
 #[repr(C, packed)]
 pub struct TestStruct {
     #[td0_field(field_type = "EnumStr", collection = "ENUM_STR_VALUES")]
@@ -101,7 +101,6 @@ pub struct TestStruct {
     val_3: u8,
 }
 
-#[cfg(test)]
 #[test]
 fn test_creates_expected_fields() {
     let expected: [&str; 32] = [

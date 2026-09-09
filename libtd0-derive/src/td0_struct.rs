@@ -589,6 +589,9 @@ fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
             #fn_get_value_raw
             #fn_set_value_raw
             #fn_get_field_type
+            fn as_bytes(&self) -> &[u8] {
+                zerocopy::IntoBytes::as_bytes(self)
+            }
         }
     ));
 

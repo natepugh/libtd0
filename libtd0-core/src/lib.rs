@@ -2,7 +2,7 @@ pub mod header;
 pub mod result;
 
 use crate::result::TD0Error;
-use core::ops::{Div, Mul};
+use core::ops::{Div, Mul, Range};
 use num_traits::Bounded;
 use result::TD0Result;
 #[cfg(feature = "serde")]
@@ -93,6 +93,7 @@ impl core::fmt::Display for TD0BackupType {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Clone)]
 pub struct ChunkManifest {
     pub name: String,
     pub pos: usize,
@@ -112,6 +113,7 @@ impl core::fmt::Display for ChunkManifest {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Clone)]
 pub struct TD0Manifest {
     pub backup_type: TD0BackupType,
     #[cfg_attr(
@@ -168,21 +170,8 @@ impl core::fmt::Display for TD0Manifest {
     }
 }
 
-pub trait TD0Chunk {
-    fn pos(&self) -> usize;
-    fn size(&self) -> usize;
-    fn item_pos(&self, item_index: usize) -> Option<usize>;
-    fn item_range(&self, item_index: usize) -> Option<::core::ops::Range<usize>>;
-    fn item_size(&self) -> usize;
-    fn value(&self, field: &str) -> Option<TD0Value>;
-    fn value_raw(&self, field: &str) -> Option<TD0ValueRaw>;
-    fn list_fields(&self) -> Vec<String>;
-    fn num_items(&self) -> usize;
-    fn set_value(&self, field: &str, value: &TD0Value) -> TD0Result<()>;
-    fn set_value_raw(&self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
-}
-
-pub trait TD0ChunkItem {
+pub trait TD0ChunkItem : Send + Sync {
+    fn as_bytes(&self) -> &[u8];
     fn get_value(&self, field: &str) -> Option<TD0Value>;
     fn get_value_raw(&self, field: &str) -> Option<TD0ValueRaw>;
     fn get_field_type(&self, field: &str) -> Option<&'static str>;
@@ -191,8 +180,7 @@ pub trait TD0ChunkItem {
     fn set_value_raw(&mut self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
 }
 
-pub trait TD0File {
-    fn as_bytes(&self) -> &[u8];
+pub trait TD0File : Send + Sync {
     fn chunk_items_copy(
         &mut self,
         chunk_name: &str,
@@ -206,23 +194,30 @@ pub trait TD0File {
         index_2: usize,
     ) -> TD0Result<()>;
     fn chunk_items_reorder(&mut self, chunk_name: &str, new_order: &[usize]) -> TD0Result<()>;
-    fn from_bytes(bytes: Vec<u8>) -> TD0Result<Self>
+    fn finalize(&mut self) -> TD0Result<()>;
+    fn try_from_bytes(bytes: &[u8]) -> TD0Result<Self>
     where
         Self: Sized;
-    fn into_bytes(self) -> Vec<u8>;
-    fn get_chunk(&self, chunk_name: &str) -> Option<Box<dyn TD0Chunk>>;
-    fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]>;
+    fn try_into_bytes(self) -> TD0Result<Vec<u8>>;
     fn get_chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem>;
     fn get_chunk_item_mut(
         &mut self,
         chunk_name: &str,
         item_index: usize,
     ) -> TD0Result<&mut dyn TD0ChunkItem>;
+    fn get_chunk_item_owned(&self, chunk_name: &str, item_index: usize) -> TD0Result<Box<dyn TD0ChunkItem>>;
     fn get_chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>>;
     fn get_chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]>;
-    fn manifest(&self) -> TD0Manifest;
+    fn get_chunk_num_items(&self, chunk_name: &str) -> Option<usize>;
+    fn get_chunk_pos(&self, chunk_name: &str) -> Option<usize>;
+    fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]>;
+    fn get_chunk_size(&self, chunk_name: &str) -> Option<usize>;
     fn list_chunks(&self) -> Vec<String>;
-    fn validate(&self) -> TD0Result<()>;
+    fn manifest(&self) -> TD0Result<TD0Manifest>;
+    fn new() -> TD0Result<Self> where Self: Sized;
+    fn to_bytes(&self) -> Vec<u8>;
+    fn validate_load(&self) -> TD0Result<()>;
+    fn validate_save(&self) -> TD0Result<()>;
 }
 
 impl TD0Value {
@@ -540,6 +535,20 @@ impl<T: ByteOrder> TryFrom<Volume> for I16<T> {
 
 pub fn usize_from_u32(val: u32) -> usize {
     usize::try_from(val).expect("platform usize is >= 32 bits")
+}
+
+pub fn calc_range_overlap<T>(r1: Range<T>, r2: Range<T>) -> Option<Range<T>> 
+    where T: Ord
+{
+    let start = r1.start.max(r2.start);
+    let end = r1.end.min(r2.end);
+
+    if start > end {
+        None
+    } else {
+        Some(start..end)
+    }
+
 }
 
 #[cfg(test)]

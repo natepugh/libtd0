@@ -1,9 +1,9 @@
 use hexout::{HexOutSettings, hex_out};
 
+use libtd0_core::TD0File;
 use super::commands::IndexedItemValues;
 use crate::commands::ChunkFieldDiffItem;
 use clap::ValueEnum;
-use libtd0_core::TD0Chunk;
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum OutputFormat {
@@ -19,10 +19,15 @@ pub fn fmt_hex_dump(bytes: &[u8], hexout_settings: &HexOutSettings) -> String {
     hex_out(bytes, hexout_settings, 0, 0, 0).expect("incorrect hexout invocation.")
 }
 
-pub fn create_hexout_settings(chunk: &dyn TD0Chunk) -> HexOutSettings {
+pub fn create_hexout_settings(td0file: &dyn TD0File, chunk_name: &str) -> HexOutSettings {
+    let Some(chunk_pos) = td0file.get_chunk_pos(chunk_name) else {
+        return HexOutSettings::default()
+    };
+    let chunk_size = td0file.get_chunk_size(chunk_name).expect("verifed chunk exists above.");
+
     HexOutSettings {
-        address_origin: chunk.pos(),
-        address_width: if chunk.pos() + chunk.size() <= 0xFFFF {
+        address_origin: chunk_pos,
+        address_width: if chunk_pos + chunk_size <= 0xFFFF {
             4
         } else {
             8

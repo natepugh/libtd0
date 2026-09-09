@@ -4,8 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-model-spdsx-pro = [
-    "model-ssxp",
+default = [
+    "model-spdsx-pro", 
+]
+model-spdsx-pro = [ 
+    "model-ssxp", 
 ]
 
 [dependencies]

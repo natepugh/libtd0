@@ -33,12 +33,17 @@ model-spdsx-pro = [
     "multi-model/model-ssxp",
 ]
 
+python-bindings = [
+    "pytd0",
+]
+
 [dependencies]
 # Internal crates
 libtd0-core = { path = "libtd0-core" }
 libtd0-derive = { path = "libtd0-derive" }
 model-ssxp = { path = "model-ssxp", optional = true }
 multi-model = { path = "multi-model" }
+pytd0 = { path = "pytd0", optional = true }
 
 # External dependencies.
 clap = { version = "4.6.1", features = ["derive"], optional = true }

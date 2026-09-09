@@ -141,7 +141,10 @@ fn main() {
                 );
             }
             let td0file = parse_td0_file_or_exit(&cli.file);
-            let manifest_data = td0file.manifest();
+            let manifest_data = match td0file.manifest() {
+                Ok(val) => val,
+                Err(err) => exit_td0_err(&err, ERR_UNKNOWN),
+            };
             #[expect(clippy::todo, reason = "todo is unreachable, checked for above.")]
             let text_output = match cli.output_format {
                 OutputFormat::Json => {
@@ -230,9 +233,6 @@ fn main() {
             item_num,
         } => {
             let td0file = parse_td0_file_or_exit(&cli.file);
-            let Some(chunk) = td0file.get_chunk(chunk_name) else {
-                exit_td0_err(&TD0Error::UnknownChunk, ERR_INVALID_CHUNK);
-            };
 
             // TD0 devices show the user 1-based indexes, while libtd0 uses 0-based indexes.
             // Convert the indexing to match the lib call here.
@@ -263,7 +263,7 @@ fn main() {
             }
             println!(
                 "{}",
-                fmt_hex_dump(chunk_data, &create_hexout_settings(&*chunk))
+                fmt_hex_dump(chunk_data, &create_hexout_settings(&*td0file, chunk_name))
             );
         }
         Commands::ListFields { chunk_name } => {

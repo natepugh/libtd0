@@ -1,23 +1,28 @@
 use core::ops::Range;
 use indexmap::{IndexMap, IndexSet};
 use libtd0::{TD0ChunkItem, TD0Error, TD0File, TD0Result, TD0Value, parse_td0_file};
-use libtd0_core::TD0Chunk;
 use serde::Serialize;
 
 pub type ItemValues = IndexMap<String, TD0Value>;
 pub type IndexedItemValues = IndexMap<usize, ItemValues>;
 
-fn get_chunk_or_error(td0file: &dyn TD0File, chunk_name: &str) -> TD0Result<Box<dyn TD0Chunk>> {
-    td0file
-        .get_chunk(chunk_name)
-        .map_or_else(|| Err(TD0Error::UnknownChunk), Ok)
+pub fn validate_chunk_name(td0file: &dyn TD0File, chunk_name: &str) -> TD0Result<()> {
+    match td0file.get_chunk_pos(chunk_name) {
+        Some(_) => Ok(()),
+        None => Err(TD0Error::UnknownChunk)
+    }
 }
 
-fn validate_chunk_item_range(range: &Range<usize>, chunk: &dyn TD0Chunk) -> TD0Result<()> {
-    if range.end > chunk.num_items() {
-        Err(TD0Error::OutOfRange)
-    } else {
-        Ok(())
+fn validate_chunk_item_range(td0file: &dyn TD0File, range: &Range<usize>, chunk_name: &str) -> TD0Result<()> {
+    match td0file.get_chunk_num_items(chunk_name) {
+        Some(num_items) => {
+            if range.end > num_items {
+                Err(TD0Error::OutOfRange)
+            } else {
+                Ok(())
+            }
+        }
+        None => Err(TD0Error::UnknownChunk)
     }
 }
 
@@ -87,10 +92,11 @@ pub fn command_dump_chunk_values(
     fields: &Option<Vec<String>>,
 ) -> TD0Result<IndexedItemValues> {
     let td0file = parse_td0_file(bytes)?;
-    let chunk = get_chunk_or_error(&*td0file, chunk_name)?;
+    validate_chunk_name(&*td0file, chunk_name)?;
+    //let chunk = get_chunk_or_error(&*td0file, chunk_name)?;
     let fields: Vec<&str> = requested_fields_or_all(&*td0file, chunk_name, fields)?;
-    let item_range = item_range.unwrap_or_else(|| 0..chunk.num_items());
-    validate_chunk_item_range(&item_range, &*chunk)?;
+    let item_range = item_range.unwrap_or_else(|| 0..td0file.get_chunk_num_items(chunk_name).expect("chunk name already validated."));
+    validate_chunk_item_range(&*td0file, &item_range, &chunk_name)?;
 
     let mut output: IndexedItemValues = IndexedItemValues::new();
 
@@ -219,11 +225,10 @@ pub fn command_reorder_chunk_items(
     new_order: &[usize],
     display_field: &str,
 ) -> TD0Result<Vec<ChunkFieldDiffItem>> {
-    let chunk = td0file
-        .get_chunk(chunk_name)
-        .ok_or(TD0Error::UnknownChunk)?;
+    validate_chunk_name(&*td0file, chunk_name)?;
     let mut before: Vec<TD0Value> = Vec::new();
-    for idx in 0..chunk.num_items() {
+    let num_items = td0file.get_chunk_num_items(chunk_name).expect("already validated chunk name.");
+    for idx in 0..num_items {
         before.push(
             td0file
                 .get_chunk_item(chunk_name, idx)?
@@ -235,7 +240,7 @@ pub fn command_reorder_chunk_items(
     td0file.chunk_items_reorder(chunk_name, new_order)?;
 
     let mut after: Vec<TD0Value> = Vec::new();
-    for idx in 0..chunk.num_items() {
+    for idx in 0..num_items {
         after.push(
             td0file
                 .get_chunk_item(chunk_name, idx)?

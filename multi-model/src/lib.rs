@@ -1,4 +1,4 @@
-use libtd0_core::TD0File;
+use libtd0_core::{TD0DeviceModel, TD0File};
 use libtd0_core::header::{SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, validate_id_tag};
 use libtd0_core::result::TD0Error::InvalidTD0File;
 use libtd0_core::result::{TD0Error, TD0Result};
@@ -38,7 +38,20 @@ pub fn parse_td0_file(bytes: &[u8]) -> TD0Result<Box<dyn TD0File>> {
     // Verify that now and the backup file must validate further.
     match next_chunk.model().as_str() {
         #[cfg(feature = "model-ssxp")]
-        "SSXP" => Ok(Box::new(SSXPTD0File::from_bytes(bytes.into())?)),
+        "SSXP" => Ok(Box::new(SSXPTD0File::try_from_bytes(bytes.into())?)),
+        _ => Err(TD0Error::UnsupportedDeviceModel),
+    }
+}
+
+pub fn new_td0_file(model: TD0DeviceModel, version: &str) -> TD0Result<Box<dyn TD0File>> {
+    match (model, version) {
+        #[cfg(feature = "model-ssxp")]
+        (TD0DeviceModel::SPDSXPro, "1.10") => Ok(Box::new(SSXPTD0File::new()?) as Box<dyn TD0File>),
+        #[cfg(feature = "model-ssxp")]
+        (TD0DeviceModel::SPDSXPro, "2.0") => todo!(),
+        #[cfg(feature = "model-ssxp")]
+        (TD0DeviceModel::SPDSXPro, _) => Err(TD0Error::UnsupportedFirmwareVersion),
+
         _ => Err(TD0Error::UnsupportedDeviceModel),
     }
 }
