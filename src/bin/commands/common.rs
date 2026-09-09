@@ -1,6 +1,6 @@
 use core::ops::Range;
 use indexmap::{IndexMap, IndexSet};
-use libtd0::{TD0ChunkItem, TD0Error, TD0File, TD0Result, TD0Value, parse_td0_file};
+use td0::{TD0ChunkItem, TD0Error, TD0File, TD0Result, TD0Value, parse_td0_file};
 use serde::Serialize;
 
 pub type ItemValues = IndexMap<String, TD0Value>;

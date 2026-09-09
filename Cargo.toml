@@ -6,7 +6,7 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "libtd0"
+name = "td0"
 path = "src/lib.rs"
 
 [[bin]]
@@ -34,7 +34,7 @@ model-spdsx-pro = [
 ]
 
 python-bindings = [
-    "pytd0",
+    "dep:pytd0",
 ]
 
 [dependencies]

@@ -21,7 +21,6 @@ static CHUNK_NAMES : [&str; 11]  = [
     "WVPa",
 ];
 
-
 pub fn chunk_item_from_bytes<'b>(
     chunk_name: &str,
     bytes: &'b [u8],

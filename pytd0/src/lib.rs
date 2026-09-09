@@ -9,10 +9,11 @@ mod pytd0 {
         TD0ChunkItem as Impl_TD0ChunkItem, TD0DeviceModel as Impl_TD0DeviceModel,
         TD0File as Impl_TD0File, TD0Manifest as Impl_TD0Manifest, TD0Value as Impl_TD0Value,
         TD0ValueRaw as Impl_TD0ValueRaw,
+        checksum_bytes_to_string,
         result::TD0Error,
     };
     use multi_model::{new_td0_file, parse_td0_file};
-    use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
+    use pyo3::{exceptions::{PyKeyError, PyRuntimeError, PyValueError}};
 
     fn map_chunk_item_error(err: TD0Error) -> PyErr {
         match err {
@@ -153,13 +154,13 @@ mod pytd0 {
         }
 
         #[getter]
-        fn checksum_actual(&self) -> PyResult<Vec<u8>> {
-            Ok(self.0.checksum_actual.to_vec())
+        fn checksum_actual(&self) -> PyResult<String> {
+            Ok(checksum_bytes_to_string(&self.0.checksum_actual))
         }
 
         #[getter]
-        fn checksum_calculated(&self) -> PyResult<Vec<u8>> {
-            Ok(self.0.checksum_calculated.to_vec())
+        fn checksum_calculated(&self) -> PyResult<String> {
+            Ok(checksum_bytes_to_string(&self.0.checksum_calculated))
         }
 
         #[getter]
@@ -186,9 +187,7 @@ mod pytd0 {
                 .map(|ch| ChunkManifest(ch.clone()))
                 .collect())
         }
-    }
 
-    impl TD0Manifest {
         fn __str__(&self) -> String {
             self.0.to_string()
         }

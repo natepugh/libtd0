@@ -1,14 +1,14 @@
 use crate::rev::v1_10::{
-    chunk_item_from_bytes_owned as v1_10_chunk_item_from_bytes_owned,
     chunk_item_from_bytes as v1_10_chunk_item_from_bytes,
     chunk_item_from_bytes_mut as v1_10_chunk_item_from_bytes_mut,
+    chunk_item_from_bytes_owned as v1_10_chunk_item_from_bytes_owned,
     get_default_chunk_item as v1_10_get_default_chunk_item,
 };
 
 use crate::rev::v2_0::{
-    chunk_item_from_bytes_owned as v2_0_chunk_item_from_bytes_owned,
     chunk_item_from_bytes as v2_0_chunk_item_from_bytes,
     chunk_item_from_bytes_mut as v2_0_chunk_item_from_bytes_mut,
+    chunk_item_from_bytes_owned as v2_0_chunk_item_from_bytes_owned,
     get_default_chunk_item as v2_0_get_default_chunk_item,
 };
 
@@ -17,13 +17,12 @@ use ::core::ops::Range;
 use libtd0_core::header::{OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
 use libtd0_core::result::{TD0Error, TD0Result};
 use libtd0_core::{
-    ChunkManifest, SZ_MD5_DIGEST, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File,
-    TD0Manifest,
+    ChunkManifest, SZ_MD5_DIGEST, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File, TD0Manifest,
 };
 use libtd0_derive::TD0ChunkItemDerive;
 use md5::Digest as _;
 use std::collections::{HashMap, HashSet};
-use zerocopy::{FromBytes, LittleEndian, U32, IntoBytes};
+use zerocopy::{FromBytes, IntoBytes, LittleEndian, U32};
 use zerocopy_derive::{Immutable, KnownLayout};
 
 /// Backup header tag for a single-kit backup.
@@ -31,6 +30,12 @@ const BACKUP_TAG_KIT: &str = "SSXPROKT";
 /// Backup header tag for whole system backup.
 const BACKUP_TAG_SYSTEM: &str = "SSXPROBK";
 
+fn device_model_from_tag_value(val: &str) -> TD0DeviceModel {
+    match val {
+        "SSXP" => TD0DeviceModel::SPDSXPro,
+        _ => TD0DeviceModel::Unknown,
+    }
+}
 
 /// The header of a `TD0Chunk` in a `TD0File`.
 #[derive(Copy, Clone, Debug, FromBytes, Immutable, IntoBytes, KnownLayout)]
@@ -82,7 +87,7 @@ pub struct HDRaItem {
     #[td0_field(field_type = "Slice")]
     data: [u8; 8],
 
-    #[td0_field(field_type = "Text", pad_byte = 0x2e)]
+    #[td0_field(field_type = "Text", pad_byte = 0)]
     name: [u8; 16],
 
     #[td0_field(field_type = "Text", pad_byte = 0x2e)]
@@ -264,7 +269,7 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn item_pos(&self, index: usize) -> Option<usize> {
-        if index > self.header.num_items() {
+        if index >= self.header.num_items() {
             None
         } else {
             Some(self.pos + self.header.first_item_offset() + (index * self.header.item_size()))
@@ -316,8 +321,7 @@ impl SSXPTD0File {
     }
 
     fn calc_header_size(&self) -> usize {
-        return size_of::<TD0IdChunk>()
-            + (self.chunk_order.len() * (size_of::<TD0ManifestTag>()))
+        return size_of::<TD0IdChunk>() + (self.chunk_order.len() * (size_of::<TD0ManifestTag>()));
     }
 
     pub fn calc_expected_size(&self) -> usize {
@@ -367,7 +371,7 @@ impl SSXPTD0File {
     }
 
     fn validate_manifest_tags_are_unique(&self) -> TD0Result<()> {
-        let mut unique : HashSet<String> = HashSet::new();
+        let mut unique: HashSet<String> = HashSet::new();
 
         for offset in self.tag_offsets.values() {
             let tag = manifest_tag_from_buf(&self.buf, *offset)?;
@@ -554,17 +558,23 @@ impl TD0File for SSXPTD0File {
     }
 
     fn finalize(&mut self) -> TD0Result<()> {
-        let header_len= self.calc_header_size();
+        let header_len = self.calc_header_size();
         let id_chunk = id_chunk_from_buf_mut(&mut self.buf)?;
         if id_chunk.bytes_remaining() != header_len - OFFSET_BYTES_REMAINING {
-            id_chunk.set_bytes_remaining(u16::try_from(header_len - OFFSET_BYTES_REMAINING).expect("does not have 4095 manifest tags."));
+            id_chunk.set_bytes_remaining(
+                u16::try_from(header_len - OFFSET_BYTES_REMAINING)
+                    .expect("does not have 4095 manifest tags."),
+            );
         }
         // TODO: Edit any reordered or moved chunk objects in in self.chunks to reflect the new positions.
 
         // Update the checksum.
         let buf_len = self.buf.len();
         let checksum = self.calc_checksum();
-        self.buf.get_mut(buf_len - SZ_MD5_DIGEST..).expect("buf is large enough to fit a checksum").copy_from_slice(&checksum);
+        self.buf
+            .get_mut(buf_len - SZ_MD5_DIGEST..)
+            .expect("buf is large enough to fit a checksum")
+            .copy_from_slice(&checksum);
         self.dirty = false;
         Ok(())
     }
@@ -609,7 +619,9 @@ impl TD0File for SSXPTD0File {
     }
 
     fn get_chunk_num_items(&self, chunk_name: &str) -> Option<usize> {
-        self.chunks.get(chunk_name).and_then(|ch| Some(ch.num_items()))
+        self.chunks
+            .get(chunk_name)
+            .and_then(|ch| Some(ch.num_items()))
     }
 
     fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]> {
@@ -637,7 +649,7 @@ impl TD0File for SSXPTD0File {
             .as_str()
         {
             "1.10" => v1_10_chunk_item_from_bytes(chunk_name, bytes),
-            "2.0" => v2_0_chunk_item_from_bytes(chunk_name, bytes),
+            "2.00" => v2_0_chunk_item_from_bytes(chunk_name, bytes),
             _ => Err(TD0Error::UnsupportedFirmwareVersion),
         }
     }
@@ -661,12 +673,16 @@ impl TD0File for SSXPTD0File {
             .as_str()
         {
             "1.10" => v1_10_chunk_item_from_bytes_mut(chunk_name, bytes),
-            "2.0" => v2_0_chunk_item_from_bytes_mut(chunk_name, bytes),
+            "2.00" => v2_0_chunk_item_from_bytes_mut(chunk_name, bytes),
             _ => Err(TD0Error::UnsupportedFirmwareVersion),
         }
     }
 
-    fn get_chunk_item_owned(&self, chunk_name: &str, item_index: usize) -> TD0Result<Box<dyn TD0ChunkItem>> {
+    fn get_chunk_item_owned(
+        &self,
+        chunk_name: &str,
+        item_index: usize,
+    ) -> TD0Result<Box<dyn TD0ChunkItem>> {
         let chunk = self.chunks.get(chunk_name).ok_or(TD0Error::UnknownChunk)?;
         let bytes = chunk
             .item_range(item_index)
@@ -681,7 +697,7 @@ impl TD0File for SSXPTD0File {
             .as_str()
         {
             "1.10" => v1_10_chunk_item_from_bytes_owned(chunk_name, bytes),
-            "2.0" => v2_0_chunk_item_from_bytes_owned(chunk_name, bytes),
+            "2.00" => v2_0_chunk_item_from_bytes_owned(chunk_name, bytes),
             _ => Err(TD0Error::UnsupportedFirmwareVersion),
         }
     }
@@ -698,7 +714,7 @@ impl TD0File for SSXPTD0File {
             .as_str()
         {
             "1.10" => v1_10_get_default_chunk_item(chunk_name),
-            "2.0" => v2_0_get_default_chunk_item(chunk_name),
+            "2.00" => v2_0_get_default_chunk_item(chunk_name),
             _ => None,
         }
     }
@@ -706,13 +722,16 @@ impl TD0File for SSXPTD0File {
     fn get_chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]> {
         let chunk = self.chunks.get(chunk_name).ok_or(TD0Error::UnknownChunk)?;
         self.buf
-            .get(chunk.item_range(item_index).ok_or(TD0Error::InvalidChunkItem)?)
+            .get(
+                chunk
+                    .item_range(item_index)
+                    .ok_or(TD0Error::InvalidChunkItem)?,
+            )
             .ok_or(TD0Error::InvalidChunk("unable to read raw chunk data."))
     }
 
     fn get_chunk_pos(&self, chunk_name: &str) -> Option<usize> {
         self.chunks.get(chunk_name).and_then(|ch| Some(ch.pos))
-
     }
 
     fn get_chunk_size(&self, chunk_name: &str) -> Option<usize> {
@@ -732,8 +751,16 @@ impl TD0File for SSXPTD0File {
         checksum_actual.clone_from_slice(self.read_checksum().expect("enough bytes for a hash."));
 
         let chunks: Vec<ChunkManifest> = self
-            .chunks
+            .chunk_order
             .iter()
+            .map(|ch_name| {
+                (
+                    ch_name,
+                    self.chunks
+                        .get(ch_name)
+                        .expect("should be a chunk for each item in the chunk index."),
+                )
+            })
             .map(|(name, ch)| ChunkManifest {
                 name: name.clone(),
                 pos: ch.pos,
@@ -747,7 +774,7 @@ impl TD0File for SSXPTD0File {
             backup_type,
             checksum_actual,
             checksum_calculated: self.calc_checksum(),
-            device_model: TD0DeviceModel::try_from(backup_tag.model().as_str())?,
+            device_model: device_model_from_tag_value(backup_tag.model().as_str()),
             size_actual: self.buf.len(),
             size_calculated: self.calc_expected_size(),
             chunks,

@@ -128,8 +128,7 @@ pub struct TD0Manifest {
     pub chunks: Vec<ChunkManifest>,
 }
 
-#[allow(dead_code)]
-pub(crate) fn checksum_bytes_to_string(val: &[u8]) -> String {
+pub fn checksum_bytes_to_string(val: &[u8]) -> String {
     val.iter()
         .map(|byte| format!("{:02x}", byte))
         .collect::<String>()

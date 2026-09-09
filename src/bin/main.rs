@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use libtd0::{TD0Error, TD0File, parse_td0_file};
+use td0::{TD0Error, TD0File, parse_td0_file};
 
 use std::error::Error;
 use std::fs;
