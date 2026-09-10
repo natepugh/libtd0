@@ -18,16 +18,15 @@ fn validate_chunk_item_range(
     range: &Range<usize>,
     chunk_name: &str,
 ) -> TD0Result<()> {
-    match td0file.get_chunk_num_items(chunk_name) {
-        Some(num_items) => {
+    td0file
+        .get_chunk_num_items(chunk_name)
+        .map_or(Err(TD0Error::UnknownChunk), |num_items| {
             if range.end > num_items {
                 Err(TD0Error::OutOfRange)
             } else {
                 Ok(())
             }
-        }
-        None => Err(TD0Error::UnknownChunk),
-    }
+        })
 }
 
 fn validate_fields(
@@ -104,7 +103,7 @@ pub fn command_dump_chunk_values(
             .get_chunk_num_items(chunk_name)
             .expect("chunk name already validated.")
     });
-    validate_chunk_item_range(&*td0file, &item_range, &chunk_name)?;
+    validate_chunk_item_range(&*td0file, &item_range, chunk_name)?;
 
     let mut output: IndexedItemValues = IndexedItemValues::new();
 

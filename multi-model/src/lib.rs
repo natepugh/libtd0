@@ -38,7 +38,7 @@ pub fn parse_td0_file(bytes: &[u8]) -> TD0Result<Box<dyn TD0File>> {
     // Verify that now and the backup file must validate further.
     match next_chunk.model().as_str() {
         #[cfg(feature = "model-ssxp")]
-        "SSXP" => Ok(Box::new(SSXPTD0File::try_from_bytes(bytes.into())?)),
+        "SSXP" => Ok(Box::new(SSXPTD0File::try_from_bytes(bytes)?)),
         _ => Err(TD0Error::UnsupportedDeviceModel),
     }
 }

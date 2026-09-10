@@ -473,7 +473,7 @@ mod pytd0 {
 
         pub fn finalize(&mut self) -> PyResult<()> {
             self._impl.finalize().map_err(|err| match err {
-                TD0Error::InvalidTD0File(msg) => PyErr::new::<PyValueError, _>(format!("{msg}")),
+                TD0Error::InvalidTD0File(msg) => PyErr::new::<PyValueError, _>(msg),
                 _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
             })?;
             Ok(())

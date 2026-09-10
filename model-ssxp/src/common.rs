@@ -188,54 +188,54 @@ pub struct SSXPTD0File {
 }
 
 fn chunk_header_from_buf(buf: &[u8], manifest_tag: &TD0ManifestTag) -> TD0Result<ChunkHeader> {
-    Ok(ChunkHeader::read_from_bytes(
+    ChunkHeader::read_from_bytes(
         buf.get(manifest_tag.chunk_pos()..manifest_tag.chunk_pos() + size_of::<ChunkHeader>())
             .ok_or(TD0Error::InvalidChunk("invalid chunk size or position."))?,
     )
-    .map_err(|_| TD0Error::InvalidChunk("unable to parse chunk header."))?)
+    .map_err(|_| TD0Error::InvalidChunk("unable to parse chunk header."))
 }
 
 fn chunk_header_ref_from_buf<'a>(
     buf: &'a [u8],
     manifest_tag: &TD0ManifestTag,
 ) -> TD0Result<&'a ChunkHeader> {
-    Ok(ChunkHeader::ref_from_bytes(
+    ChunkHeader::ref_from_bytes(
         buf.get(manifest_tag.chunk_pos()..manifest_tag.chunk_pos() + size_of::<ChunkHeader>())
             .ok_or(TD0Error::InvalidChunk("invalid chunk size or position."))?,
     )
-    .map_err(|_| TD0Error::InvalidChunk("unable to parse chunk header."))?)
+    .map_err(|_| TD0Error::InvalidChunk("unable to parse chunk header."))
 }
 
 fn id_chunk_from_buf(buf: &[u8]) -> TD0Result<&TD0IdChunk> {
-    Ok(TD0IdChunk::ref_from_bytes(
+    TD0IdChunk::ref_from_bytes(
         buf.get(..size_of::<TD0IdChunk>())
             .ok_or(TD0Error::InvalidTD0File("unable to read TD0 ID chunk."))?,
     )
-    .map_err(|_| TD0Error::InvalidTD0File("unable to read TD0 ID chunk."))?)
+    .map_err(|_| TD0Error::InvalidTD0File("unable to read TD0 ID chunk."))
 }
 
 fn id_chunk_from_buf_mut(buf: &mut [u8]) -> TD0Result<&mut TD0IdChunk> {
-    Ok(TD0IdChunk::mut_from_bytes(
+    TD0IdChunk::mut_from_bytes(
         buf.get_mut(..size_of::<TD0IdChunk>())
             .ok_or(TD0Error::InvalidTD0File("unable to read TD0 ID chunk."))?,
     )
-    .map_err(|_| TD0Error::InvalidTD0File("unable to read TD0 ID chunk."))?)
+    .map_err(|_| TD0Error::InvalidTD0File("unable to read TD0 ID chunk."))
 }
 
 fn manifest_tag_from_buf(buf: &[u8], pos: usize) -> TD0Result<&TD0ManifestTag> {
-    Ok(TD0ManifestTag::ref_from_bytes(
+    TD0ManifestTag::ref_from_bytes(
         buf.get(pos..pos + size_of::<TD0ManifestTag>())
             .ok_or(TD0Error::InvalidTD0File("unable to read manifest tag."))?,
     )
-    .map_err(|_| TD0Error::InvalidTD0File("invalid manifest tag."))?)
+    .map_err(|_| TD0Error::InvalidTD0File("invalid manifest tag."))
 }
 
 fn manifest_tag_from_buf_mut(buf: &mut [u8], pos: usize) -> TD0Result<&mut TD0ManifestTag> {
-    Ok(TD0ManifestTag::mut_from_bytes(
+    TD0ManifestTag::mut_from_bytes(
         buf.get_mut(pos..pos + size_of::<TD0ManifestTag>())
             .ok_or(TD0Error::InvalidTD0File("unable to read manifest tag."))?,
     )
-    .map_err(|_| TD0Error::InvalidTD0File("invalid manifest tag."))?)
+    .map_err(|_| TD0Error::InvalidTD0File("invalid manifest tag."))
 }
 
 fn collect_offsets(buf: &[u8]) -> TD0Result<(Vec<String>, HashMap<String, usize>)> {
@@ -304,8 +304,8 @@ impl SSXPTD0File {
             .and_then(|irange| self.buf.get(irange))
             .ok_or(TD0Error::InvalidTD0File("unable to read HDRa backup data."))?;
 
-        Ok(HDRaItem::ref_from_bytes(bytes)
-            .map_err(|_| TD0Error::InvalidTD0File("unable to parse HDRa backup data."))?)
+        HDRaItem::ref_from_bytes(bytes)
+            .map_err(|_| TD0Error::InvalidTD0File("unable to parse HDRa backup data."))
     }
 
     pub fn calc_checksum(&self) -> [u8; 16] {
@@ -321,17 +321,13 @@ impl SSXPTD0File {
     }
 
     fn calc_header_size(&self) -> usize {
-        return size_of::<TD0IdChunk>() + (self.chunk_order.len() * (size_of::<TD0ManifestTag>()));
+        size_of::<TD0IdChunk>() + (self.chunk_order.len() * (size_of::<TD0ManifestTag>()))
     }
 
     pub fn calc_expected_size(&self) -> usize {
-        return self.calc_header_size()
-            + self
-                .chunks
-                .values()
-                .map(|ch| ch.size)
-                .fold(0, |acc, val| acc + val)
-            + SZ_MD5_DIGEST;
+        self.calc_header_size()
+            + self.chunks.values().map(|ch| ch.size).sum::<usize>()
+            + SZ_MD5_DIGEST
     }
 
     pub fn manifest_tag(&self, chunk_name: &str) -> TD0Result<&TD0ManifestTag> {
@@ -385,7 +381,7 @@ impl SSXPTD0File {
     fn validate_manifest_tags_correct_model(&self) -> TD0Result<()> {
         for offset in self.tag_offsets.values() {
             let tag = manifest_tag_from_buf(&self.buf, *offset)?;
-            if tag.model() != "SSXP".to_string() {
+            if tag.model() != "SSXP" {
                 return Err(TD0Error::InvalidTD0File(
                     "manifest tag found with incorrect model.",
                 ));
@@ -601,7 +597,7 @@ impl TD0File for SSXPTD0File {
 
         Ok(Self {
             buf: bytes.to_vec(),
-            chunks: chunks,
+            chunks,
             dirty: false,
             chunk_order,
             tag_offsets,
@@ -619,15 +615,11 @@ impl TD0File for SSXPTD0File {
     }
 
     fn get_chunk_num_items(&self, chunk_name: &str) -> Option<usize> {
-        self.chunks
-            .get(chunk_name)
-            .and_then(|ch| Some(ch.num_items()))
+        self.chunks.get(chunk_name).map(|ch| ch.num_items())
     }
 
     fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]> {
-        let Some(&tag_offset) = self.tag_offsets.get(chunk_name) else {
-            return None;
-        };
+        let &tag_offset = self.tag_offsets.get(chunk_name)?;
 
         let tag = manifest_tag_from_buf(self.buf.as_bytes(), tag_offset)
             .expect("verified that tag exists.");
@@ -660,7 +652,7 @@ impl TD0File for SSXPTD0File {
         item_index: usize,
     ) -> TD0Result<&mut dyn TD0ChunkItem> {
         let chunk = self.chunks.get(chunk_name).ok_or(TD0Error::UnknownChunk)?;
-        let backup_header = self.backup_header()?.clone();
+        let backup_header = *self.backup_header()?;
         let bytes = chunk
             .item_range(item_index)
             .and_then(|irange| self.buf.get_mut(irange))
@@ -731,11 +723,11 @@ impl TD0File for SSXPTD0File {
     }
 
     fn get_chunk_pos(&self, chunk_name: &str) -> Option<usize> {
-        self.chunks.get(chunk_name).and_then(|ch| Some(ch.pos))
+        self.chunks.get(chunk_name).map(|ch| ch.pos)
     }
 
     fn get_chunk_size(&self, chunk_name: &str) -> Option<usize> {
-        self.chunks.get(chunk_name).and_then(|ch| Some(ch.size))
+        self.chunks.get(chunk_name).map(|ch| ch.size)
     }
 
     fn manifest(&self) -> TD0Result<TD0Manifest> {

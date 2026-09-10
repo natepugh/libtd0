@@ -6,7 +6,7 @@ use libtd0_core::TD0ChunkItem;
 use libtd0_core::result::{TD0Error, TD0Result};
 use zerocopy::{FromBytes, TryFromBytes};
 
-static CHUNK_NAMES: [&str; 8] = [
+static _CHUNK_NAMES: [&str; 8] = [
     "HDRa", "KITa", "CURa", "STLa", "STPa", "TGLa", "TRGa", "WVPa",
 ];
 
