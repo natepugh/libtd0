@@ -81,19 +81,19 @@ impl fmt::Display for ChunkHeader {
 #[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
 pub struct HDRaItem {
-    #[td0_field(field_type = "Text", pad_byte = 0x2e)] // 0x2e = '.', ASCII period.
+    #[td0_field(field_type = "Text", pad_byte = 0)]
     tag: [u8; 8],
 
     #[td0_field(field_type = "Slice")]
     data: [u8; 8],
 
-    #[td0_field(field_type = "Text", pad_byte = 0)]
+    #[td0_field(field_type = "Text", pad_byte = 0x20)]
     name: [u8; 16],
 
-    #[td0_field(field_type = "Text", pad_byte = 0x2e)]
+    #[td0_field(field_type = "Text", pad_byte = 0x20)]
     firmware: [u8; 4],
 
-    #[td0_field(field_type = "Text", pad_byte = 0x2e)]
+    #[td0_field(field_type = "Text", pad_byte = 0x20)]
     build: [u8; 4],
 
     #[td0_field(field_type = "Text", pad_byte = 0x20)] // 0x20 = ' ', ASCII space.
@@ -104,17 +104,17 @@ pub struct HDRaItem {
 }
 
 impl HDRaItem {
-    const DEFAULT_BACKUP_NAME_KIT: [u8; 16] = *b"USER KIT........";
+    const DEFAULT_BACKUP_NAME_KIT: [u8; 16] = *b"USER KIT        ";
     const DEFAULT_BUILD_V1_10: [u8; 4] = *b"0083";
     const DEFAULT_BUILD_V2_0: [u8; 4] = *b"0000";
-    const DEFAULT_DEVICE_SERIAL: [u8; 8] = *b"XXXXXXX.";
+    const DEFAULT_DEVICE_SERIAL: [u8; 8] = *b"XXXXXXX ";
     const DEFAULT_FIRMWARE_V1_10: [u8; 4] = *b"1.10";
     const DEFAULT_FIRMWARE_V2_0: [u8; 4] = *b"2.00";
     const DEFAULT_SUFFIX: [u8; 16] = [0xFFu8; 16];
     const DEFAULT_TAG: [u8; 8] = *b"SSXPROKT";
 
     pub fn new_default_v1_10() -> Self {
-        let data = [0u8; 8];
+        let data = [1u8, 1u8, 0, 0, 0, 0, 0, 0];
 
         let mut tag = [0u8; 8];
         let mut name = [0u8; 16];
