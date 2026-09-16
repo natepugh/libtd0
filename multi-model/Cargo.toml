@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 [package]
 name = "multi-model"
 version = "0.1.0"

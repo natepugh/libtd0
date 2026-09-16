@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use clap::{Parser, Subcommand};
 use td0::{TD0Error, TD0File, parse_td0_file};
 

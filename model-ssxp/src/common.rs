@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use crate::rev::v1_10::{
     chunk_item_from_bytes as v1_10_chunk_item_from_bytes,
     chunk_item_from_bytes_mut as v1_10_chunk_item_from_bytes_mut,

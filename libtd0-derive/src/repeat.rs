@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident};
 use syn::{Attribute, Field, FieldsNamed, ItemStruct, parse2};

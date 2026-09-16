@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use libtd0_core::header::{SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, validate_id_tag};
 use libtd0_core::result::TD0Error::InvalidTD0File;
 use libtd0_core::result::{TD0Error, TD0Result};

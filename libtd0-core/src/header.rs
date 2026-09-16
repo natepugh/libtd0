@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use super::result::{TD0Error, TD0Result};
 use super::usize_from_u32;
 use zerocopy::{FromBytes, LittleEndian, U16, U32};

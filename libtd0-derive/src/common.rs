@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use quote::ToTokens;
 use syn::punctuated::Punctuated;
 use syn::{Arm, Expr, Stmt};

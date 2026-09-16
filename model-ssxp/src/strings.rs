@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 pub const CLICK_MODES: [&str; 3] = [
     "PLAY INTERNAL CLICK",
     "PLAY WAVE as CLICK",

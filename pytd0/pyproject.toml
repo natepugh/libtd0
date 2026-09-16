@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"

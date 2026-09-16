@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use core::convert::Into;
 use num_traits::Bounded;
 use proc_macro2::{Literal, Span, TokenStream};

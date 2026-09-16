@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use libtd0_derive::{TD0ChunkItemDerive, repeat_fields};
 use zerocopy::{LittleEndian, U16};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
