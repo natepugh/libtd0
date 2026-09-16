@@ -34,7 +34,7 @@ use crate::strings::{
 //
 
 #[repeat_fields]
-#[derive(Clone, Copy, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
+#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
 pub struct KITaItem {
     #[td0_field(field_type = "Text", pad_byte = 0x20)]

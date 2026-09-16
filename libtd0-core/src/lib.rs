@@ -187,8 +187,9 @@ impl core::fmt::Display for TD0Manifest {
     }
 }
 
-pub trait TD0ChunkItem: Send + Sync {
+pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     fn as_bytes(&self) -> &[u8];
+    fn field_options(&self, field: &str) -> Option<&'static [&'static str]>;
     fn get_value(&self, field: &str) -> Option<TD0Value>;
     fn get_value_raw(&self, field: &str) -> Option<TD0ValueRaw>;
     fn get_field_type(&self, field: &str) -> Option<&'static str>;
@@ -198,6 +199,13 @@ pub trait TD0ChunkItem: Send + Sync {
 }
 
 pub trait TD0File: Send + Sync {
+    fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> TD0Result<()>;
+    fn chunk_item_replace(
+        &mut self,
+        chunk_name: &str,
+        item_index: usize,
+        source: &dyn TD0ChunkItem,
+    ) -> TD0Result<()>;
     fn chunk_items_copy(
         &mut self,
         chunk_name: &str,

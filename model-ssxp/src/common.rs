@@ -22,7 +22,7 @@ use libtd0_core::{
 use libtd0_derive::TD0ChunkItemDerive;
 use md5::Digest as _;
 use std::collections::{HashMap, HashSet};
-use zerocopy::{FromBytes, IntoBytes, LittleEndian, U32};
+use zerocopy::{FromBytes, FromZeros, IntoBytes, LittleEndian, U32};
 use zerocopy_derive::{Immutable, KnownLayout};
 
 /// Backup header tag for a single-kit backup.
@@ -330,6 +330,12 @@ impl SSXPTD0File {
             + SZ_MD5_DIGEST
     }
 
+    pub fn firmware_version(&self) -> TD0Result<String> {
+        let backup_header = self.backup_header()?;
+
+        Ok(backup_header.get_value("firmware").unwrap().to_string())
+    }
+
     pub fn manifest_tag(&self, chunk_name: &str) -> TD0Result<&TD0ManifestTag> {
         let &pos = self
             .tag_offsets
@@ -465,6 +471,121 @@ impl SSXPTD0File {
 }
 
 impl TD0File for SSXPTD0File {
+    fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> TD0Result<()> {
+        let default_item = match self.firmware_version()?.as_str() {
+            "1.10" => v1_10_get_default_chunk_item(chunk_name),
+            "2.00" => v2_0_get_default_chunk_item(chunk_name),
+            _ => return Err(TD0Error::UnsupportedFirmwareVersion),
+        }
+        .ok_or(TD0Error::UnknownChunk)?;
+
+        let item_size = size_of_val(&*default_item);
+
+        // To insert a new chunk (after the current last chunk):
+        // - Update the headers of all self.chunks items, size_of::<TD0ManifestTag>() is added to all chunk positions.
+        //  - First update the offsets in the bytes the manifest tags in self.buf.
+        //  - Then update the self.chunks[item].header metadata to match.
+        // - Insert the new TD0ManifestTag's bytes into self.buf at the correct position.
+        // - Add its offset to self.tag_offsets.
+        //
+        // - Insert the new Chunk's bytes in self.buf at the correct position. (right before the checksum.)
+        //  - Create a ChunkHeader and insert it.
+        //  - Create a default TD0ChunkItem and clone it n times. Insert the bytes of each.
+        // - Add a new Chunk object to self.chunks.
+        // - Add its name to chunk_order.
+        let mut manifest_tag = TD0ManifestTag::new_zeroed();
+        manifest_tag.set_model("SSXP")?;
+        manifest_tag.set_tag(chunk_name)?;
+        manifest_tag.set_chunk_pos(
+            u32::try_from(self.buf.len() - SZ_MD5_DIGEST + size_of::<TD0ManifestTag>()).map_err(
+                |_| TD0Error::InvalidTD0File("chunk position exceeded 32-bit in bounds."),
+            )?,
+        );
+        manifest_tag.set_chunk_size(
+            u32::try_from(size_of::<ChunkHeader>() + (item_size * num_items))
+                .map_err(|_| TD0Error::InvalidChunk("chunk size is larger than a 32-bit int."))?,
+        );
+
+        for offset in self.tag_offsets.values() {
+            let tag = manifest_tag_from_buf_mut(&mut self.buf, *offset)?;
+            tag.set_chunk_pos(
+                u32::try_from(tag.chunk_pos() + size_of::<TD0ManifestTag>())
+                    .map_err(|_| TD0Error::InvalidTD0File("file data size is too large."))?,
+            );
+            self.chunks
+                .get_mut(&tag.tag())
+                .expect("all tags should have corresponding metadata.")
+                .pos = tag.chunk_pos();
+        }
+        let new_tag_offset = self.calc_header_size();
+        self.buf.splice(
+            new_tag_offset..new_tag_offset,
+            manifest_tag.as_bytes().iter().cloned(),
+        );
+        self.tag_offsets
+            .insert(chunk_name.to_string(), new_tag_offset);
+
+        let chunk_header: ChunkHeader = ChunkHeader {
+            num_items: U32::from(u32::try_from(num_items).map_err(|_| {
+                TD0Error::InvalidInputWithMessage("num_items larger than a u32.".to_string())
+            })?),
+            item_size: U32::from(u32::try_from(item_size).map_err(|_| {
+                TD0Error::InvalidInputWithMessage("item_size larger than a u32.".to_string())
+            })?),
+            first_item_offset: U32::from(
+                u32::try_from(size_of::<ChunkHeader>())
+                    .expect("chunk header is smaller than u32::MAX bytes."),
+            ),
+            unknown_header_data: [0u8; 4],
+        };
+        let chunk: Chunk = Chunk {
+            header: chunk_header,
+            pos: manifest_tag.chunk_pos(),
+            size: manifest_tag.chunk_size(),
+        };
+        self.chunks.insert(chunk_name.to_string(), chunk);
+
+        let buflen = self.buf.len();
+        // let (buf, checksum) = self.buf.split_at_mut(buflen - SZ_MD5_DIGEST);
+        let checksum = self.buf.split_off(buflen - SZ_MD5_DIGEST);
+        self.buf.extend_from_slice(chunk_header.as_bytes());
+        let default_item_bytes = default_item.as_bytes();
+        for _ in 0..num_items {
+            self.buf.extend_from_slice(default_item_bytes);
+        }
+        self.buf.extend_from_slice(&checksum);
+        self.chunk_order.push(chunk_name.to_string());
+        self.dirty = true;
+        Ok(())
+    }
+
+    fn chunk_item_replace(
+        &mut self,
+        chunk_name: &str,
+        dest_index: usize,
+        source: &dyn TD0ChunkItem,
+    ) -> TD0Result<()> {
+        let chunk = self.chunks.get(chunk_name).ok_or(TD0Error::UnknownChunk)?;
+        let dest_range = chunk
+            .item_range(dest_index)
+            .ok_or(TD0Error::InvalidChunkItem)?;
+
+        let source_bytes = source.as_bytes();
+        if source_bytes.len() != dest_range.len() {
+            return Err(TD0Error::InvalidInputWithMessage(
+                "invalid item type for this chunk.".to_string(),
+            ));
+        }
+
+        self.buf
+            .get_mut(dest_range)
+            .expect("chunk item is within source buffer.")
+            .copy_from_slice(source_bytes);
+        self.dirty = true;
+
+        Ok(())
+    }
+
     fn chunk_items_copy(
         &mut self,
         chunk_name: &str,
@@ -632,14 +753,8 @@ impl TD0File for SSXPTD0File {
             .item_range(item_index)
             .and_then(|irange| self.buf.get(irange))
             .ok_or(TD0Error::InvalidChunkItem)?;
-        let backup_header = self.backup_header()?;
 
-        match backup_header
-            .get_value("firmware")
-            .unwrap()
-            .to_string()
-            .as_str()
-        {
+        match self.firmware_version()?.as_str() {
             "1.10" => v1_10_chunk_item_from_bytes(chunk_name, bytes),
             "2.00" => v2_0_chunk_item_from_bytes(chunk_name, bytes),
             _ => Err(TD0Error::UnsupportedFirmwareVersion),
@@ -652,18 +767,13 @@ impl TD0File for SSXPTD0File {
         item_index: usize,
     ) -> TD0Result<&mut dyn TD0ChunkItem> {
         let chunk = self.chunks.get(chunk_name).ok_or(TD0Error::UnknownChunk)?;
-        let backup_header = *self.backup_header()?;
+        let firmware_version = self.firmware_version()?.clone();
         let bytes = chunk
             .item_range(item_index)
             .and_then(|irange| self.buf.get_mut(irange))
             .ok_or(TD0Error::InvalidChunkItem)?;
 
-        match backup_header
-            .get_value("firmware")
-            .unwrap()
-            .to_string()
-            .as_str()
-        {
+        match firmware_version.as_str() {
             "1.10" => v1_10_chunk_item_from_bytes_mut(chunk_name, bytes),
             "2.00" => v2_0_chunk_item_from_bytes_mut(chunk_name, bytes),
             _ => Err(TD0Error::UnsupportedFirmwareVersion),
@@ -680,14 +790,8 @@ impl TD0File for SSXPTD0File {
             .item_range(item_index)
             .and_then(|irange| self.buf.get(irange))
             .ok_or(TD0Error::InvalidChunkItem)?;
-        let backup_header = self.backup_header()?;
 
-        match backup_header
-            .get_value("firmware")
-            .unwrap()
-            .to_string()
-            .as_str()
-        {
+        match self.firmware_version()?.as_str() {
             "1.10" => v1_10_chunk_item_from_bytes_owned(chunk_name, bytes),
             "2.00" => v2_0_chunk_item_from_bytes_owned(chunk_name, bytes),
             _ => Err(TD0Error::UnsupportedFirmwareVersion),
@@ -695,14 +799,9 @@ impl TD0File for SSXPTD0File {
     }
 
     fn get_chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>> {
-        let Ok(backup_header) = self.backup_header() else {
-            return None;
-        };
-
-        match backup_header
-            .get_value("firmware")
-            .unwrap()
-            .to_string()
+        match self
+            .firmware_version()
+            .unwrap_or("unknown".to_string())
             .as_str()
         {
             "1.10" => v1_10_get_default_chunk_item(chunk_name),
@@ -895,5 +994,62 @@ impl TD0File for SSXPTD0File {
         self.validate_is_not_dirty()?;
         self.validate_load()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chunk_item_pos() {
+        static CHUNK_POS: usize = 212;
+        static HDR_SIZE: usize = size_of::<ChunkHeader>();
+
+        let ch_header: ChunkHeader = ChunkHeader {
+            num_items: U32::from(5),
+            item_size: U32::from(20),
+            first_item_offset: U32::from(u32::try_from(HDR_SIZE).unwrap()),
+            unknown_header_data: [0; 4],
+        };
+        let chunk: Chunk = Chunk {
+            header: ch_header,
+            pos: CHUNK_POS,
+            size: 100 + HDR_SIZE,
+        };
+        assert_eq!(chunk.item_pos(0), Some(CHUNK_POS + HDR_SIZE));
+        assert_eq!(chunk.item_pos(1), Some(CHUNK_POS + HDR_SIZE + 20));
+        assert_eq!(chunk.item_pos(4), Some(CHUNK_POS + HDR_SIZE + 80));
+        assert_eq!(chunk.item_pos(5), None);
+    }
+
+    #[test]
+    fn test_chunk_item_range() {
+        static CHUNK_POS: usize = 84;
+        static HDR_SIZE: usize = size_of::<ChunkHeader>();
+        static ITEM_0_POS: usize = 100;
+
+        assert_eq!(
+            ITEM_0_POS,
+            CHUNK_POS + HDR_SIZE,
+            "failed math class while setting up the test."
+        );
+
+        let ch_header: ChunkHeader = ChunkHeader {
+            num_items: U32::from(5),
+            item_size: U32::from(20),
+            first_item_offset: U32::from(u32::try_from(HDR_SIZE).unwrap()),
+            unknown_header_data: [0; 4],
+        };
+        let chunk: Chunk = Chunk {
+            header: ch_header,
+            pos: CHUNK_POS,
+            size: 116,
+        };
+
+        assert_eq!(chunk.item_range(0), Some(ITEM_0_POS..ITEM_0_POS + 20));
+        assert_eq!(chunk.item_range(1), Some(ITEM_0_POS + 20..ITEM_0_POS + 40));
+        assert_eq!(chunk.item_range(4), Some(ITEM_0_POS + 80..ITEM_0_POS + 100));
+        assert_eq!(chunk.item_range(5), None);
     }
 }

@@ -10,6 +10,10 @@ static _CHUNK_NAMES: [&str; 8] = [
     "HDRa", "KITa", "CURa", "STLa", "STPa", "TGLa", "TRGa", "WVPa",
 ];
 
+pub fn valid_chunk_names() -> &'static [&'static str] {
+    &_CHUNK_NAMES
+}
+
 pub fn chunk_item_from_bytes<'b>(
     chunk_name: &str,
     bytes: &'b [u8],

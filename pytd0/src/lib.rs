@@ -315,6 +315,12 @@ mod pytd0 {
 
     #[pymethods]
     impl TD0ChunkItem {
+        fn field_options(&self, field: &str) -> Option<Vec<String>> {
+            self._impl
+                .field_options(field)
+                .map(|slice| slice.iter().map(|fld_name| fld_name.to_string()).collect())
+        }
+
         fn get_value(&self, field: &str) -> PyResult<TD0Value> {
             let val: Impl_TD0Value = self._impl.get_value(field).ok_or(PyErr::new::<
                 PyKeyError,
@@ -414,6 +420,7 @@ mod pytd0 {
     #[pymethods]
     impl TD0File {
         #[new]
+        #[pyo3(signature = (data = None))]
         pub fn new(data: Option<Vec<u8>>) -> PyResult<Self> {
             let td0file = match data {
                 Some(has_data) => parse_td0_file(&has_data).map_err(|err| {
@@ -429,6 +436,23 @@ mod pytd0 {
             Ok(Self { _impl: td0file })
         }
 
+        pub fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> PyResult<()> {
+            self._impl
+                .add_chunk(chunk_name, num_items)
+                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))
+        }
+
+        pub fn chunk_item_replace(
+            &mut self,
+            chunk_name: &str,
+            item_index: usize,
+            source: Bound<'_, TD0ChunkItem>,
+        ) -> PyResult<()> {
+            self._impl
+                .chunk_item_replace(chunk_name, item_index, &*(source.borrow()._impl))
+                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))
+        }
+
         pub fn chunk_items_copy(
             &mut self,
             chunk_name: &str,
@@ -437,8 +461,7 @@ mod pytd0 {
         ) -> PyResult<()> {
             self._impl
                 .chunk_items_copy(chunk_name, source_index, dest_index)
-                .map_err(map_chunk_item_error)?;
-            Ok(())
+                .map_err(map_chunk_item_error)
         }
 
         pub fn chunk_items_swap(
@@ -449,8 +472,7 @@ mod pytd0 {
         ) -> PyResult<()> {
             self._impl
                 .chunk_items_swap(chunk_name, index_1, index_2)
-                .map_err(map_chunk_item_error)?;
-            Ok(())
+                .map_err(map_chunk_item_error)
         }
 
         pub fn chunk_items_reorder(
@@ -467,16 +489,14 @@ mod pytd0 {
                         PyErr::new::<PyValueError, _>("Invalid chunk item index")
                     }
                     _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
-                })?;
-            Ok(())
+                })
         }
 
         pub fn finalize(&mut self) -> PyResult<()> {
             self._impl.finalize().map_err(|err| match err {
                 TD0Error::InvalidTD0File(msg) => PyErr::new::<PyValueError, _>(msg),
                 _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
-            })?;
-            Ok(())
+            })
         }
 
         pub fn to_bytes(&self) -> PyResult<Vec<u8>> {
@@ -494,6 +514,12 @@ mod pytd0 {
                     .get_chunk_item_owned(chunk_name, item_index)
                     .map_err(map_chunk_item_error)?,
             })
+        }
+
+        fn get_chunk_item_default(&self, chunk_name: &str) -> Option<TD0ChunkItem> {
+            self._impl
+                .get_chunk_item_default(chunk_name)
+                .map(|item| TD0ChunkItem { _impl: item })
         }
 
         pub fn list_chunks(&self) -> Vec<String> {

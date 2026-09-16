@@ -573,6 +573,7 @@ fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
         ];
     };
 
+    let fn_field_options: ImplItemFn = build_chunkitem_get_field_options(&td0fields);
     let fn_get_value: ImplItemFn = build_chunkitem_get_value(&td0fields);
     let fn_set_value: ImplItemFn = build_chunkitem_set_value(&td0fields);
     let fn_get_value_raw: ImplItemFn = build_chunkitem_get_value_raw(&td0fields);
@@ -584,6 +585,7 @@ fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
         #[automatically_derived]
         impl libtd0_core::TD0ChunkItem for #source_ident {
             fn list_fields(&self) -> &'static [&'static str] { &#const_field_array_name }
+            #fn_field_options
             #fn_get_value
             #fn_set_value
             #fn_get_value_raw
@@ -1023,6 +1025,29 @@ fn build_chunkitem_get_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
 
     parse_quote!(
         fn get_field_type(&self, field: &str) -> Option<&'static str> {
+            match field {
+                #( #arms, )*
+                _ => None
+            }
+        }
+    )
+}
+
+fn build_chunkitem_get_field_options(td0fields: &[TD0Field]) -> ImplItemFn {
+    let mut arms: Vec<Arm> = Vec::new();
+    for field in td0fields.iter() {
+        match &field.field_type {
+            TD0FieldType::EnumStr(fld) => {
+                let field_name_str = field.ident.to_string();
+                let collection_name = format_ident!("{}", &fld.collection);
+                arms.push(parse_quote!( #field_name_str => Some(&#collection_name) ))
+            }
+            _ => (),
+        }
+    }
+
+    parse_quote!(
+        fn field_options(&self, field: &str) -> Option<&'static [&'static str]> {
             match field {
                 #( #arms, )*
                 _ => None
