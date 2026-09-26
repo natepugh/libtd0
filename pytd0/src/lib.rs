@@ -16,6 +16,7 @@ mod pytd0 {
     };
     use multi_model::{new_td0_file, parse_td0_file};
     use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
+    use rust_decimal::prelude::FromPrimitive;
 
     fn map_chunk_item_error(err: TD0Error) -> PyErr {
         match err {
@@ -254,7 +255,15 @@ mod pytd0 {
 
         fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
             match self.0 {
-                Impl_TD0Value::Decimal(val) => Ok(val.into_pyobject(py)?.into_any()),
+                Impl_TD0Value::Decimal(val) => {
+                    let dec_value = rust_decimal::Decimal::from_f32(val).ok_or(PyErr::new::<
+                        PyValueError,
+                        _,
+                    >(
+                        "Unable to convert native value to Decimal.",
+                    ))?;
+                    Ok(dec_value.into_pyobject(py)?.into_any())
+                }
                 Impl_TD0Value::Text(val) => Ok(val.into_pyobject(py)?.into_any()),
                 Impl_TD0Value::Slice(val) => Ok(val.into_pyobject(py)?.into_any()),
                 Impl_TD0Value::I8(val) => Ok(val.into_pyobject(py)?.into_any()),
@@ -365,7 +374,10 @@ mod pytd0 {
                     Impl_TD0Value::Slice(value.extract::<Vec<u8>>()?.into_boxed_slice())
                 }
                 Some("TD0Decimal") | Some("Volume") => {
-                    Impl_TD0Value::Decimal(value.extract::<f32>()?)
+                    let dec_value = value.extract::<rust_decimal::Decimal>()?;
+                    Impl_TD0Value::Decimal(f32::try_from(dec_value).map_err(|err| {
+                        PyErr::new::<PyValueError, _>(format!("Out of range: {err}"))
+                    })?)
                 }
                 Some("U8") => Impl_TD0Value::U8(value.extract::<u8>()?),
                 Some("U16") => Impl_TD0Value::U16(value.extract::<u16>()?),
