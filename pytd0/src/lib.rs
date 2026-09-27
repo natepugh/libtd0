@@ -365,6 +365,7 @@ mod pytd0 {
             self._impl.list_fields()
         }
 
+
         fn set_value<'py>(&mut self, field: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
             let val: Impl_TD0Value = match self._impl.get_field_type(field) {
                 Some("EnumStr") | Some("Text") => Impl_TD0Value::Text(value.extract::<String>()?),

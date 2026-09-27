@@ -1040,14 +1040,11 @@ fn build_chunkitem_get_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
 fn build_chunkitem_get_field_options(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut arms: Vec<Arm> = Vec::new();
     for field in td0fields.iter() {
-        match &field.field_type {
-            TD0FieldType::EnumStr(fld) => {
-                let field_name_str = field.ident.to_string();
-                let collection_name = format_ident!("{}", &fld.collection);
-                arms.push(parse_quote!( #field_name_str => Some(&#collection_name) ))
-            }
-            _ => (),
-        }
+        if let TD0FieldType::EnumStr(fld) = &field.field_type {
+            let field_name_str = field.ident.to_string();
+            let collection_name = format_ident!("{}", &fld.collection);
+            arms.push(parse_quote!( #field_name_str => Some(&#collection_name) ))
+        };
     }
 
     parse_quote!(

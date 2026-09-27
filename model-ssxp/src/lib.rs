@@ -191,7 +191,7 @@ mod tests {
         expected.extend_from_slice(U32::<LittleEndian>::new(0u32).as_bytes());
         //  TGLa data
         for _ in 0..3 {
-            expected.extend_from_slice(&default_item_bytes);
+            expected.extend_from_slice(default_item_bytes);
         }
 
         // File checksum:
