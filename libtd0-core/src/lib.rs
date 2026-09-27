@@ -194,12 +194,12 @@ impl core::fmt::Display for TD0Manifest {
 pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     fn as_bytes(&self) -> &[u8];
     fn field_options(&self, field: &str) -> Option<&'static [&'static str]>;
-    fn get_value(&self, field: &str) -> Option<TD0Value>;
-    fn get_value_raw(&self, field: &str) -> Option<TD0ValueRaw>;
-    fn get_field_type(&self, field: &str) -> Option<&'static str>;
+    fn field_type(&self, field: &str) -> Option<&'static str>;
+    fn field_value(&self, field: &str) -> Option<TD0Value>;
+    fn field_value_raw(&self, field: &str) -> Option<TD0ValueRaw>;
     fn list_fields(&self) -> &'static [&'static str];
-    fn set_value(&mut self, field: &str, value: &TD0Value) -> TD0Result<()>;
-    fn set_value_raw(&mut self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
+    fn set_field_value(&mut self, field: &str, value: &TD0Value) -> TD0Result<()>;
+    fn set_field_value_raw(&mut self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
 }
 
 pub trait TD0File: Send + Sync {
@@ -228,23 +228,23 @@ pub trait TD0File: Send + Sync {
     where
         Self: Sized;
     fn try_into_bytes(self) -> TD0Result<Vec<u8>>;
-    fn get_chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem>;
-    fn get_chunk_item_mut(
+    fn chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem>;
+    fn chunk_item_mut(
         &mut self,
         chunk_name: &str,
         item_index: usize,
     ) -> TD0Result<&mut dyn TD0ChunkItem>;
-    fn get_chunk_item_owned(
+    fn chunk_item_owned(
         &self,
         chunk_name: &str,
         item_index: usize,
     ) -> TD0Result<Box<dyn TD0ChunkItem>>;
-    fn get_chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>>;
-    fn get_chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]>;
-    fn get_chunk_num_items(&self, chunk_name: &str) -> Option<usize>;
-    fn get_chunk_pos(&self, chunk_name: &str) -> Option<usize>;
-    fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]>;
-    fn get_chunk_size(&self, chunk_name: &str) -> Option<usize>;
+    fn chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>>;
+    fn chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]>;
+    fn chunk_num_items(&self, chunk_name: &str) -> Option<usize>;
+    fn chunk_pos(&self, chunk_name: &str) -> Option<usize>;
+    fn chunk_raw(&self, chunk_name: &str) -> Option<&[u8]>;
+    fn chunk_size(&self, chunk_name: &str) -> Option<usize>;
     fn list_chunks(&self) -> Vec<String>;
     fn manifest(&self) -> TD0Result<TD0Manifest>;
     fn new() -> TD0Result<Self>
@@ -337,10 +337,10 @@ where
 pub struct IntEncodedDecimal(pub f32);
 
 impl IntEncodedDecimal {
-    pub fn get_val(&self) -> f32 {
+    pub fn val(&self) -> f32 {
         self.0
     }
-    pub fn get_val_mut(&mut self) -> &f32 {
+    pub fn val_mut(&mut self) -> &f32 {
         &mut self.0
     }
 }
@@ -626,7 +626,7 @@ mod tests {
     #[test]
     fn test_int_encoded_decimal_from_u16() {
         let actual = IntEncodedDecimal::from(200u16);
-        assert_eq!(actual.get_val(), 20.0f32, "Properly converts u16");
+        assert_eq!(actual.val(), 20.0f32, "Properly converts u16");
     }
 
     #[test]

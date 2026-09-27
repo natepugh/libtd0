@@ -11,7 +11,7 @@ pub type ItemValues = IndexMap<String, TD0Value>;
 pub type IndexedItemValues = IndexMap<usize, ItemValues>;
 
 pub fn validate_chunk_name(td0file: &dyn TD0File, chunk_name: &str) -> TD0Result<()> {
-    match td0file.get_chunk_pos(chunk_name) {
+    match td0file.chunk_pos(chunk_name) {
         Some(_) => Ok(()),
         None => Err(TD0Error::UnknownChunk),
     }
@@ -23,7 +23,7 @@ fn validate_chunk_item_range(
     chunk_name: &str,
 ) -> TD0Result<()> {
     td0file
-        .get_chunk_num_items(chunk_name)
+        .chunk_num_items(chunk_name)
         .map_or(Err(TD0Error::UnknownChunk), |num_items| {
             if range.end > num_items {
                 Err(TD0Error::OutOfRange)
@@ -61,7 +61,7 @@ fn requested_fields_or_all<'a>(
     chunk_name: &str,
     fields: &'a Option<Vec<String>>,
 ) -> TD0Result<Vec<&'a str>> {
-    let Some(default_item) = td0file.get_chunk_item_default(chunk_name) else {
+    let Some(default_item) = td0file.chunk_item_default(chunk_name) else {
         return Err(TD0Error::UnknownChunk);
     };
 
@@ -79,12 +79,12 @@ pub fn command_dump_chunk_item<'a>(
     chunk_name: &'a str,
     item_num: usize,
 ) -> TD0Result<&'a [u8]> {
-    td0file.get_chunk_item_raw(chunk_name, item_num)
+    td0file.chunk_item_raw(chunk_name, item_num)
 }
 
 pub fn command_dump_chunk<'a>(td0file: &'a dyn TD0File, chunk_name: &str) -> TD0Result<&'a [u8]> {
     td0file
-        .get_chunk_raw(chunk_name)
+        .chunk_raw(chunk_name)
         .ok_or(TD0Error::UnknownChunk)
 }
 
@@ -104,7 +104,7 @@ pub fn command_dump_chunk_values(
     let fields: Vec<&str> = requested_fields_or_all(&*td0file, chunk_name, fields)?;
     let item_range = item_range.unwrap_or_else(|| {
         0..td0file
-            .get_chunk_num_items(chunk_name)
+            .chunk_num_items(chunk_name)
             .expect("chunk name already validated.")
     });
     validate_chunk_item_range(&*td0file, &item_range, chunk_name)?;
@@ -112,13 +112,13 @@ pub fn command_dump_chunk_values(
     let mut output: IndexedItemValues = IndexedItemValues::new();
 
     for idx in item_range {
-        if let Ok(item) = td0file.get_chunk_item(chunk_name, idx) {
+        if let Ok(item) = td0file.chunk_item(chunk_name, idx) {
             let mut vals: ItemValues = ItemValues::new();
             for field in &fields {
                 vals.insert(
                     field.to_string(),
-                    item.get_value(field)
-                        .expect("get_value failed for an existing field."),
+                    item.field_value(field)
+                        .expect("field_value failed for an existing field."),
                 );
             }
             // output.push(vals);
@@ -144,8 +144,8 @@ pub fn command_compare_chunk_items(
     chunk_name_2: &str,
     item_num: usize,
 ) -> TD0Result<Vec<ChunkFieldDiffItem>> {
-    let chunk_1_item = td0file.get_chunk_item(chunk_name_1, item_num)?;
-    let chunk_2_item = td0file.get_chunk_item(chunk_name_2, item_num)?;
+    let chunk_1_item = td0file.chunk_item(chunk_name_1, item_num)?;
+    let chunk_2_item = td0file.chunk_item(chunk_name_2, item_num)?;
 
     let chunk_1_fields: IndexSet<&str> = chunk_1_item.list_fields().iter().copied().collect();
     let chunk_2_fields: IndexSet<&str> = chunk_2_item.list_fields().iter().copied().collect();
@@ -155,8 +155,8 @@ pub fn command_compare_chunk_items(
 
     let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();
     for field in &all_fields {
-        let c1_val = chunk_1_item.get_value(field);
-        let c2_val = chunk_2_item.get_value(field);
+        let c1_val = chunk_1_item.field_value(field);
+        let c2_val = chunk_2_item.field_value(field);
         if c1_val != c2_val {
             diffs.push(ChunkFieldDiffItem {
                 field: field.to_string(),
@@ -176,7 +176,7 @@ pub fn parse_chunk_item_field_value(
     field: &str,
     val: &str,
 ) -> TD0Result<TD0Value> {
-    match chunk_item.get_field_type(field) {
+    match chunk_item.field_type(field) {
         Some("TD0Decimal" | "Volume") => Ok(TD0Value::Decimal(
             val.parse().map_err(|_| TD0Error::InvalidInput)?,
         )),
@@ -207,16 +207,16 @@ pub fn command_set_chunk_item_values(
     item_num: usize,
     values: &[(String, String)],
 ) -> TD0Result<Vec<ChunkFieldDiffItem>> {
-    let chunk_item = td0file.get_chunk_item_mut(chunk_name, item_num)?;
+    let chunk_item = td0file.chunk_item_mut(chunk_name, item_num)?;
     let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();
     for (field, value) in values {
         let parsed_value = parse_chunk_item_field_value(&*chunk_item, field, value)?;
-        let Some(before) = chunk_item.get_value(field) else {
+        let Some(before) = chunk_item.field_value(field) else {
             return Err(TD0Error::InvalidFieldOrType);
         };
 
-        chunk_item.set_value(field, &parsed_value)?;
-        let Some(after) = chunk_item.get_value(field) else {
+        chunk_item.set_field_value(field, &parsed_value)?;
+        let Some(after) = chunk_item.field_value(field) else {
             return Err(TD0Error::InvalidFieldOrType);
         };
         diffs.push(ChunkFieldDiffItem {
@@ -239,13 +239,13 @@ pub fn command_reorder_chunk_items(
     validate_chunk_name(&*td0file, chunk_name)?;
     let mut before: Vec<TD0Value> = Vec::new();
     let num_items = td0file
-        .get_chunk_num_items(chunk_name)
+        .chunk_num_items(chunk_name)
         .expect("already validated chunk name.");
     for idx in 0..num_items {
         before.push(
             td0file
-                .get_chunk_item(chunk_name, idx)?
-                .get_value(display_field)
+                .chunk_item(chunk_name, idx)?
+                .field_value(display_field)
                 .ok_or(TD0Error::InvalidChunkItem)?,
         );
     }
@@ -256,8 +256,8 @@ pub fn command_reorder_chunk_items(
     for idx in 0..num_items {
         after.push(
             td0file
-                .get_chunk_item(chunk_name, idx)?
-                .get_value(display_field)
+                .chunk_item(chunk_name, idx)?
+                .field_value(display_field)
                 .ok_or(TD0Error::InvalidChunkItem)?,
         );
     }

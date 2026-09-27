@@ -24,11 +24,11 @@ pub fn fmt_hex_dump(bytes: &[u8], hexout_settings: &HexOutSettings) -> String {
 }
 
 pub fn create_hexout_settings(td0file: &dyn TD0File, chunk_name: &str) -> HexOutSettings {
-    let Some(chunk_pos) = td0file.get_chunk_pos(chunk_name) else {
+    let Some(chunk_pos) = td0file.chunk_pos(chunk_name) else {
         return HexOutSettings::default();
     };
     let chunk_size = td0file
-        .get_chunk_size(chunk_name)
+        .chunk_size(chunk_name)
         .expect("verifed chunk exists above.");
 
     HexOutSettings {

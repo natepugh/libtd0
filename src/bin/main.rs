@@ -272,7 +272,7 @@ fn main() {
         }
         Commands::ListFields { chunk_name } => {
             let td0file = parse_td0_file_or_exit(&cli.file);
-            let Some(chunk_item) = td0file.get_chunk_item_default(chunk_name) else {
+            let Some(chunk_item) = td0file.chunk_item_default(chunk_name) else {
                 exit_td0_err(&TD0Error::UnknownChunk, ERR_INVALID_CHUNK);
             };
             let text_output = match cli.output_format {

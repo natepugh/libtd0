@@ -376,7 +376,7 @@ impl TryFrom<&Field> for TD0Field {
             "Volume" => TD0FieldType::Volume(TD0FieldTypeNone {}),
             _ => {
                 return Err(syn::Error::new_spanned(
-                    field_type.get_val(),
+                    field_type.val(),
                     format!("Unknown field_type: `{field_type_name}`"),
                 ));
             }
@@ -577,12 +577,12 @@ fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
         ];
     };
 
-    let fn_field_options: ImplItemFn = build_chunkitem_get_field_options(&td0fields);
-    let fn_get_value: ImplItemFn = build_chunkitem_get_value(&td0fields);
-    let fn_set_value: ImplItemFn = build_chunkitem_set_value(&td0fields);
-    let fn_get_value_raw: ImplItemFn = build_chunkitem_get_value_raw(&td0fields);
-    let fn_set_value_raw: ImplItemFn = build_chunkitem_set_value_raw(&td0fields);
-    let fn_get_field_type: ImplItemFn = build_chunkitem_get_field_type(&td0fields);
+    let fn_field_options: ImplItemFn = build_chunkitem_field_options(&td0fields);
+    let fn_field_value: ImplItemFn = build_chunkitem_field_value(&td0fields);
+    let fn_set_field_value: ImplItemFn = build_chunkitem_set_field_value(&td0fields);
+    let fn_field_value_raw: ImplItemFn = build_chunkitem_field_value_raw(&td0fields);
+    let fn_set_field_value_raw: ImplItemFn = build_chunkitem_set_field_value_raw(&td0fields);
+    let fn_field_type: ImplItemFn = build_chunkitem_field_type(&td0fields);
 
     // Create an impl with get_fields().
     output.extend(quote!(
@@ -590,11 +590,11 @@ fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
         impl libtd0_core::TD0ChunkItem for #source_ident {
             fn list_fields(&self) -> &'static [&'static str] { &#const_field_array_name }
             #fn_field_options
-            #fn_get_value
-            #fn_set_value
-            #fn_get_value_raw
-            #fn_set_value_raw
-            #fn_get_field_type
+            #fn_field_value
+            #fn_set_field_value
+            #fn_field_value_raw
+            #fn_set_field_value_raw
+            #fn_field_type
             fn as_bytes(&self) -> &[u8] {
                 zerocopy::IntoBytes::as_bytes(self)
             }
@@ -694,7 +694,7 @@ fn build_decimal_setter_expr(
     };
 
     parse_quote!(
-        if libtd0_core::in_range_inclusive(libtd0_core::IntEncodedDecimal::from(*val).get_val(), Some(#min), Some(#max)) {
+        if libtd0_core::in_range_inclusive(libtd0_core::IntEncodedDecimal::from(*val).val(), Some(#min), Some(#max)) {
             self.#ident = #rhand;
         } else {
             return Err(libtd0_core::result::TD0Error::OutOfRange)
@@ -927,9 +927,9 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
     }
 }
 
-fn build_chunkitem_get_value(td0fields: &[TD0Field]) -> ImplItemFn {
+fn build_chunkitem_field_value(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
-        fn get_value(&self, field: &str) -> Option<libtd0_core::TD0Value> {
+        fn field_value(&self, field: &str) -> Option<libtd0_core::TD0Value> {
             match field {}
         }
     );
@@ -950,9 +950,9 @@ fn build_chunkitem_get_value(td0fields: &[TD0Field]) -> ImplItemFn {
     fn_skel
 }
 
-fn build_chunkitem_get_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
+fn build_chunkitem_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
-        fn get_value_raw(&self, field: &str) -> Option<libtd0_core::TD0ValueRaw> {
+        fn field_value_raw(&self, field: &str) -> Option<libtd0_core::TD0ValueRaw> {
             match field {}
         }
     );
@@ -973,9 +973,9 @@ fn build_chunkitem_get_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     fn_skel
 }
 
-fn build_chunkitem_set_value(td0fields: &[TD0Field]) -> ImplItemFn {
+fn build_chunkitem_set_field_value(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
-        fn set_value(
+        fn set_field_value(
             &mut self,
             field: &str,
             value: &libtd0_core::TD0Value,
@@ -995,9 +995,9 @@ fn build_chunkitem_set_value(td0fields: &[TD0Field]) -> ImplItemFn {
     fn_skel
 }
 
-fn build_chunkitem_set_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
+fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut fn_skel: ImplItemFn = parse_quote!(
-        fn set_value_raw(
+        fn set_field_value_raw(
             &mut self,
             field: &str,
             value: &libtd0_core::TD0ValueRaw,
@@ -1017,7 +1017,7 @@ fn build_chunkitem_set_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     fn_skel
 }
 
-fn build_chunkitem_get_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
+fn build_chunkitem_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
     let arms: Vec<Arm> = td0fields
         .iter()
         .map(|field| {
@@ -1028,7 +1028,7 @@ fn build_chunkitem_get_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
         .collect();
 
     parse_quote!(
-        fn get_field_type(&self, field: &str) -> Option<&'static str> {
+        fn field_type(&self, field: &str) -> Option<&'static str> {
             match field {
                 #( #arms, )*
                 _ => None
@@ -1037,7 +1037,7 @@ fn build_chunkitem_get_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
     )
 }
 
-fn build_chunkitem_get_field_options(td0fields: &[TD0Field]) -> ImplItemFn {
+fn build_chunkitem_field_options(td0fields: &[TD0Field]) -> ImplItemFn {
     let mut arms: Vec<Arm> = Vec::new();
     for field in td0fields.iter() {
         if let TD0FieldType::EnumStr(fld) = &field.field_type {

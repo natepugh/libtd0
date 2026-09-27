@@ -334,8 +334,8 @@ mod pytd0 {
                 .map(|slice| slice.iter().map(|fld_name| fld_name.to_string()).collect())
         }
 
-        fn get_value(&self, field: &str) -> PyResult<TD0Value> {
-            let val: Impl_TD0Value = self._impl.get_value(field).ok_or(PyErr::new::<
+        fn field_value(&self, field: &str) -> PyResult<TD0Value> {
+            let val: Impl_TD0Value = self._impl.field_value(field).ok_or(PyErr::new::<
                 PyKeyError,
                 _,
             >(format!(
@@ -344,18 +344,18 @@ mod pytd0 {
             Ok(TD0Value(val))
         }
 
-        fn get_value_raw(&self, field: &str) -> PyResult<TD0ValueRaw> {
+        fn field_value_raw(&self, field: &str) -> PyResult<TD0ValueRaw> {
             let val: Impl_TD0ValueRaw =
                 self._impl
-                    .get_value_raw(field)
+                    .field_value_raw(field)
                     .ok_or(PyErr::new::<PyKeyError, _>(format!(
                         "unknown field '{field}'"
                     )))?;
             Ok(TD0ValueRaw(val))
         }
 
-        fn get_field_type(&self, field: &str) -> Option<TD0ValueType> {
-            self._impl.get_field_type(field).map(|val| {
+        fn field_type(&self, field: &str) -> Option<TD0ValueType> {
+            self._impl.field_type(field).map(|val| {
                 val.parse::<TD0ValueType>()
                     .expect("all field types accounted for.")
             })
@@ -366,8 +366,8 @@ mod pytd0 {
         }
 
 
-        fn set_value<'py>(&mut self, field: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
-            let val: Impl_TD0Value = match self._impl.get_field_type(field) {
+        fn set_field_value<'py>(&mut self, field: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
+            let val: Impl_TD0Value = match self._impl.field_type(field) {
                 Some("EnumStr") | Some("Text") => Impl_TD0Value::Text(value.extract::<String>()?),
                 Some("I8") => Impl_TD0Value::I8(value.extract::<i8>()?),
                 Some("I16") => Impl_TD0Value::I16(value.extract::<i16>()?),
@@ -395,12 +395,12 @@ mod pytd0 {
                 }
             };
             self._impl
-                .set_value(field, &val)
+                .set_field_value(field, &val)
                 .map_err(|err| PyErr::new::<PyValueError, _>(format!("{err}")))
         }
 
-        fn set_value_raw<'py>(&mut self, field: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
-            let val: Impl_TD0ValueRaw = match self._impl.get_field_type(field) {
+        fn set_field_value_raw<'py>(&mut self, field: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
+            let val: Impl_TD0ValueRaw = match self._impl.field_type(field) {
                 Some("EnumStr") | Some("Slice") | Some("Text") => {
                     Impl_TD0ValueRaw::Slice(value.extract::<Vec<u8>>()?.into_boxed_slice())
                 }
@@ -424,7 +424,7 @@ mod pytd0 {
                 }
             };
             self._impl
-                .set_value_raw(field, &val)
+                .set_field_value_raw(field, &val)
                 .map_err(|err| PyErr::new::<PyValueError, _>(format!("{err}")))
         }
     }
@@ -528,14 +528,14 @@ mod pytd0 {
             Ok(TD0ChunkItem {
                 _impl: self
                     ._impl
-                    .get_chunk_item_owned(chunk_name, item_index)
+                    .chunk_item_owned(chunk_name, item_index)
                     .map_err(map_chunk_item_error)?,
             })
         }
 
         fn get_chunk_item_default(&self, chunk_name: &str) -> Option<TD0ChunkItem> {
             self._impl
-                .get_chunk_item_default(chunk_name)
+                .chunk_item_default(chunk_name)
                 .map(|item| TD0ChunkItem { _impl: item })
         }
 

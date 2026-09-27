@@ -337,7 +337,7 @@ impl SSXPTD0File {
     pub fn firmware_version(&self) -> TD0Result<String> {
         let backup_header = self.backup_header()?;
 
-        Ok(backup_header.get_value("firmware").unwrap().to_string())
+        Ok(backup_header.field_value("firmware").unwrap().to_string())
     }
 
     pub fn manifest_tag(&self, chunk_name: &str) -> TD0Result<&TD0ManifestTag> {
@@ -739,11 +739,11 @@ impl TD0File for SSXPTD0File {
         }
     }
 
-    fn get_chunk_num_items(&self, chunk_name: &str) -> Option<usize> {
+    fn chunk_num_items(&self, chunk_name: &str) -> Option<usize> {
         self.chunks.get(chunk_name).map(|ch| ch.num_items())
     }
 
-    fn get_chunk_raw(&self, chunk_name: &str) -> Option<&[u8]> {
+    fn chunk_raw(&self, chunk_name: &str) -> Option<&[u8]> {
         let &tag_offset = self.tag_offsets.get(chunk_name)?;
 
         let tag = manifest_tag_from_buf(self.buf.as_bytes(), tag_offset)
@@ -751,7 +751,7 @@ impl TD0File for SSXPTD0File {
         self.buf.get(tag.chunk_range())
     }
 
-    fn get_chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem> {
+    fn chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem> {
         let chunk = self.chunks.get(chunk_name).ok_or(TD0Error::UnknownChunk)?;
         let bytes = chunk
             .item_range(item_index)
@@ -765,7 +765,7 @@ impl TD0File for SSXPTD0File {
         }
     }
 
-    fn get_chunk_item_mut(
+    fn chunk_item_mut(
         &mut self,
         chunk_name: &str,
         item_index: usize,
@@ -784,7 +784,7 @@ impl TD0File for SSXPTD0File {
         }
     }
 
-    fn get_chunk_item_owned(
+    fn chunk_item_owned(
         &self,
         chunk_name: &str,
         item_index: usize,
@@ -802,7 +802,7 @@ impl TD0File for SSXPTD0File {
         }
     }
 
-    fn get_chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>> {
+    fn chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>> {
         match self
             .firmware_version()
             .unwrap_or("unknown".to_string())
@@ -814,7 +814,7 @@ impl TD0File for SSXPTD0File {
         }
     }
 
-    fn get_chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]> {
+    fn chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]> {
         let chunk = self.chunks.get(chunk_name).ok_or(TD0Error::UnknownChunk)?;
         self.buf
             .get(
@@ -825,18 +825,18 @@ impl TD0File for SSXPTD0File {
             .ok_or(TD0Error::InvalidChunk("unable to read raw chunk data."))
     }
 
-    fn get_chunk_pos(&self, chunk_name: &str) -> Option<usize> {
+    fn chunk_pos(&self, chunk_name: &str) -> Option<usize> {
         self.chunks.get(chunk_name).map(|ch| ch.pos)
     }
 
-    fn get_chunk_size(&self, chunk_name: &str) -> Option<usize> {
+    fn chunk_size(&self, chunk_name: &str) -> Option<usize> {
         self.chunks.get(chunk_name).map(|ch| ch.size)
     }
 
     fn manifest(&self) -> TD0Result<TD0Manifest> {
         let backup_chunk = self.backup_header()?;
         let backup_tag = self.manifest_tag("HDRa")?;
-        let backup_type = match backup_chunk.get_value("tag").unwrap().to_string().as_str() {
+        let backup_type = match backup_chunk.field_value("tag").unwrap().to_string().as_str() {
             BACKUP_TAG_KIT => TD0BackupType::Kit,
             BACKUP_TAG_SYSTEM => TD0BackupType::System,
             _ => TD0BackupType::Unknown,
@@ -867,20 +867,20 @@ impl TD0File for SSXPTD0File {
 
         Ok(TD0Manifest {
             backup_name: backup_chunk
-                .get_value("name")
+                .field_value("name")
                 .map_or("Unknown".to_string(), |val| val.to_string()),
             backup_type,
             checksum_actual,
             checksum_calculated: self.calc_checksum(),
             device_model: device_model_from_tag_value(backup_tag.model().as_str()),
             device_firmware_build: backup_chunk
-                .get_value("build")
+                .field_value("build")
                 .map_or("Unknown".to_string(), |val| val.to_string()),
             device_firmware_version: backup_chunk
-                .get_value("firmware")
+                .field_value("firmware")
                 .map_or("Unknown".to_string(), |val| val.to_string()),
             device_serial: backup_chunk
-                .get_value("device_serial")
+                .field_value("device_serial")
                 .map_or("Unknown".to_string(), |val| val.to_string()),
             size_actual: self.buf.len(),
             size_calculated: self.calc_expected_size(),

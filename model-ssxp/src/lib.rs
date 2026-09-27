@@ -216,17 +216,17 @@ mod tests {
             .add_chunk("TGLa", 3)
             .expect("can successfully add a chunk.");
         assert_matches!(
-            td0file.get_chunk_item("TGLa", 0),
+            td0file.chunk_item("TGLa", 0),
             Ok(_),
             "can retrieve a chunk item after add_chunk."
         );
         assert_matches!(
-            td0file.get_chunk_item("TGLa", 2),
+            td0file.chunk_item("TGLa", 2),
             Ok(_),
             "can retrieve the last chunk item after add_chunk."
         );
         assert_matches!(
-            td0file.get_chunk_item("TGLa", 3),
+            td0file.chunk_item("TGLa", 3),
             Err(TD0Error::InvalidChunkItem),
             "can't retrieve spurious chunk items."
         );
@@ -245,10 +245,10 @@ mod tests {
             "test setup successful."
         );
 
-        let mut new_tag = td0file.get_chunk_item_default("TGLa").unwrap();
-        let _ = new_tag.set_value("name", &TD0Value::Text("This is a test !".to_string()));
+        let mut new_tag = td0file.chunk_item_default("TGLa").unwrap();
+        let _ = new_tag.set_field_value("name", &TD0Value::Text("This is a test !".to_string()));
         assert_eq!(
-            new_tag.get_value("name"),
+            new_tag.field_value("name"),
             Some(TD0Value::Text("This is a test !".to_string()))
         );
         assert_eq!(td0file.chunk_item_replace("TGLa", 1, &*new_tag), Ok(()));

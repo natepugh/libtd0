@@ -136,7 +136,7 @@ impl TryFrom<&AttrKeyValue> for String {
 }
 
 impl AttrKeyValue {
-    pub fn get_val(&self) -> &Lit {
+    pub fn val(&self) -> &Lit {
         &self.val
     }
 }
