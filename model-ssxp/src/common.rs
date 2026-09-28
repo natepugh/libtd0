@@ -943,36 +943,38 @@ impl TD0File for SSXPTD0File {
                         .expect("should be a chunk for each item in the chunk index."),
                 )
             })
-            .map(|(name, ch)| ChunkManifest {
-                name: name.clone(),
-                pos: ch.pos,
-                size: ch.size,
-                num_items: ch.num_items(),
-                item_size: ch.item_size(),
+            .map(|(name, ch)| {
+                ChunkManifest::new(
+                    name.clone(),
+                    ch.pos,
+                    ch.size,
+                    ch.num_items(),
+                    ch.item_size(),
+                )
             })
             .collect();
 
-        Ok(TD0Manifest {
-            backup_name: backup_chunk
+        Ok(TD0Manifest::new(
+            backup_chunk
                 .field_value("name")
                 .map_or("Unknown".to_string(), |val| val.to_string()),
             backup_type,
-            checksum_actual,
-            checksum_calculated: self.calc_checksum(),
-            device_model: device_model_from_tag_value(backup_tag.model().as_str()),
-            device_firmware_build: backup_chunk
+            checksum_actual.as_slice(),
+            &self.calc_checksum()[..],
+            device_model_from_tag_value(backup_tag.model().as_str()),
+            backup_chunk
                 .field_value("build")
                 .map_or("Unknown".to_string(), |val| val.to_string()),
-            device_firmware_version: backup_chunk
+            backup_chunk
                 .field_value("firmware")
                 .map_or("Unknown".to_string(), |val| val.to_string()),
-            device_serial: backup_chunk
+            backup_chunk
                 .field_value("device_serial")
                 .map_or("Unknown".to_string(), |val| val.to_string()),
-            size_actual: self.buf.len(),
-            size_calculated: self.calc_expected_size(),
+            self.buf.len(),
+            self.calc_expected_size(),
             chunks,
-        })
+        ))
     }
 
     fn new() -> TD0Result<Self> {
@@ -1085,6 +1087,17 @@ impl TD0File for SSXPTD0File {
         self.validate_is_not_dirty()?;
         self.validate_load()?;
         Ok(())
+    }
+}
+
+impl core::fmt::Debug for SSXPTD0File {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "SSXPTD0File(buffer size: {}, num chunks: {})",
+            self.buf.len(),
+            self.chunk_order.len()
+        )
     }
 }
 

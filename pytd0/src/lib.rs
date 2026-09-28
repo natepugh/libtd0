@@ -12,7 +12,7 @@ mod pytd0 {
         ChunkManifest as Impl_ChunkManifest, TD0BackupType as Impl_TD0BackupType,
         TD0ChunkItem as Impl_TD0ChunkItem, TD0DeviceModel as Impl_TD0DeviceModel,
         TD0File as Impl_TD0File, TD0Manifest as Impl_TD0Manifest, TD0Value as Impl_TD0Value,
-        TD0ValueRaw as Impl_TD0ValueRaw, checksum_bytes_to_string, result::TD0Error,
+        TD0ValueRaw as Impl_TD0ValueRaw, result::TD0Error,
     };
     use multi_model::{new_td0_file, parse_td0_file};
     use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
@@ -88,52 +88,27 @@ mod pytd0 {
     impl ChunkManifest {
         #[getter]
         fn name(&self) -> PyResult<String> {
-            Ok(self.0.name.clone())
-        }
-        #[setter]
-        fn set_name(&mut self, val: String) -> PyResult<()> {
-            self.0.name = val;
-            Ok(())
+            Ok(self.0.name().clone())
         }
 
         #[getter]
         fn pos(&self) -> PyResult<usize> {
-            Ok(self.0.pos)
-        }
-        #[setter]
-        fn set_pos(&mut self, val: usize) -> PyResult<()> {
-            self.0.pos = val;
-            Ok(())
+            Ok(self.0.pos())
         }
 
         #[getter]
         fn size(&self) -> PyResult<usize> {
-            Ok(self.0.size)
-        }
-        #[setter]
-        fn set_size(&mut self, val: usize) -> PyResult<()> {
-            self.0.size = val;
-            Ok(())
+            Ok(self.0.size())
         }
 
         #[getter]
         fn num_items(&self) -> PyResult<usize> {
-            Ok(self.0.num_items)
-        }
-        #[setter]
-        fn set_num_items(&mut self, val: usize) -> PyResult<()> {
-            self.0.num_items = val;
-            Ok(())
+            Ok(self.0.num_items())
         }
 
         #[getter]
         fn item_size(&self) -> PyResult<usize> {
-            Ok(self.0.item_size)
-        }
-        #[setter]
-        fn set_item_size(&mut self, val: usize) -> PyResult<()> {
-            self.0.item_size = val;
-            Ok(())
+            Ok(self.0.item_size())
         }
 
         fn __str__(&self) -> String {
@@ -143,7 +118,11 @@ mod pytd0 {
         fn __repr__(&self) -> String {
             format!(
                 "ChunkManifest('{}', {}, {}, {}, {})",
-                self.0.name, self.0.pos, self.0.size, self.0.num_items, self.0.item_size
+                self.0.name(),
+                self.0.pos(),
+                self.0.size(),
+                self.0.num_items(),
+                self.0.item_size()
             )
         }
     }
@@ -155,59 +134,59 @@ mod pytd0 {
     impl TD0Manifest {
         #[getter]
         fn backup_name(&self) -> PyResult<String> {
-            Ok(self.0.backup_name.clone())
+            Ok(self.0.backup_name())
         }
 
         #[getter]
         fn backup_type(&self) -> PyResult<TD0BackupType> {
-            Ok(TD0BackupType::from(self.0.backup_type))
+            Ok(TD0BackupType::from(self.0.backup_type()))
         }
 
         #[getter]
         fn checksum_actual(&self) -> PyResult<String> {
-            Ok(checksum_bytes_to_string(&self.0.checksum_actual))
+            Ok(self.0.checksum_actual())
         }
 
         #[getter]
         fn checksum_calculated(&self) -> PyResult<String> {
-            Ok(checksum_bytes_to_string(&self.0.checksum_calculated))
+            Ok(self.0.checksum_calculated())
         }
 
         #[getter]
         fn device_model(&self) -> PyResult<TD0DeviceModel> {
-            Ok(TD0DeviceModel::from(self.0.device_model))
+            Ok(TD0DeviceModel::from(self.0.device_model()))
         }
 
         #[getter]
         fn device_firmware_version(&self) -> PyResult<String> {
-            Ok(self.0.device_firmware_version.clone())
+            Ok(self.0.device_firmware_version())
         }
 
         #[getter]
         fn device_firmware_build(&self) -> PyResult<String> {
-            Ok(self.0.device_firmware_build.clone())
+            Ok(self.0.device_firmware_build())
         }
 
         #[getter]
         fn device_serial(&self) -> PyResult<String> {
-            Ok(self.0.device_serial.clone())
+            Ok(self.0.device_serial())
         }
 
         #[getter]
         fn size_actual(&self) -> PyResult<usize> {
-            Ok(self.0.size_actual)
+            Ok(self.0.size_actual())
         }
 
         #[getter]
         fn size_calculated(&self) -> PyResult<usize> {
-            Ok(self.0.size_calculated)
+            Ok(self.0.size_calculated())
         }
 
         #[getter]
         fn chunks(&self) -> PyResult<Vec<ChunkManifest>> {
             Ok(self
                 .0
-                .chunks
+                .chunks()
                 .iter()
                 .map(|ch| ChunkManifest(ch.clone()))
                 .collect())
@@ -220,10 +199,10 @@ mod pytd0 {
         fn __repr__(&self) -> String {
             format!(
                 "TD0Manifest(backup_name={:?}, backup_type={:?}, device_model={:?}, num_chunks={})",
-                self.0.backup_name,
-                self.0.backup_type,
-                self.0.device_model,
-                self.0.chunks.len()
+                self.0.backup_name(),
+                self.0.backup_type(),
+                self.0.device_model(),
+                self.0.chunks().len()
             )
         }
     }

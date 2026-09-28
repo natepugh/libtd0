@@ -99,13 +99,41 @@ impl core::fmt::Display for TD0BackupType {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChunkManifest {
-    pub name: String,
-    pub pos: usize,
-    pub size: usize,
-    pub num_items: usize,
-    pub item_size: usize,
+    name: String,
+    pos: usize,
+    size: usize,
+    num_items: usize,
+    item_size: usize,
+}
+
+impl ChunkManifest {
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+    pub fn pos(&self) -> usize {
+        self.pos
+    }
+    pub fn size(&self) -> usize {
+        self.size
+    }
+    pub fn num_items(&self) -> usize {
+        self.num_items
+    }
+    pub fn item_size(&self) -> usize {
+        self.item_size
+    }
+
+    pub fn new(name: String, pos: usize, size: usize, num_items: usize, item_size: usize) -> Self {
+        Self {
+            name,
+            pos,
+            size,
+            num_items,
+            item_size,
+        }
+    }
 }
 
 impl core::fmt::Display for ChunkManifest {
@@ -119,29 +147,121 @@ impl core::fmt::Display for ChunkManifest {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TD0Manifest {
-    pub backup_name: String,
-    pub backup_type: TD0BackupType,
+    backup_name: String,
+    backup_type: TD0BackupType,
 
     #[cfg_attr(
         feature = "serde",
         serde(serialize_with = "serde_checksum_bytes_to_string")
     )]
-    pub checksum_actual: [u8; 16],
+    checksum_actual: [u8; 16],
 
     #[cfg_attr(
         feature = "serde",
         serde(serialize_with = "serde_checksum_bytes_to_string")
     )]
-    pub checksum_calculated: [u8; 16],
-    pub device_model: TD0DeviceModel,
-    pub device_firmware_version: String,
-    pub device_firmware_build: String,
-    pub device_serial: String,
-    pub size_actual: usize,
-    pub size_calculated: usize,
-    pub chunks: Vec<ChunkManifest>,
+    checksum_calculated: [u8; 16],
+    device_model: TD0DeviceModel,
+    device_firmware_version: String,
+    device_firmware_build: String,
+    device_serial: String,
+    size_actual: usize,
+    size_calculated: usize,
+    chunks: Vec<ChunkManifest>,
+}
+
+impl TD0Manifest {
+    pub fn backup_name(&self) -> String {
+        self.backup_name.clone()
+    }
+
+    pub fn backup_type(&self) -> TD0BackupType {
+        self.backup_type
+    }
+
+    pub fn checksum_actual(&self) -> String {
+        checksum_bytes_to_string(&self.checksum_actual)
+    }
+
+    pub fn checksum_calculated(&self) -> String {
+        checksum_bytes_to_string(&self.checksum_calculated)
+    }
+
+    pub fn device_model(&self) -> TD0DeviceModel {
+        self.device_model
+    }
+
+    pub fn device_firmware_version(&self) -> String {
+        self.device_firmware_version.clone()
+    }
+
+    pub fn device_firmware_build(&self) -> String {
+        self.device_firmware_build.clone()
+    }
+
+    pub fn device_serial(&self) -> String {
+        self.device_serial.clone()
+    }
+
+    pub fn size_actual(&self) -> usize {
+        self.size_actual
+    }
+
+    pub fn size_calculated(&self) -> usize {
+        self.size_calculated
+    }
+
+    pub fn chunks(&self) -> &[ChunkManifest] {
+        &self.chunks
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "A TD0Manifest is composed of many items."
+    )]
+    pub fn new(
+        backup_name: impl Into<String>,
+        backup_type: impl Into<TD0BackupType>,
+        checksum_actual: &[u8],
+        checksum_calculated: &[u8],
+        device_model: impl Into<TD0DeviceModel>,
+        device_firmware_version: impl Into<String>,
+        device_firmware_build: impl Into<String>,
+        device_serial: impl Into<String>,
+        size_actual: usize,
+        size_calculated: usize,
+        chunks: Vec<ChunkManifest>,
+    ) -> Self {
+        let mut my_checksum_actual: [u8; 16] = [0u8; 16];
+        let input_slice_def = 0..checksum_actual.len().clamp(0, 16usize);
+        my_checksum_actual
+            .get_mut(input_slice_def.clone())
+            .unwrap()
+            .copy_from_slice(&checksum_actual[input_slice_def]);
+
+        let mut my_checksum_calculated: [u8; 16] = [0u8; 16];
+        let input_slice_def = 0..checksum_calculated.len().clamp(0, 16usize);
+        my_checksum_calculated
+            .get_mut(input_slice_def.clone())
+            .unwrap()
+            .copy_from_slice(&checksum_calculated[input_slice_def]);
+
+        Self {
+            backup_name: backup_name.into(),
+            backup_type: backup_type.into(),
+            checksum_actual: my_checksum_actual,
+            checksum_calculated: my_checksum_calculated,
+            device_model: device_model.into(),
+            device_firmware_version: device_firmware_version.into(),
+            device_firmware_build: device_firmware_build.into(),
+            device_serial: device_serial.into(),
+            size_actual,
+            size_calculated,
+            chunks,
+        }
+    }
 }
 
 pub fn checksum_bytes_to_string(val: &[u8]) -> String {
@@ -204,7 +324,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     fn set_field_value_raw(&mut self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
 }
 
-pub trait TD0File: Send + Sync {
+pub trait TD0File: Send + Sync + core::fmt::Debug {
     fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> TD0Result<()>;
     fn chunk_item_replace(
         &mut self,
