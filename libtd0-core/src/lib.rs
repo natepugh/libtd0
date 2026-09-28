@@ -62,7 +62,9 @@ impl TryFrom<&str> for TD0DeviceModel {
         match val {
             "SPDSXPro" => Ok(Self::SPDSXPro),
             "Unknown" => Ok(Self::Unknown),
-            _ => Err(TD0Error::InvalidInput),
+            _ => Err(TD0Error::InvalidInput(
+                "input string is not a valid TD0DeviceModel.".to_string(),
+            )),
         }
     }
 }
@@ -293,10 +295,15 @@ where
 
 pub fn copy_ascii_str_to_u8_slice(src: &String, dest: &mut [u8], pad_byte: u8) -> TD0Result<()> {
     if src.len() > dest.len() {
-        return Err(result::TD0Error::OutOfRange);
+        return Err(result::TD0Error::OutOfRange(result::OutOfRangeError::new(
+            0,
+            i64::try_from(dest.len()).expect("dest.len() is not larger than i64."),
+        )));
     }
     if !src.is_ascii() {
-        return Err(result::TD0Error::InvalidInput);
+        return Err(result::TD0Error::InvalidInput(
+            "an ASCII string is required.".to_string(),
+        ));
     }
 
     let src_bytes = src.as_bytes();
@@ -307,7 +314,9 @@ pub fn copy_ascii_str_to_u8_slice(src: &String, dest: &mut [u8], pad_byte: u8) -
 
 pub fn copy_slice_to_native(src: &[u8], dest: &mut [u8]) -> TD0Result<()> {
     if src.len() != dest.len() {
-        return Err(result::TD0Error::InvalidInput);
+        return Err(result::TD0Error::InvalidInput(
+            "source length != destination length.".to_string(),
+        ));
     }
     dest.clone_from_slice(src);
     Ok(())
@@ -315,7 +324,9 @@ pub fn copy_slice_to_native(src: &[u8], dest: &mut [u8]) -> TD0Result<()> {
 
 pub fn copy_slice_to_native_padded(src: &[u8], dest: &mut [u8], pad: u8) -> TD0Result<()> {
     if src.len() > dest.len() {
-        return Err(result::TD0Error::InvalidInput);
+        return Err(result::TD0Error::InvalidInput(
+            "source length != destination length.".to_string(),
+        ));
     }
     dest[src.len()..].fill(pad);
     dest[..src.len()].clone_from_slice(src);
@@ -354,10 +365,9 @@ impl core::fmt::Display for IntEncodedDecimal {
 impl core::str::FromStr for IntEncodedDecimal {
     type Err = result::TD0Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let selfobj = Self(
-            s.parse::<f32>()
-                .map_err(|_| result::TD0Error::InvalidInput)?,
-        );
+        let selfobj = Self(s.parse::<f32>().map_err(|_| {
+            result::TD0Error::InvalidInput("input string not parsable as a Decimal.".to_string())
+        })?);
         Ok(selfobj)
     }
 }
@@ -487,7 +497,9 @@ impl core::fmt::Display for Volume {
 impl Volume {
     fn validate_impl_range(val: &f32) -> Result<(), result::TD0Error> {
         if (val.lt(&VOLUME_MIN) || val.gt(&VOLUME_MAX)) && val.ne(&VOLUME_MINUS_INF_FLOAT) {
-            Err(result::TD0Error::OutOfRange)
+            Err(result::TD0Error::OutOfRangeDecimal(
+                result::OutOfRangeErrorTD0Decimal::new(VOLUME_MIN, VOLUME_MAX),
+            ))
         } else {
             Ok(())
         }
@@ -504,10 +516,11 @@ impl core::str::FromStr for Volume {
         if s.eq_ignore_ascii_case(VOLUME_MINUS_INF_DISPLAY) {
             Ok(Self(VOLUME_MINUS_INF_FLOAT))
         } else {
-            let selfobj = Self(
-                s.parse::<f32>()
-                    .map_err(|_| result::TD0Error::InvalidInput)?,
-            );
+            let selfobj = Self(s.parse::<f32>().map_err(|_| {
+                result::TD0Error::InvalidInput(
+                    "input string not parsable as a Decimal.".to_string(),
+                )
+            })?);
             selfobj.validate()?;
             Ok(selfobj)
         }
@@ -701,25 +714,31 @@ mod tests {
     #[test]
     fn test_volume_from_i16_out_of_range() {
         let actual = Volume::try_from(-602i16);
-        debug_assert_matches!(
+        assert_eq!(
             actual,
-            Err(result::TD0Error::OutOfRange),
-            "Test proper Err from > VOLUME_MAX"
+            Err(result::TD0Error::OutOfRangeDecimal(
+                result::OutOfRangeErrorTD0Decimal::new(VOLUME_MIN, VOLUME_MAX)
+            )),
+            "Test proper Err from < VOLUME_MIN"
         );
 
         let actual = Volume::try_from(61i16);
-        debug_assert_matches!(
+        assert_eq!(
             actual,
-            Err(result::TD0Error::OutOfRange),
+            Err(result::TD0Error::OutOfRangeDecimal(
+                result::OutOfRangeErrorTD0Decimal::new(VOLUME_MIN, VOLUME_MAX)
+            )),
             "Test proper Err from > VOLUME_MAX"
         );
     }
     #[test]
     fn test_volume_from_str() {
         let actual = Volume::from_str("-60.2");
-        debug_assert_matches!(
+        assert_eq!(
             actual,
-            Err(result::TD0Error::OutOfRange),
+            Err(result::TD0Error::OutOfRangeDecimal(
+                result::OutOfRangeErrorTD0Decimal::new(VOLUME_MIN, VOLUME_MAX)
+            )),
             "Test proper Err from < VOLUME_MIN"
         );
 
@@ -731,9 +750,11 @@ mod tests {
         );
 
         let actual = Volume::from_str("6.1");
-        debug_assert_matches!(
+        assert_eq!(
             actual,
-            Err(result::TD0Error::OutOfRange),
+            Err(result::TD0Error::OutOfRangeDecimal(
+                result::OutOfRangeErrorTD0Decimal::new(VOLUME_MIN, VOLUME_MAX)
+            )),
             "Test proper Err from > VOLUME_MAX"
         );
 
@@ -777,15 +798,17 @@ mod tests {
             "Should properly pad dest bytes."
         );
 
-        debug_assert_matches!(
+        assert_eq!(
             copy_ascii_str_to_u8_slice(&"I'm 17 chars long".to_string(), &mut dest, 0u8),
-            Err(result::TD0Error::OutOfRange),
+            Err(result::TD0Error::OutOfRange(result::OutOfRangeError::new(
+                0, 16
+            ))),
             "Error if source string is too long."
         );
 
         debug_assert_matches!(
             copy_ascii_str_to_u8_slice(&"I'm not äscii".to_string(), &mut dest, 0u8),
-            Err(result::TD0Error::InvalidInput),
+            Err(result::TD0Error::InvalidInput(..)),
             "Error if non-ascii chars are in source.."
         );
     }
@@ -809,7 +832,7 @@ mod tests {
 
         debug_assert_matches!(
             copy_slice_to_native_padded("I'm 17 chars long".as_bytes(), &mut dest, 0u8),
-            Err(result::TD0Error::InvalidInput),
+            Err(result::TD0Error::InvalidInput(..)),
             "Error if source slice is too long."
         );
     }

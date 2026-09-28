@@ -330,7 +330,7 @@ fn test_setters() {
             "enumstr_field",
             &libtd0_core::TD0Value::Text("INVALID".to_string())
         ),
-        Err(TD0Error::InvalidInput),
+        Err(TD0Error::InvalidInput(..)),
         "`enumstr_field` Setter should error on invalid value."
     );
     assert_eq!(
@@ -353,12 +353,12 @@ fn test_setters() {
     let val_before = ts.field_value("i16_bounded");
     assert_matches!(
         ts.set_field_value("i16_bounded", &libtd0_core::TD0Value::I16(-2049)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`i16_bounded` Bounded field setter should Error if less than min."
     );
     assert_matches!(
         ts.set_field_value("i16_bounded", &libtd0_core::TD0Value::I16(51)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`i16_bounded` Bounded field setter should Error if greater than max."
     );
     assert_eq!(
@@ -375,7 +375,7 @@ fn test_setters() {
     );
     assert_matches!(
         ts.set_field_value("i8_bounded_min_only", &libtd0_core::TD0Value::I8(-46)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`i8_bounded_min_only` Bounded_min_only field setter should Error if less than min."
     );
     let val_before = ts.field_value("i8_bounded_min_only");
@@ -393,14 +393,14 @@ fn test_setters() {
     );
     assert_matches!(
         ts.set_field_value("i8_bounded_max_only", &libtd0_core::TD0Value::I8(-44)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`i8_bounded_max_only` Bounded_max_only field setter should Error if greater than max."
     );
 
     // slice: [u8; 3]: #[td0_field(field_type = "Slice")]
     assert_matches!(
         ts.set_field_value("slice", &libtd0_core::TD0Value::Slice(Box::new([1u8; 3]))),
-        Err(TD0Error::ReadOnlyField),
+        Err(TD0Error::ReadOnlyField(..)),
         "Slice shouldn't be settable with set_field_value()."
     );
 
@@ -434,7 +434,7 @@ fn test_setters() {
             "td0_decimal_bounded",
             &libtd0_core::TD0Value::Decimal(19.9999)
         ),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRangeDecimal(..)),
         "`td0_decimal_bounded` Bounded field setter should Error if less than min."
     );
     assert_matches!(
@@ -442,7 +442,7 @@ fn test_setters() {
             "td0_decimal_bounded",
             &libtd0_core::TD0Value::Decimal(260.1)
         ),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRangeDecimal(..)),
         "`td0_decimal_bounded` Bounded field setter should Error if greater than max."
     );
     assert_eq!(
@@ -475,12 +475,12 @@ fn test_setters() {
     let val_before = ts.field_value("td0_decimal_u8");
     assert_matches!(
         ts.set_field_value("td0_decimal_u8", &libtd0_core::TD0Value::Decimal(0.08)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRangeDecimal(..)),
         "`td0_decimal_u8` Bounded field setter should Error if less than min."
     );
     assert_matches!(
         ts.set_field_value("td0_decimal_u8", &libtd0_core::TD0Value::Decimal(8.01)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRangeDecimal(..)),
         "`td0_decimal_u8` Bounded field setter should Error if greater than max."
     );
     assert_eq!(
@@ -508,7 +508,7 @@ fn test_setters() {
             "space_padded_text",
             &libtd0_core::TD0Value::Text("One char too long".to_string())
         ),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`space_padded_text` Setter should Error if string too long."
     );
     assert_eq!(
@@ -599,12 +599,12 @@ fn test_setters() {
     let val_before = ts.field_value("u16_bounded");
     assert_matches!(
         ts.set_field_value("u16_bounded", &libtd0_core::TD0Value::U16(256)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`u16_bounded` Bounded field setter should Error if less than min."
     );
     assert_matches!(
         ts.set_field_value("u16_bounded", &libtd0_core::TD0Value::U16(65501)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`u16_bounded` Bounded field setter should Error if greater than max."
     );
     assert_eq!(
@@ -632,12 +632,12 @@ fn test_setters() {
     let val_before = ts.field_value("u32_bounded");
     assert_matches!(
         ts.set_field_value("u32_bounded", &libtd0_core::TD0Value::U32(65536)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`u32_bounded` Bounded field setter should Error if less than min."
     );
     assert_matches!(
         ts.set_field_value("u32_bounded", &libtd0_core::TD0Value::U32(655_378)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`u32_bounded` Bounded field setter should Error if greater than max."
     );
     assert_eq!(
@@ -671,7 +671,7 @@ fn test_setters() {
     );
     assert_matches!(
         ts.set_field_value("u8_bounded_min_only", &libtd0_core::TD0Value::U8(26)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`u8_bounded_min_only` Bounded_min_only field setter should Error if less than min."
     );
     let val_before = ts.field_value("u8_bounded_min_only");
@@ -694,7 +694,7 @@ fn test_setters() {
     );
     assert_matches!(
         ts.set_field_value("u8_bounded_max_only", &libtd0_core::TD0Value::U8(143)),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRange(..)),
         "`u8_bounded_max_only` Bounded_max_only field setter should Error if greater than max."
     );
     assert_matches!(
@@ -732,7 +732,7 @@ fn test_setters() {
             "volume_field",
             &libtd0_core::TD0Value::Decimal(VOLUME_MIN - 0.01)
         ),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRangeDecimal(..)),
         "`volume_field` Bounded field setter should Error if less than min."
     );
     assert_matches!(
@@ -740,7 +740,7 @@ fn test_setters() {
             "volume_field",
             &libtd0_core::TD0Value::Decimal(VOLUME_MAX + 0.01)
         ),
-        Err(TD0Error::OutOfRange),
+        Err(TD0Error::OutOfRangeDecimal(..)),
         "`volume_field` Bounded field setter should Error if greater than max."
     );
     assert_eq!(
@@ -767,7 +767,9 @@ fn test_setters() {
     );
 
     assert_eq!(
-        ts.field_value("volume_field").expect(TEST_BROKEN).to_string(),
+        ts.field_value("volume_field")
+            .expect(TEST_BROKEN)
+            .to_string(),
         VOLUME_MINUS_INF_DISPLAY,
         "`volume_field` to_string() should handle VOLUME_MINUS_INF."
     );

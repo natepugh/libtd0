@@ -72,8 +72,8 @@ pub fn validate_id_tag(tag: &TD0IdChunk) -> TD0Result<()> {
     if *tag.magic_raw() == TD0_MAGIC {
         Ok(())
     } else {
-        Err(TD0Error::InvalidTD0File(
-            "invalid or missing `TD0a` header chunk.",
+        Err(TD0Error::FileParse(
+            "invalid or missing `TD0a` header chunk.".to_string(),
         ))
     }
 }
@@ -114,13 +114,15 @@ impl TD0ManifestTag {
 
     pub fn set_model(&mut self, model: &str) -> TD0Result<()> {
         if !model.is_ascii() {
-            return Err(TD0Error::InvalidInputWithMessage(
+            return Err(TD0Error::InvalidInput(
                 "model must be ASCII only.".to_string(),
             ));
         }
 
         if model.len() != 4 {
-            return Err(TD0Error::OutOfRange);
+            return Err(TD0Error::InvalidInput(
+                "model must be exactly 4 ASCII characters long.".to_string(),
+            ));
         }
 
         self.model.copy_from_slice(model.as_bytes());
@@ -129,13 +131,15 @@ impl TD0ManifestTag {
 
     pub fn set_tag(&mut self, tag: &str) -> TD0Result<()> {
         if !tag.is_ascii() {
-            return Err(TD0Error::InvalidInputWithMessage(
+            return Err(TD0Error::InvalidInput(
                 "tag must be ASCII only.".to_string(),
             ));
         }
 
         if tag.len() != 4 {
-            return Err(TD0Error::OutOfRange);
+            return Err(TD0Error::InvalidInput(
+                "model must be exactly 4 ASCII characters long.".to_string(),
+            ));
         }
 
         self.tag.copy_from_slice(tag.as_bytes());

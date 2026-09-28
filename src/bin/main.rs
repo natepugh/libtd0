@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use clap::{Parser, Subcommand};
-use td0::{TD0Error, TD0File, parse_td0_file};
+use td0::{InvalidChunkError, TD0Error, TD0File, parse_td0_file};
 
 use std::error::Error;
 use std::fs;
@@ -172,10 +172,8 @@ fn main() {
                 command_compare_chunk_items(&*td0file, chunk_name_1, chunk_name_2, inum_reindexed)
                     .unwrap_or_else(|err| {
                         let code = match err {
-                            TD0Error::UnknownChunk | TD0Error::InvalidChunk(..) => {
-                                ERR_INVALID_CHUNK
-                            }
-                            TD0Error::OutOfRange => ERR_INVALID_ITEM_INDEX,
+                            TD0Error::InvalidChunk(_) => ERR_INVALID_CHUNK,
+                            TD0Error::OutOfRange(_) => ERR_INVALID_ITEM_INDEX,
                             _ => ERR_UNKNOWN,
                         };
                         exit_td0_err(&err, code);
@@ -210,9 +208,9 @@ fn main() {
                 Ok(data) => data,
                 Err(e) => {
                     match e {
-                        TD0Error::OutOfRange => {
+                        TD0Error::OutOfRange(err) => {
                             exit_err(
-                                "Item index out of bounds. Must be 1 - ? inclusive.",
+                                format!("Item index {err}.").as_str(),
                                 ERR_INVALID_ITEM_INDEX,
                             );
                         }
@@ -273,7 +271,13 @@ fn main() {
         Commands::ListFields { chunk_name } => {
             let td0file = parse_td0_file_or_exit(&cli.file);
             let Some(chunk_item) = td0file.chunk_item_default(chunk_name) else {
-                exit_td0_err(&TD0Error::UnknownChunk, ERR_INVALID_CHUNK);
+                exit_td0_err(
+                    &TD0Error::InvalidChunk(InvalidChunkError::new(
+                        chunk_name.clone(),
+                        "invalid chunk (has no defaults.)",
+                    )),
+                    ERR_INVALID_CHUNK,
+                );
             };
             let text_output = match cli.output_format {
                 OutputFormat::Json => serde_json::to_string(&chunk_item.list_fields())

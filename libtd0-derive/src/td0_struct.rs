@@ -532,7 +532,7 @@ fn td0_struct_gen_from_u8_slice_impl(source: &ItemStruct) -> TokenStream {
 
             fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
                 use zerocopy::FromBytes;
-                Self::read_from_bytes(bytes).map_err(|_| libtd0_core::result::TD0Error::InvalidChunkItem)
+                Self::read_from_bytes(bytes).map_err(|_| Self::Error::ChunkItemParse)
             }
         }
     }
@@ -672,23 +672,34 @@ fn build_decimal_setter_expr(
     let attr_max: LitFloat = LitFloat::new(attr.max.to_string().as_str(), Span::call_site());
     let min: Expr = parse_quote!(#attr_min as f32);
     let max: Expr = parse_quote!(#attr_max as f32);
+    let out_of_range_dec: Expr = parse_quote!(
+        libtd0_core::result::OutOfRangeErrorTD0Decimal::new(#min, #max)
+    );
 
     let rhand: Expr = match native_type {
         NativeType::U8 => parse_quote!(
             u8::try_from(libtd0_core::IntEncodedDecimal::from(*val))
-                .map_err(|_| libtd0_core::result::TD0Error::OutOfRange)?
+                .map_err(|_| libtd0_core::result::TD0Error::OutOfRangeDecimal(
+                    #out_of_range_dec
+                ))?
         ),
         NativeType::U16 => parse_quote!(
             U16::try_from(libtd0_core::IntEncodedDecimal::from(*val))
-                .map_err(|_| libtd0_core::result::TD0Error::OutOfRange)?
+                .map_err(|_| libtd0_core::result::TD0Error::OutOfRangeDecimal(
+                    #out_of_range_dec
+                ))?
         ),
         NativeType::I8 => parse_quote!(
             i8::try_from(libtd0_core::IntEncodedDecimal::from(*val))
-                .map_err(|_| libtd0_core::result::TD0Error::OutOfRange)?
+                .map_err(|_| libtd0_core::result::TD0Error::OutOfRangeDecimal(
+                    #out_of_range_dec
+                ))?
         ),
         NativeType::I16 => parse_quote!(
             I16::try_from(libtd0_core::IntEncodedDecimal::from(*val))
-                .map_err(|_| libtd0_core::result::TD0Error::OutOfRange)?
+                .map_err(|_| libtd0_core::result::TD0Error::OutOfRangeDecimal(
+                    #out_of_range_dec
+                ))?
         ),
         _ => parse_quote!(val.clone()),
     };
@@ -697,7 +708,7 @@ fn build_decimal_setter_expr(
         if libtd0_core::in_range_inclusive(libtd0_core::IntEncodedDecimal::from(*val).val(), Some(#min), Some(#max)) {
             self.#ident = #rhand;
         } else {
-            return Err(libtd0_core::result::TD0Error::OutOfRange)
+            return Err(libtd0_core::result::TD0Error::OutOfRangeDecimal(#out_of_range_dec))
         }
     )
 }
@@ -717,10 +728,12 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
         }
         TD0FieldType::EnumStr(attr) => {
             let collection = format_ident!("{}", &attr.collection);
+            let err_msg = format!("invalid value for field '{}'.", ident_str);
+
             parse_quote!(
                 (#ident_str, libtd0_core::TD0Value::Text(val)) => {
                     let pos : &usize = &#collection.iter().position(|item| *item == val.as_str())
-                        .ok_or_else(|| libtd0_core::result::TD0Error::InvalidInput)?;
+                        .ok_or_else(|| libtd0_core::result::TD0Error::InvalidInput(#err_msg.to_string()))?;
                     self.#ident = u8::try_from(*pos).expect("Collection index must be in range.");
                     Ok(())
                 }
@@ -740,14 +753,18 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             parse_quote!(
                 (#ident_str, libtd0_core::TD0Value::Decimal(val)) => {
                     let tmp = libtd0_core::Volume::try_from(*val)?;
-                    self.#ident = tmp.try_into().map_err(|_| libtd0_core::result::TD0Error::OutOfRange)?;
+                    self.#ident = tmp.try_into().map_err(|_|
+                        libtd0_core::result::TD0Error::OutOfRangeDecimal(
+                            libtd0_core::result::OutOfRangeErrorTD0Decimal::new(libtd0_core::VOLUME_MIN, libtd0_core::VOLUME_MAX)
+                        )
+                    )?;
                     Ok(())
                 }
             )
         }
         TD0FieldType::Slice(_) => parse_quote!(
             (#ident_str, ..) => {
-                Err(libtd0_core::result::TD0Error::ReadOnlyField)
+                Err(libtd0_core::result::TD0Error::ReadOnlyField(#ident_str.to_string()))
             }
         ),
         TD0FieldType::I16(attr) => {
@@ -761,6 +778,16 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 None => parse_quote!(None),
             };
 
+            let min_val: Expr = match attr.min {
+                Some(val) => parse_quote!(#val),
+                None => parse_quote!(0),
+            };
+
+            let max_val: Expr = match attr.max {
+                Some(val) => parse_quote!(#val),
+                None => parse_quote!(i16::MAX),
+            };
+
             parse_quote!(
                 (#ident_str, libtd0_core::TD0Value::I16(val)) => {
                     if libtd0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
@@ -768,7 +795,9 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                         Ok(())
                     }
                     else {
-                        Err(libtd0_core::result::TD0Error::OutOfRange)
+                        Err(libtd0_core::result::TD0Error::OutOfRange(
+                            libtd0_core::result::OutOfRangeError::new(#min_val, #max_val)
+                        ))
                     }
                 }
             )
@@ -784,6 +813,16 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 None => parse_quote!(None),
             };
 
+            let min_val: Expr = match attr.min {
+                Some(val) => parse_quote!(#val),
+                None => parse_quote!(0),
+            };
+
+            let max_val: Expr = match attr.max {
+                Some(val) => parse_quote!(#val),
+                None => parse_quote!(i16::MAX),
+            };
+
             parse_quote!(
                 (#ident_str, libtd0_core::TD0Value::U16(val)) => {
                     if libtd0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
@@ -791,7 +830,9 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                         Ok(())
                     }
                     else {
-                        Err(libtd0_core::result::TD0Error::OutOfRange)
+                        Err(libtd0_core::result::TD0Error::OutOfRange(
+                            libtd0_core::result::OutOfRangeError::new(#min_val, #max_val)
+                        ))
                     }
                 }
             )
@@ -807,6 +848,16 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 None => parse_quote!(None),
             };
 
+            let min_val: Expr = match attr.min {
+                Some(val) => parse_quote!(#val),
+                None => parse_quote!(0),
+            };
+
+            let max_val: Expr = match attr.max {
+                Some(val) => parse_quote!(#val),
+                None => parse_quote!(i16::MAX),
+            };
+
             parse_quote!(
                 (#ident_str, libtd0_core::TD0Value::U32(val)) => {
                     if libtd0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
@@ -814,7 +865,9 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                         Ok(())
                     }
                     else {
-                        Err(libtd0_core::result::TD0Error::OutOfRange)
+                        Err(libtd0_core::result::TD0Error::OutOfRange(
+                            libtd0_core::result::OutOfRangeError::new(#min_val, #max_val)
+                        ))
                     }
                 }
             )
@@ -830,6 +883,16 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 None => parse_quote!(None),
             };
 
+            let min_val: Expr = match attr.min {
+                Some(val) => parse_quote!(#val),
+                None => parse_quote!(0),
+            };
+
+            let max_val: Expr = match attr.max {
+                Some(val) => parse_quote!(#val),
+                None => parse_quote!(i16::MAX),
+            };
+
             parse_quote!(
                 (#ident_str, libtd0_core::TD0Value::U8(val)) => {
                     if libtd0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
@@ -837,7 +900,9 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                         Ok(())
                     }
                     else {
-                        Err(libtd0_core::result::TD0Error::OutOfRange)
+                        Err(libtd0_core::result::TD0Error::OutOfRange(
+                            libtd0_core::result::OutOfRangeError::new(#min_val, #max_val)
+                        ))
                     }
                 }
             )
@@ -853,6 +918,16 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 None => parse_quote!(None),
             };
 
+            let min_val: Expr = match attr.min {
+                Some(val) => parse_quote!(#val),
+                None => parse_quote!(0),
+            };
+
+            let max_val: Expr = match attr.max {
+                Some(val) => parse_quote!(#val),
+                None => parse_quote!(i16::MAX),
+            };
+
             parse_quote!(
                 (#ident_str, libtd0_core::TD0Value::I8(val)) => {
                     if libtd0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
@@ -860,7 +935,9 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                         Ok(())
                     }
                     else {
-                        Err(libtd0_core::result::TD0Error::OutOfRange)
+                        Err(libtd0_core::result::TD0Error::OutOfRange(
+                            libtd0_core::result::OutOfRangeError::new(#min_val, #max_val)
+                        ))
                     }
                 }
             )
@@ -1008,7 +1085,7 @@ fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
 
     let mut set_fields_clauses: Vec<Arm> = td0fields.iter().map(build_setter_expr_raw).collect();
     set_fields_clauses.push(parse_quote!(
-        _ => Err(libtd0_core::result::TD0Error::InvalidInput)
+        _ => Err(libtd0_core::result::TD0Error::InvalidFieldOrType)
     ));
 
     for arm in set_fields_clauses.iter() {

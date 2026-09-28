@@ -5,7 +5,10 @@
 use core::ops::Range;
 use indexmap::{IndexMap, IndexSet};
 use serde::Serialize;
-use td0::{TD0ChunkItem, TD0Error, TD0File, TD0Result, TD0Value, parse_td0_file};
+use td0::{
+    InvalidChunkError, OutOfRangeError, TD0ChunkItem, TD0Error, TD0File, TD0Result, TD0Value,
+    parse_td0_file,
+};
 
 pub type ItemValues = IndexMap<String, TD0Value>;
 pub type IndexedItemValues = IndexMap<usize, ItemValues>;
@@ -13,7 +16,10 @@ pub type IndexedItemValues = IndexMap<usize, ItemValues>;
 pub fn validate_chunk_name(td0file: &dyn TD0File, chunk_name: &str) -> TD0Result<()> {
     match td0file.chunk_pos(chunk_name) {
         Some(_) => Ok(()),
-        None => Err(TD0Error::UnknownChunk),
+        None => Err(TD0Error::InvalidChunk(InvalidChunkError::new(
+            chunk_name.to_string(),
+            "unknown chunk",
+        ))),
     }
 }
 
@@ -22,15 +28,22 @@ fn validate_chunk_item_range(
     range: &Range<usize>,
     chunk_name: &str,
 ) -> TD0Result<()> {
-    td0file
-        .chunk_num_items(chunk_name)
-        .map_or(Err(TD0Error::UnknownChunk), |num_items| {
+    td0file.chunk_num_items(chunk_name).map_or_else(
+        || Err(TD0Error::InvalidChunk(InvalidChunkError::new(
+            chunk_name.to_string(),
+            "unknown chunk",
+        ))),
+        |num_items| {
             if range.end > num_items {
-                Err(TD0Error::OutOfRange)
+                Err(TD0Error::OutOfRange(OutOfRangeError::new(
+                    0,
+                    i64::try_from(num_items).expect("chunk manifest num_items < i64::MAX"),
+                )))
             } else {
                 Ok(())
             }
-        })
+        },
+    )
 }
 
 fn validate_fields(
@@ -45,7 +58,7 @@ fn validate_fields(
     let unknown_fields_str = unknown_fields.copied().collect::<Vec<&str>>().join(",");
 
     if !unknown_fields_str.is_empty() {
-        return Err(TD0Error::InvalidInputWithMessage(format!(
+        return Err(TD0Error::InvalidInput(format!(
             "Unknown {chunk_name} fields: [{unknown_fields_str}]"
         )));
     }
@@ -62,7 +75,10 @@ fn requested_fields_or_all<'a>(
     fields: &'a Option<Vec<String>>,
 ) -> TD0Result<Vec<&'a str>> {
     let Some(default_item) = td0file.chunk_item_default(chunk_name) else {
-        return Err(TD0Error::UnknownChunk);
+        return Err(TD0Error::InvalidChunk(InvalidChunkError::new(
+            chunk_name.to_string(),
+            "unknown chunk",
+        )));
     };
 
     match fields {
@@ -85,7 +101,10 @@ pub fn command_dump_chunk_item<'a>(
 pub fn command_dump_chunk<'a>(td0file: &'a dyn TD0File, chunk_name: &str) -> TD0Result<&'a [u8]> {
     td0file
         .chunk_raw(chunk_name)
-        .ok_or(TD0Error::UnknownChunk)
+        .ok_or_else(|| TD0Error::InvalidChunk(InvalidChunkError::new(
+            chunk_name.to_string(),
+            "unknown chunk",
+        )))
 }
 
 #[expect(
@@ -177,26 +196,28 @@ pub fn parse_chunk_item_field_value(
     val: &str,
 ) -> TD0Result<TD0Value> {
     match chunk_item.field_type(field) {
-        Some("TD0Decimal" | "Volume") => Ok(TD0Value::Decimal(
-            val.parse().map_err(|_| TD0Error::InvalidInput)?,
-        )),
-        Some("I16") => Ok(TD0Value::I16(
-            val.parse().map_err(|_| TD0Error::InvalidInput)?,
-        )),
+        Some("TD0Decimal" | "Volume") => {
+            Ok(TD0Value::Decimal(val.parse().map_err(|_| {
+                TD0Error::InvalidInput(format!("invalid value for field '{field}'"))
+            })?))
+        }
+        Some("I16") => Ok(TD0Value::I16(val.parse().map_err(|_| {
+            TD0Error::InvalidInput(format!("invalid value for field '{field}'"))
+        })?)),
         Some("Text" | "EnumStr") => Ok(TD0Value::Text(val.to_string())),
-        Some("I8") => Ok(TD0Value::I8(
-            val.parse().map_err(|_| TD0Error::InvalidInput)?,
-        )),
+        Some("I8") => Ok(TD0Value::I8(val.parse().map_err(|_| {
+            TD0Error::InvalidInput(format!("invalid value for field '{field}'"))
+        })?)),
         // Slice parsing from String not implemented.
-        Some("U8") => Ok(TD0Value::U8(
-            val.parse().map_err(|_| TD0Error::InvalidInput)?,
-        )),
-        Some("U16") => Ok(TD0Value::U16(
-            val.parse().map_err(|_| TD0Error::InvalidInput)?,
-        )),
-        Some("U32") => Ok(TD0Value::U32(
-            val.parse().map_err(|_| TD0Error::InvalidInput)?,
-        )),
+        Some("U8") => Ok(TD0Value::U8(val.parse().map_err(|_| {
+            TD0Error::InvalidInput(format!("invalid value for field '{field}'"))
+        })?)),
+        Some("U16") => Ok(TD0Value::U16(val.parse().map_err(|_| {
+            TD0Error::InvalidInput(format!("invalid value for field '{field}'"))
+        })?)),
+        Some("U32") => Ok(TD0Value::U32(val.parse().map_err(|_| {
+            TD0Error::InvalidInput(format!("invalid value for field '{field}'"))
+        })?)),
         _ => Err(TD0Error::InvalidFieldOrType),
     }
 }
@@ -246,7 +267,7 @@ pub fn command_reorder_chunk_items(
             td0file
                 .chunk_item(chunk_name, idx)?
                 .field_value(display_field)
-                .ok_or(TD0Error::InvalidChunkItem)?,
+                .ok_or(TD0Error::ChunkItemParse)?,
         );
     }
 
@@ -258,7 +279,7 @@ pub fn command_reorder_chunk_items(
             td0file
                 .chunk_item(chunk_name, idx)?
                 .field_value(display_field)
-                .ok_or(TD0Error::InvalidChunkItem)?,
+                .ok_or(TD0Error::ChunkItemParse)?,
         );
     }
 

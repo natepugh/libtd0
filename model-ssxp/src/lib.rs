@@ -227,7 +227,7 @@ mod tests {
         );
         assert_matches!(
             td0file.chunk_item("TGLa", 3),
-            Err(TD0Error::InvalidChunkItem),
+            Err(TD0Error::ChunkItemParse),
             "can't retrieve spurious chunk items."
         );
     }

@@ -20,8 +20,10 @@ mod pytd0 {
 
     fn map_chunk_item_error(err: TD0Error) -> PyErr {
         match err {
-            TD0Error::UnknownChunk => PyErr::new::<PyValueError, _>("Unknown chunk"),
-            TD0Error::InvalidChunkItem => PyErr::new::<PyValueError, _>("Invalid chunk item index"),
+            TD0Error::InvalidChunk(chunk_err) => {
+                PyErr::new::<PyValueError, _>(chunk_err.to_string())
+            }
+            TD0Error::ChunkItemParse => PyErr::new::<PyValueError, _>("Invalid chunk item index"),
             _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
         }
     }
@@ -365,7 +367,6 @@ mod pytd0 {
             self._impl.list_fields()
         }
 
-
         fn set_field_value<'py>(&mut self, field: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
             let val: Impl_TD0Value = match self._impl.field_type(field) {
                 Some("EnumStr") | Some("Text") => Impl_TD0Value::Text(value.extract::<String>()?),
@@ -399,7 +400,11 @@ mod pytd0 {
                 .map_err(|err| PyErr::new::<PyValueError, _>(format!("{err}")))
         }
 
-        fn set_field_value_raw<'py>(&mut self, field: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
+        fn set_field_value_raw<'py>(
+            &mut self,
+            field: &str,
+            value: Bound<'py, PyAny>,
+        ) -> PyResult<()> {
             let val: Impl_TD0ValueRaw = match self._impl.field_type(field) {
                 Some("EnumStr") | Some("Slice") | Some("Text") => {
                     Impl_TD0ValueRaw::Slice(value.extract::<Vec<u8>>()?.into_boxed_slice())
@@ -500,9 +505,11 @@ mod pytd0 {
             self._impl
                 .chunk_items_reorder(chunk_name, new_order.as_slice())
                 .map_err(|err| match err {
-                    TD0Error::InvalidInputWithMessage(msg) => PyErr::new::<PyValueError, _>(msg),
-                    TD0Error::UnknownChunk => PyErr::new::<PyValueError, _>("Unknown chunk"),
-                    TD0Error::InvalidChunkItem => {
+                    TD0Error::InvalidInput(msg) => PyErr::new::<PyValueError, _>(msg),
+                    TD0Error::InvalidChunk(chunk_err) => {
+                        PyErr::new::<PyValueError, _>(chunk_err.to_string())
+                    }
+                    TD0Error::ChunkItemParse => {
                         PyErr::new::<PyValueError, _>("Invalid chunk item index")
                     }
                     _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
@@ -511,7 +518,7 @@ mod pytd0 {
 
         pub fn finalize(&mut self) -> PyResult<()> {
             self._impl.finalize().map_err(|err| match err {
-                TD0Error::InvalidTD0File(msg) => PyErr::new::<PyValueError, _>(msg),
+                TD0Error::FileParse(msg) => PyErr::new::<PyValueError, _>(msg),
                 _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
             })
         }
