@@ -7,6 +7,13 @@ name = "libtd0-derive"
 version = "0.1.0"
 edition = "2024"
 
+authors = ["Nathan Pugh <natepugh@gmail.com>"]
+description = "Derive macros for internal use in libtd0. Use the `libtd0` crate instead."
+license = "GPL-3.0-or-later"
+repository = "https://github.com/natepugh/libtd0"
+keywords = ["libtd0", "td0"]
+categories = ["parsing", "parser-implementations"]
+
 [dependencies]
 proc-macro2 = "1.0.107"
 quote = "1.0.47"
