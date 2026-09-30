@@ -17,9 +17,9 @@ impl Display for InvalidChunkError {
 }
 impl Error for InvalidChunkError {}
 impl InvalidChunkError {
-    pub fn new(chunk_name: String, reason: &'static str) -> Self {
+    pub fn new(chunk_name: impl Into<String>, reason: &'static str) -> Self {
         Self {
-            chunk_name: chunk_name.clone(),
+            chunk_name: chunk_name.into(),
             reason,
         }
     }
@@ -121,6 +121,7 @@ pub enum TD0Error {
     ChecksumMismatch,
     ChunkItemParse,
     FileParse(String),
+    FileTooLarge,
     InvalidChunk(InvalidChunkError),
     InvalidFieldOrType,
     InvalidInput(String),
@@ -129,6 +130,7 @@ pub enum TD0Error {
     ReadOnlyField(String),
     UnsupportedDeviceFirmwareVersion(String),
     UnsupportedDeviceModel(String),
+    ValidationFailed(String),
 }
 
 impl Display for TD0Error {
@@ -136,19 +138,21 @@ impl Display for TD0Error {
         let repr: String = match self {
             Self::ChecksumMismatch => "checksum mismatch.".to_string(),
             Self::ChunkItemParse => "unable to parse chunk item.".to_string(),
+            Self::FileParse(err) => err.to_string(),
+            Self::FileTooLarge => "the file is too large to complete this operation.".to_string(),
+            Self::InvalidChunk(val) => val.to_string(),
             Self::InvalidFieldOrType => {
                 "unknown field or invalid input type for field.".to_string()
             }
             Self::InvalidInput(msg) => msg.clone(),
+            Self::OutOfRange(val) => val.to_string(),
+            Self::OutOfRangeDecimal(val) => val.to_string(),
             Self::ReadOnlyField(field_name) => format!("field '{field_name}' is read-only."),
             Self::UnsupportedDeviceFirmwareVersion(version) => {
                 format!("unsupported firmware version '{version}'")
             }
             Self::UnsupportedDeviceModel(model) => format!("unsupported device model '{model}'"),
-            Self::FileParse(err) => err.to_string(),
-            Self::InvalidChunk(val) => val.to_string(),
-            Self::OutOfRange(val) => val.to_string(),
-            Self::OutOfRangeDecimal(val) => val.to_string(),
+            Self::ValidationFailed(message) => message.clone(),
         };
 
         write!(f, "{}", repr)
@@ -157,3 +161,23 @@ impl Display for TD0Error {
 impl Error for TD0Error {}
 
 pub type TD0Result<T> = Result<T, TD0Error>;
+
+impl TD0Error {
+    pub fn unknown_chunk_error(chunk_name: impl Into<String>) -> Self {
+        Self::InvalidChunk(InvalidChunkError {
+            chunk_name: chunk_name.into(),
+            reason: "unkonwn chunk.",
+        })
+    }
+
+    pub fn out_of_range_error(min: impl Into<i64>, max: impl Into<i64>) -> Self {
+        Self::OutOfRange(OutOfRangeError {
+            min: min.into(),
+            max: max.into(),
+        })
+    }
+}
+
+pub fn create_u32_oob_error() -> TD0Error {
+    TD0Error::OutOfRange(OutOfRangeError::new(0, u32::MAX))
+}

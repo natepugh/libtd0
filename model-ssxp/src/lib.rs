@@ -263,6 +263,28 @@ mod tests {
     }
 
     #[test]
+    fn test_remove_chunk() {
+        let initial_bytes = get_test_data(PathBuf::from("_01_after_add_chunk.TD0"));
+        let expected = get_test_data(PathBuf::from("new_v1_10.TD0"));
+
+        let mut td0file: SSXPTD0File =
+            SSXPTD0File::try_from_bytes(&initial_bytes).expect("or test is broken");
+
+        assert_eq!(
+            td0file.remove_chunk("TGLa"),
+            Ok(()),
+            "SSXPTD0File.remove_chunk() succeeds."
+        );
+        let _ = td0file.finalize();
+
+        assert_eq!(
+            fmt_hex(td0file.to_bytes().as_bytes()),
+            fmt_hex(expected.as_bytes()),
+            "remove chunk produced correct output."
+        );
+    }
+
+    #[test]
     fn test_ssxp_td0file_new_is_valid() {
         let td0file = SSXPTD0File::new().expect("Test is broken.");
         assert_eq!(Ok(()), td0file.validate_load());

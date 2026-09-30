@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::result::{TD0Error, TD0Result};
+use super::try_u32_le_from_usize;
 use super::usize_from_u32;
 use zerocopy::{FromBytes, LittleEndian, U16, U32};
 use zerocopy_derive::{Immutable, IntoBytes, KnownLayout};
@@ -101,11 +102,11 @@ impl TD0ManifestTag {
     }
 
     pub fn chunk_pos(&self) -> usize {
-        usize::try_from(self.chunk_pos.get()).expect("platform usize is >= 32 bits")
+        usize_from_u32(self.chunk_pos.get())
     }
 
     pub fn chunk_size(&self) -> usize {
-        usize::try_from(self.chunk_size.get()).expect("platform usize is >= 32 bits")
+        usize_from_u32(self.chunk_size.get())
     }
 
     pub fn chunk_range(&self) -> ::core::ops::Range<usize> {
@@ -146,12 +147,14 @@ impl TD0ManifestTag {
         Ok(())
     }
 
-    pub fn set_chunk_pos(&mut self, pos: u32) {
-        self.chunk_pos = U32::from(pos);
+    pub fn set_chunk_pos(&mut self, pos: usize) -> TD0Result<()> {
+        self.chunk_pos = try_u32_le_from_usize(pos)?;
+        Ok(())
     }
 
-    pub fn set_chunk_size(&mut self, size: u32) {
-        self.chunk_size = U32::from(size);
+    pub fn set_chunk_size(&mut self, size: usize) -> TD0Result<()> {
+        self.chunk_size = try_u32_le_from_usize(size)?;
+        Ok(())
     }
 }
 

@@ -26,9 +26,9 @@ fn read_td0_id_chunk(bytes: &[u8]) -> TD0Result<TD0IdChunk> {
 ///
 /// - `TD0Error::UnsupportedDeviceModel` - The device model is not supported by this library.
 ///   Support may be added in the future.
-/// - `TD0Error::UnsupportedFirmwareVersion` - The firmware revision of the device that created the backup file is
+/// - `TD0Error::UnsupportedDeviceFirmwareVersion` - The firmware revision of the device that created the backup file is
 ///   not supported by this library. Support may be added in the future.
-/// - `TD0Error::InvalidTD0File` - The backup file is improperly formatted or otherwise not parsable.
+/// - `TD0Error::FileParse` - The backup file is improperly formatted or otherwise not parsable.
 pub fn parse_td0_file(bytes: &[u8]) -> TD0Result<Box<dyn TD0File>> {
     use zerocopy::FromBytes;
 

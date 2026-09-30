@@ -19,14 +19,15 @@ use crate::rev::v2_0::{
 use ::core::fmt;
 use ::core::ops::Range;
 use libtd0_core::header::{OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
-use libtd0_core::result::{InvalidChunkError, TD0Error, TD0Result};
+use libtd0_core::result::{InvalidChunkError, TD0Error, TD0Result, create_u32_oob_error};
 use libtd0_core::{
-    ChunkManifest, SZ_MD5_DIGEST, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File, TD0Manifest,
+    ChunkManifest, SZ_MD5_DIGEST, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File,
+    TD0Manifest, try_u32_from_usize, usize_from_u32,
 };
 use libtd0_derive::TD0ChunkItemDerive;
 use md5::Digest as _;
 use std::collections::{HashMap, HashSet};
-use zerocopy::{FromBytes, FromZeros, IntoBytes, LittleEndian, U32};
+use zerocopy::{FromBytes, FromZeros, IntoBytes, LittleEndian, TryFromBytes, U32};
 use zerocopy_derive::{Immutable, KnownLayout};
 
 /// Backup header tag for a single-kit backup.
@@ -42,7 +43,7 @@ fn device_model_from_tag_value(val: &str) -> TD0DeviceModel {
 }
 
 /// The header of a `TD0Chunk` in a `TD0File`.
-#[derive(Copy, Clone, Debug, FromBytes, Immutable, IntoBytes, KnownLayout)]
+#[derive(Copy, Clone, Debug, Default, FromBytes, PartialEq, Immutable, IntoBytes, KnownLayout)]
 #[repr(C, packed)]
 pub struct ChunkHeader {
     /// The number of items contained in the chunk.
@@ -60,15 +61,34 @@ pub struct ChunkHeader {
 
 impl ChunkHeader {
     pub fn first_item_offset(&self) -> usize {
-        libtd0_core::usize_from_u32(self.first_item_offset.get())
+        usize_from_u32(self.first_item_offset.get())
     }
 
     pub fn item_size(&self) -> usize {
-        libtd0_core::usize_from_u32(self.item_size.get())
+        usize_from_u32(self.item_size.get())
     }
 
     pub fn num_items(&self) -> usize {
-        libtd0_core::usize_from_u32(self.num_items.get())
+        usize_from_u32(self.num_items.get())
+    }
+
+    pub fn new(
+        num_items: u32,
+        item_size: u32,
+        first_item_offset: u32,
+        unknown_header_data: Option<&[u8; 4]>,
+    ) -> Self {
+        let mut unknown_buf: [u8; 4] = [0; 4];
+        if let Some(buf) = unknown_header_data {
+            unknown_buf.copy_from_slice(buf);
+        };
+
+        Self {
+            num_items: U32::from(num_items),
+            item_size: U32::from(item_size),
+            first_item_offset: U32::from(first_item_offset),
+            unknown_header_data: unknown_buf,
+        }
     }
 }
 
@@ -91,7 +111,10 @@ pub struct HDRaItem {
     #[td0_field(field_type = "Slice")]
     data: [u8; 8],
 
-    #[td0_field(field_type = "Text", pad_byte = 0x20)]
+    // NOTE: SSXPROBK (whole system) backups use 0x0 as a pad byte.
+    //       SSXPROKT (single kit) backups use 0x20, likely copied
+    //       verbatim from the kit name.
+    #[td0_field(field_type = "Text", pad_byte = 0x0)]
     name: [u8; 16],
 
     #[td0_field(field_type = "Text", pad_byte = 0x20)]
@@ -183,12 +206,231 @@ impl HDRaItem {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+struct SSXPTD0FileMetadata {
+    chunks: HashMap<String, Chunk>,
+    tag_order: Vec<String>,
+    tags: HashMap<String, TD0ManifestTag>,
+}
+
+fn manifest_tag_from_chunk(
+    chunk_name: &str,
+    chunk: &Chunk,
+    device_model: TD0DeviceModel,
+) -> TD0Result<TD0ManifestTag> {
+    let mut tag: TD0ManifestTag = TD0ManifestTag::new_zeroed();
+    tag.set_chunk_pos(usize_from_u32(chunk.pos))?;
+    tag.set_tag(chunk_name)?;
+    tag.set_model(device_model.as_str())?;
+    tag.set_chunk_size(usize_from_u32(chunk.size))?;
+    Ok(tag)
+}
+
+impl SSXPTD0FileMetadata {
+    pub fn new_from_buf(buf: &[u8]) -> TD0Result<Self> {
+        let id_chunk = id_chunk_from_buf(buf)?;
+        let mut pos = size_of::<TD0IdChunk>();
+        let mut tags: HashMap<String, TD0ManifestTag> = HashMap::new();
+        let mut tag_order: Vec<String> = Vec::new();
+        let mut chunks: HashMap<String, Chunk> = HashMap::new();
+
+        while pos < id_chunk.bytes_remaining() + OFFSET_BYTES_REMAINING && pos < buf.len() {
+            let tag = manifest_tag_from_buf_owned(buf, pos)?;
+            tags.insert(tag.tag(), tag);
+            tag_order.push(tag.tag());
+            pos += size_of::<TD0ManifestTag>();
+        }
+
+        for tag in tags.values() {
+            chunks.insert(
+                tag.tag(),
+                Chunk {
+                    header: chunk_header_from_buf(buf, tag)?,
+                    pos: u32::try_from(tag.chunk_pos()).map_err(|_| {
+                        TD0Error::FileParse(format!("chunk '{}' has an invalid offset.", tag.tag()))
+                    })?,
+                    size: u32::try_from(tag.chunk_size()).map_err(|_| {
+                        TD0Error::FileParse(format!("chunk '{}' has an invalid size.", tag.tag()))
+                    })?,
+                },
+            );
+        }
+
+        Ok(Self {
+            chunks,
+            tag_order,
+            tags,
+        })
+    }
+
+    pub fn chunk(&self, chunk_name: impl Into<String>) -> Option<&Chunk> {
+        self.chunks.get(&chunk_name.into())
+    }
+
+    pub fn manifest_tag(&self, manifest_tag_name: impl Into<String>) -> Option<&TD0ManifestTag> {
+        self.tags.get(&manifest_tag_name.into())
+    }
+
+    pub fn manifest_tag_pos(&self, tag_name: impl Into<String>) -> Option<usize> {
+        let tag_name = tag_name.into();
+        self.tag_order
+            .iter()
+            .position(|val| val.as_str() == tag_name)
+            .map(|index| index * size_of::<TD0ManifestTag>() + size_of::<TD0IdChunk>())
+    }
+
+    pub fn header_size(&self) -> usize {
+        size_of::<TD0IdChunk>() + (size_of::<TD0ManifestTag>() * self.tags.len())
+    }
+
+    pub fn chunk_data_size(&self) -> usize {
+        usize_from_u32(self.chunks.values().map(|ch| ch.size).sum::<u32>())
+    }
+
+    fn next_chunk_pos(&self) -> usize {
+        // NOTE: This method assumes that the new header for the chunk hasn't
+        //       been added to the file.
+
+        // Inefficient, but shouldn't be called often. If this becomes a
+        // bottleneck, consider saving the chunk order as a struct member.
+        //
+        // An ASSUMED invariant is that the tag order in the manifest matches
+        // the chunk order in the file data. Caching the order rather than
+        // relying on this assumption is probably the safest option.
+        let mut last_chunk: Option<&Chunk> = None;
+        for chunk in self.chunks.values() {
+            if last_chunk.is_none() || last_chunk.unwrap().pos < chunk.pos {
+                last_chunk = Some(chunk);
+            }
+        }
+        let before_header_added = match last_chunk {
+            Some(chunk) => usize_from_u32(chunk.pos + chunk.size),
+            None => self.header_size(),
+        };
+        before_header_added + size_of::<TD0ManifestTag>()
+    }
+
+    fn create_new_chunk(&self, num_items: u32, item_size: u32) -> TD0Result<Chunk> {
+        let first_item_offset = u32::try_from(size_of::<ChunkHeader>()).unwrap();
+        let header = ChunkHeader::new(num_items, item_size, first_item_offset, None);
+
+        let chunk_pos: u32 =
+            u32::try_from(self.next_chunk_pos()).map_err(|_| TD0Error::FileTooLarge)?;
+        let chunk_data_size: u32 =
+            num_items
+                .checked_mul(item_size)
+                .ok_or(TD0Error::InvalidInput(
+                    "num_items * item_size may not be larger than u32::MAX.".to_string(),
+                ))?;
+        let chunk_size: u32 =
+            first_item_offset
+                .checked_add(chunk_data_size)
+                .ok_or(TD0Error::InvalidInput(
+                    "num_items * item_size + ChunkHeader size may not be larger than u32::MAX."
+                        .to_string(),
+                ))?;
+        Ok(Chunk {
+            header,
+            pos: chunk_pos,
+            size: chunk_size,
+        })
+    }
+
+    pub fn push_chunk(
+        &mut self,
+        chunk_name: impl Into<String>,
+        device_model: TD0DeviceModel,
+        num_items: u32,
+        item_size: u32,
+    ) -> TD0Result<()> {
+        let chunk_name: String = chunk_name.into();
+        if self.chunks.contains_key(&chunk_name) {
+            return Err(TD0Error::InvalidInput(format!(
+                "chunk '{chunk_name}' already exists."
+            )));
+        }
+
+        let chunk = self.create_new_chunk(num_items, item_size)?;
+        let tag: TD0ManifestTag = manifest_tag_from_chunk(&chunk_name, &chunk, device_model)?;
+        // Since we're pushing, all chunks' positions are incremented by the size of a TD0ManifestTag.
+        let all_chunks: Vec<String> = self.chunks.keys().cloned().collect();
+        for chunk_name in all_chunks.iter() {
+            self.update_chunk_offset(
+                chunk_name,
+                i64::try_from(size_of::<TD0ManifestTag>()).unwrap(),
+            )?;
+        }
+
+        self.chunks.insert(chunk_name.clone(), chunk);
+        self.tags.insert(chunk_name.clone(), tag);
+        self.tag_order.push(chunk_name);
+        Ok(())
+    }
+
+    fn update_chunk_offset(&mut self, chunk_name: &str, offset: i64) -> TD0Result<()> {
+        // Update the position in the manifest.
+        let tag = self
+            .tags
+            .get_mut(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
+        let chunk_pos: i64 = i64::try_from(tag.chunk_pos()).map_err(|_| {
+            TD0Error::InvalidChunk(InvalidChunkError::new(tag.tag(), "chunk offset invalid."))
+        })?;
+        tag.set_chunk_pos(usize_from_u32(
+            u32::try_from(chunk_pos + offset).map_err(|_| create_u32_oob_error())?,
+        ))?;
+
+        // Update the position in the chunk metadata.
+        self.chunks.get_mut(&tag.tag()).unwrap().pos = try_u32_from_usize(tag.chunk_pos())?;
+        Ok(())
+    }
+
+    pub fn remove_chunk(&mut self, chunk_name: &str) -> TD0Result<()> {
+        let remove_tag_index: usize = self
+            .tag_order
+            .iter()
+            .position(|val| val.as_str() == chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
+        let (remove_tag_pos, remove_tag_size) = self
+            .chunk(chunk_name)
+            .map(|ch| (usize_from_u32(ch.pos), usize_from_u32(ch.size)))
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
+
+        // The chunks before remove_tag_pos positions are decremented by the size of a TD0ManifestTag.
+        // The chunks afterware are decremented by the size of the chunk in addition to the manfiest tag.
+        let before_offset: i64 = -i64::try_from(size_of::<TD0ManifestTag>()).unwrap();
+        let after_offset: i64 = -before_offset
+            - i64::try_from(remove_tag_size).map_err(|_| {
+                TD0Error::InvalidChunk(InvalidChunkError::new(chunk_name, "chunk size invalid."))
+            })?;
+
+        let mut chunk_offset_changes: HashMap<String, i64> = HashMap::new();
+
+        for (name, tag) in self.tags.iter() {
+            if tag.chunk_pos() < remove_tag_pos {
+                chunk_offset_changes.insert(name.clone(), before_offset);
+            } else if tag.chunk_pos() > remove_tag_pos {
+                chunk_offset_changes.insert(name.clone(), after_offset);
+            }
+            // Intentionally excluding chunk_pos == remove_tag_pos.
+        }
+
+        for (modify_chunk_name, offset) in chunk_offset_changes.iter() {
+            self.update_chunk_offset(modify_chunk_name, *offset)?;
+        }
+
+        self.chunks.remove(chunk_name).unwrap();
+        self.tags.remove(chunk_name).unwrap();
+        self.tag_order.remove(remove_tag_index);
+
+        Ok(())
+    }
+}
+
 pub struct SSXPTD0File {
     buf: Vec<u8>,
-    chunk_order: Vec<String>,
-    chunks: HashMap<String, Chunk>,
     dirty: bool,
-    tag_offsets: HashMap<String, usize>,
+    meta: SSXPTD0FileMetadata,
 }
 
 fn get_chunk_header_bytes<'a>(buf: &'a [u8], manifest_tag: &TD0ManifestTag) -> TD0Result<&'a [u8]> {
@@ -209,7 +451,7 @@ fn chunk_header_ref_from_buf<'a>(
     manifest_tag: &TD0ManifestTag,
 ) -> TD0Result<&'a ChunkHeader> {
     let bytes = get_chunk_header_bytes(buf, manifest_tag)?;
-    ChunkHeader::ref_from_bytes(bytes).map_err(|_| {
+    ChunkHeader::try_ref_from_bytes(bytes).map_err(|_| {
         TD0Error::InvalidChunk(InvalidChunkError::new(
             manifest_tag.tag(),
             "unable to parse chunk header.",
@@ -218,63 +460,47 @@ fn chunk_header_ref_from_buf<'a>(
 }
 
 fn id_chunk_from_buf(buf: &[u8]) -> TD0Result<&TD0IdChunk> {
-    TD0IdChunk::ref_from_bytes(
-        buf.get(..size_of::<TD0IdChunk>())
-            .ok_or(TD0Error::FileParse(
-                "unable to read TD0 ID chunk.".to_string(),
-            ))?,
-    )
+    TD0IdChunk::try_ref_from_bytes(buf.get(..size_of::<TD0IdChunk>()).ok_or(
+        TD0Error::FileParse("unable to read TD0 ID chunk.".to_string()),
+    )?)
     .map_err(|_| TD0Error::FileParse("unable to parse TD0 ID chunk.".to_string()))
 }
 
 fn id_chunk_from_buf_mut(buf: &mut [u8]) -> TD0Result<&mut TD0IdChunk> {
-    TD0IdChunk::mut_from_bytes(buf.get_mut(..size_of::<TD0IdChunk>()).ok_or(
+    TD0IdChunk::try_mut_from_bytes(buf.get_mut(..size_of::<TD0IdChunk>()).ok_or(
         TD0Error::FileParse("unable to read TD0 ID chunk.".to_string()),
     )?)
     .map_err(|_| TD0Error::FileParse("unable to parse TD0 ID chunk.".to_string()))
 }
 
 fn manifest_tag_from_buf(buf: &[u8], pos: usize) -> TD0Result<&TD0ManifestTag> {
-    TD0ManifestTag::ref_from_bytes(buf.get(pos..pos + size_of::<TD0ManifestTag>()).ok_or(
+    TD0ManifestTag::try_ref_from_bytes(buf.get(pos..pos + size_of::<TD0ManifestTag>()).ok_or(
+        TD0Error::FileParse("unable to read manifest tag.".to_string()),
+    )?)
+    .map_err(|_| TD0Error::FileParse("invalid manifest tag.".to_string()))
+}
+
+fn manifest_tag_from_buf_owned(buf: &[u8], pos: usize) -> TD0Result<TD0ManifestTag> {
+    TD0ManifestTag::try_read_from_bytes(buf.get(pos..pos + size_of::<TD0ManifestTag>()).ok_or(
         TD0Error::FileParse("unable to read manifest tag.".to_string()),
     )?)
     .map_err(|_| TD0Error::FileParse("invalid manifest tag.".to_string()))
 }
 
 fn manifest_tag_from_buf_mut(buf: &mut [u8], pos: usize) -> TD0Result<&mut TD0ManifestTag> {
-    TD0ManifestTag::mut_from_bytes(buf.get_mut(pos..pos + size_of::<TD0ManifestTag>()).ok_or(
+    TD0ManifestTag::try_mut_from_bytes(buf.get_mut(pos..pos + size_of::<TD0ManifestTag>()).ok_or(
         TD0Error::FileParse("unable to read manifest tag.".to_string()),
     )?)
     .map_err(|_| TD0Error::FileParse("invalid manifest tag.".to_string()))
 }
 
-fn collect_offsets(buf: &[u8]) -> TD0Result<(Vec<String>, HashMap<String, usize>)> {
-    let mut chunk_order: Vec<String> = Vec::new();
-    let mut tag_offsets: HashMap<String, usize> = HashMap::new();
-
-    let header_size = id_chunk_from_buf(buf)?.bytes_remaining() + OFFSET_BYTES_REMAINING;
-    let mut pos: usize = size_of::<TD0IdChunk>();
-    while pos < header_size {
-        let tag = manifest_tag_from_buf(buf, pos)?;
-        let chunk_name = str::from_utf8(tag.tag_raw())
-            .map_err(|_| TD0Error::FileParse("non-utf8 TD0 tag.".to_string()))?
-            .to_string();
-        chunk_order.push(chunk_name.clone());
-        tag_offsets.insert(chunk_name, pos);
-
-        pos += size_of::<TD0ManifestTag>();
-    }
-
-    Ok((chunk_order, tag_offsets))
-}
-
 /// Represents a section of a `TD0File` containing a specific subtype of data.
 /// (e.g. Kit configuration or LED colors.)
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Chunk {
     pub header: ChunkHeader,
-    pub pos: usize,
-    pub size: usize,
+    pub pos: u32,
+    pub size: u32,
 }
 
 impl Chunk {
@@ -282,7 +508,11 @@ impl Chunk {
         if index >= self.header.num_items() {
             None
         } else {
-            Some(self.pos + self.header.first_item_offset() + (index * self.header.item_size()))
+            Some(
+                usize_from_u32(self.pos)
+                    + self.header.first_item_offset()
+                    + (index * self.header.item_size()),
+            )
         }
     }
 
@@ -299,15 +529,16 @@ impl Chunk {
     }
 
     pub fn range(&self) -> Range<usize> {
-        self.pos..self.pos + self.size
+        usize_from_u32(self.pos)..usize_from_u32(self.pos + self.size)
     }
 }
 
 impl SSXPTD0File {
     fn backup_header(&self) -> TD0Result<&HDRaItem> {
-        let chunk = self.chunks.get("HDRa").ok_or(TD0Error::FileParse(
+        let chunk = self.meta.chunk("HDRa").ok_or(TD0Error::FileParse(
             "missing HDRa backup manifest.".to_string(),
         ))?;
+
         let bytes = chunk
             .item_range(0)
             .and_then(|irange| self.buf.get(irange))
@@ -332,13 +563,11 @@ impl SSXPTD0File {
     }
 
     fn calc_header_size(&self) -> usize {
-        size_of::<TD0IdChunk>() + (self.chunk_order.len() * (size_of::<TD0ManifestTag>()))
+        self.meta.header_size()
     }
 
     pub fn calc_expected_size(&self) -> usize {
-        self.calc_header_size()
-            + self.chunks.values().map(|ch| ch.size).sum::<usize>()
-            + SZ_MD5_DIGEST
+        self.calc_header_size() + self.meta.chunk_data_size() + SZ_MD5_DIGEST
     }
 
     pub fn firmware_version(&self) -> TD0Result<String> {
@@ -348,76 +577,101 @@ impl SSXPTD0File {
     }
 
     pub fn manifest_tag(&self, chunk_name: &str) -> TD0Result<&TD0ManifestTag> {
-        let &pos = self
-            .tag_offsets
-            .get(chunk_name)
-            .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                chunk_name.to_string(),
-                "unknown or missing chunk.",
-            )))?;
-        manifest_tag_from_buf(&self.buf, pos)
+        let pos = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?
+            .pos;
+        manifest_tag_from_buf(&self.buf, usize_from_u32(pos))
     }
 
     pub fn manifest_tag_mut(&mut self, chunk_name: &str) -> TD0Result<&mut TD0ManifestTag> {
-        let &pos = self
-            .tag_offsets
-            .get(chunk_name)
-            .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                chunk_name.to_string(),
-                "unknown or missing chunk.",
-            )))?;
-        manifest_tag_from_buf_mut(&mut self.buf, pos)
+        let pos = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?
+            .pos;
+        manifest_tag_from_buf_mut(&mut self.buf, usize_from_u32(pos))
     }
 
     pub fn read_checksum(&self) -> Option<&[u8]> {
         self.buf.get(self.buf.len() - SZ_MD5_DIGEST..)
     }
 
+    fn update_buf_manifest_from_meta_changes(
+        &mut self,
+        old_meta: &SSXPTD0FileMetadata,
+    ) -> TD0Result<()> {
+        // NOTE: This function should be run _before_ any insertions or deletions
+        // are made to to self.buf!
+        //
+        // NOTE2: old_meta **MUST** be a clone of the metadata that was created
+        //        prior to adding or removing chunks.
+        for name in old_meta.tags.keys() {
+            let Some(new_tag) = self.meta.manifest_tag(name) else {
+                continue;
+            };
+            let tag_real = manifest_tag_from_buf_mut(
+                &mut self.buf,
+                old_meta
+                    .manifest_tag_pos(name)
+                    .expect("old metadata was consistent."),
+            )?;
+            tag_real.set_chunk_pos(new_tag.chunk_pos())?;
+            // That's it. In-file chunk headers don't carry their own position.
+        }
+        Ok(())
+    }
+
     fn validate_expected_file_size(&self) -> TD0Result<()> {
         if self.buf.len() == self.calc_expected_size() {
             Ok(())
         } else {
-            Err(TD0Error::FileParse("incorrect file size.".to_string()))
+            Err(TD0Error::ValidationFailed(
+                "incorrect file size.".to_string(),
+            ))
         }
     }
 
     fn validate_has_backup_hdr_chunk(&self) -> TD0Result<()> {
-        if self.tag_offsets.contains_key("HDRa") {
+        if self.meta.tags.contains_key("HDRa") {
             Ok(())
         } else {
-            Err(TD0Error::FileParse(
+            Err(TD0Error::ValidationFailed(
                 "missing TD0a backup header.".to_string(),
             ))
         }
     }
 
     fn validate_manifest_tags_are_unique(&self) -> TD0Result<()> {
-        let mut unique: HashSet<String> = HashSet::new();
+        let mut unique: HashSet<&String> = HashSet::new();
 
-        for offset in self.tag_offsets.values() {
-            let tag = manifest_tag_from_buf(&self.buf, *offset)?;
-            if !unique.insert(tag.tag()) {
-                return Err(TD0Error::FileParse("duplicate manifest chunk".to_string()));
+        for tag in self.meta.tags.keys() {
+            if !unique.insert(tag) {
+                return Err(TD0Error::ValidationFailed(format!(
+                    "duplicate manifest tag '{tag}'"
+                )));
             }
         }
         Ok(())
     }
 
     fn validate_manifest_tags_correct_model(&self) -> TD0Result<()> {
-        for offset in self.tag_offsets.values() {
-            let tag = manifest_tag_from_buf(&self.buf, *offset)?;
+        for (chunk_name, tag) in self.meta.tags.iter() {
             if tag.model() != "SSXP" {
-                return Err(TD0Error::FileParse(
-                    "manifest tag found with incorrect model.".to_string(),
-                ));
+                return Err(TD0Error::ValidationFailed(format!(
+                    "manifest tag '{}' has incorrect model '{}'.",
+                    chunk_name,
+                    tag.model()
+                )));
             }
         }
+
         Ok(())
     }
 
     fn validate_manifest_tags_have_chunk_headers(&self) -> TD0Result<()> {
-        for offset in self.tag_offsets.values() {
-            let tag = manifest_tag_from_buf(&self.buf, *offset)?;
+        for tag in self.meta.tags.values() {
             // Read the Chunk header directly at the location specified by the tag rather
             // than relying on this file's cached chunk objects.
             //
@@ -431,14 +685,23 @@ impl SSXPTD0File {
     fn validate_manifest_tags_in_order(&self) -> TD0Result<()> {
         let mut last_range = 0..size_of::<TD0IdChunk>();
 
-        for offset in self.tag_offsets.values() {
-            let tag = manifest_tag_from_buf(&self.buf, *offset)?;
+        for tag_name in self.meta.tag_order.iter() {
+            let tag = self
+                .meta
+                .manifest_tag(tag_name)
+                .ok_or(TD0Error::ValidationFailed(format!(
+                    "manifest tag order has name '{}' with no corresponding tag.",
+                    tag_name
+                )))?;
+
             if libtd0_core::calc_range_overlap(tag.chunk_range(), last_range.clone()).is_some() {
-                return Err(TD0Error::FileParse("overlapping chunks.".to_string()));
+                return Err(TD0Error::ValidationFailed(
+                    "overlapping chunks.".to_string(),
+                ));
             }
 
             if tag.chunk_range().start <= last_range.start {
-                return Err(TD0Error::FileParse(
+                return Err(TD0Error::ValidationFailed(
                     "manifest tags out of order.".to_string(),
                 ));
             }
@@ -450,16 +713,16 @@ impl SSXPTD0File {
     }
 
     fn validate_chunk_headers_chunks_exist(&self) -> TD0Result<()> {
-        for offset in self.tag_offsets.values() {
-            let tag = manifest_tag_from_buf(&self.buf, *offset)?;
+        for tag in self.meta.tags.values() {
             let chunk_header = chunk_header_ref_from_buf(&self.buf, tag)?;
+
             // Calculate the pos of the first element of the next part of the file.
             // (either a chunk or the checksum.)
             let next_part_pos = tag.chunk_pos()
                 + chunk_header.first_item_offset()
                 + (chunk_header.item_size() * chunk_header.num_items());
             if next_part_pos > self.buf.len() {
-                return Err(TD0Error::FileParse(
+                return Err(TD0Error::ValidationFailed(
                     "not enough bytes for all chunks in the manifest.".to_string(),
                 ));
             }
@@ -502,92 +765,79 @@ impl TD0File for SSXPTD0File {
                 ));
             }
         }
-        .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-            chunk_name.to_string(),
-            "unknown chunk.",
-        )))?;
+        .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
 
         let item_size = size_of_val(&*default_item);
 
-        // To insert a new chunk (after the current last chunk):
-        // - Update the headers of all self.chunks items, size_of::<TD0ManifestTag>() is added to all chunk positions.
-        //  - First update the offsets in the bytes the manifest tags in self.buf.
-        //  - Then update the self.chunks[item].header metadata to match.
-        // - Insert the new TD0ManifestTag's bytes into self.buf at the correct position.
-        // - Add its offset to self.tag_offsets.
-        //
-        // - Insert the new Chunk's bytes in self.buf at the correct position. (right before the checksum.)
-        //  - Create a ChunkHeader and insert it.
-        //  - Create a default TD0ChunkItem and clone it n times. Insert the bytes of each.
-        // - Add a new Chunk object to self.chunks.
-        // - Add its name to chunk_order.
-        let mut manifest_tag = TD0ManifestTag::new_zeroed();
-        manifest_tag.set_model("SSXP")?;
-        manifest_tag.set_tag(chunk_name)?;
-        manifest_tag.set_chunk_pos(
-            u32::try_from(self.buf.len() - SZ_MD5_DIGEST + size_of::<TD0ManifestTag>()).map_err(
-                |_| TD0Error::FileParse("chunk position exceeded 32-bit in bounds.".to_string()),
-            )?,
-        );
-        manifest_tag.set_chunk_size(
-            u32::try_from(size_of::<ChunkHeader>() + (item_size * num_items)).map_err(|_| {
-                TD0Error::InvalidChunk(InvalidChunkError::new(
-                    chunk_name.to_string(),
-                    "chunk size is larger than a 32-bit int.",
-                ))
-            })?,
-        );
+        // The order here matters quite a lot:
+        //  1) Make a clone of the old metadata.
+        //  2) Push the new chunk to self.meta.
+        //  3) Call self.update_buf_manifest_from_meta_changes with the old metadata.
+        //  - 4 and 5 can trade places without any ill effect.
+        //  4) Insert new manifest tag at old meta's .header_size() offset.
+        //  5) Insert the new chunk header + default chunk items at the end
+        //     of the buffer right before the checksum.
+        let old_meta = self.meta.clone();
 
-        for offset in self.tag_offsets.values() {
-            let tag = manifest_tag_from_buf_mut(&mut self.buf, *offset)?;
-            tag.set_chunk_pos(
-                u32::try_from(tag.chunk_pos() + size_of::<TD0ManifestTag>())
-                    .map_err(|_| TD0Error::FileParse("file data size is too large.".to_string()))?,
-            );
-            self.chunks
-                .get_mut(&tag.tag())
-                .expect("all tags should have corresponding metadata.")
-                .pos = tag.chunk_pos();
-        }
-        let new_tag_offset = self.calc_header_size();
+        self.meta.push_chunk(
+            chunk_name,
+            TD0DeviceModel::SPDSXPro,
+            try_u32_from_usize(num_items)?,
+            try_u32_from_usize(item_size)?,
+        )?;
+        self.update_buf_manifest_from_meta_changes(&old_meta)?;
+        let new_chunk_header = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
+                chunk_name,
+                "failed to add chunk to file metadata.",
+            )))?
+            .header;
+        let new_manifest_tag = self
+            .meta
+            .manifest_tag(chunk_name)
+            .expect("just added this manifest tag.");
+        let new_manifest_tag_pos = self
+            .meta
+            .manifest_tag_pos(chunk_name)
+            .expect("just added this manifest tag.");
+
+        // Insert new manifest tag:
         self.buf.splice(
-            new_tag_offset..new_tag_offset,
-            manifest_tag.as_bytes().iter().cloned(),
+            new_manifest_tag_pos..new_manifest_tag_pos,
+            new_manifest_tag.as_bytes().iter().cloned(),
         );
-        self.tag_offsets
-            .insert(chunk_name.to_string(), new_tag_offset);
-
-        let chunk_header: ChunkHeader =
-            ChunkHeader {
-                num_items: U32::from(u32::try_from(num_items).map_err(|_| {
-                    TD0Error::InvalidInput("num_items larger than a u32.".to_string())
-                })?),
-                item_size: U32::from(u32::try_from(item_size).map_err(|_| {
-                    TD0Error::InvalidInput("item_size larger than a u32.".to_string())
-                })?),
-                first_item_offset: U32::from(
-                    u32::try_from(size_of::<ChunkHeader>())
-                        .expect("chunk header is smaller than u32::MAX bytes."),
-                ),
-                unknown_header_data: [0u8; 4],
-            };
-        let chunk: Chunk = Chunk {
-            header: chunk_header,
-            pos: manifest_tag.chunk_pos(),
-            size: manifest_tag.chunk_size(),
-        };
-        self.chunks.insert(chunk_name.to_string(), chunk);
 
         let buflen = self.buf.len();
-        // let (buf, checksum) = self.buf.split_at_mut(buflen - SZ_MD5_DIGEST);
         let checksum = self.buf.split_off(buflen - SZ_MD5_DIGEST);
-        self.buf.extend_from_slice(chunk_header.as_bytes());
+        self.buf.extend_from_slice(new_chunk_header.as_bytes());
         let default_item_bytes = default_item.as_bytes();
         for _ in 0..num_items {
             self.buf.extend_from_slice(default_item_bytes);
         }
         self.buf.extend_from_slice(&checksum);
-        self.chunk_order.push(chunk_name.to_string());
+        self.dirty = true;
+
+        Ok(())
+    }
+
+    fn remove_chunk(&mut self, chunk_name: &str) -> TD0Result<()> {
+        let old_meta = self.meta.clone();
+        self.meta.remove_chunk(chunk_name)?;
+
+        let remove_chunk_range = old_meta
+            .manifest_tag(chunk_name)
+            .map(|tag| tag.chunk_range())
+            .expect("chunk's existence in metadata verified above.");
+        let remove_tag_offset = old_meta.manifest_tag_pos(chunk_name).unwrap();
+
+        self.update_buf_manifest_from_meta_changes(&old_meta)?;
+
+        self.buf.drain(remove_chunk_range);
+        self.buf
+            .drain(remove_tag_offset..remove_tag_offset + size_of::<TD0ManifestTag>());
+
         self.dirty = true;
         Ok(())
     }
@@ -598,13 +848,10 @@ impl TD0File for SSXPTD0File {
         dest_index: usize,
         source: &dyn TD0ChunkItem,
     ) -> TD0Result<()> {
-        let chunk =
-            self.chunks
-                .get(chunk_name)
-                .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                    chunk_name.to_string(),
-                    "unknown chunk",
-                )))?;
+        let chunk = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
         let dest_range = chunk
             .item_range(dest_index)
             .ok_or(TD0Error::ChunkItemParse)?;
@@ -631,13 +878,10 @@ impl TD0File for SSXPTD0File {
         source_index: usize,
         dest_index: usize,
     ) -> TD0Result<()> {
-        let chunk =
-            self.chunks
-                .get(chunk_name)
-                .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                    chunk_name.to_string(),
-                    "unknown chunk",
-                )))?;
+        let chunk = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
         let source_range = chunk
             .item_range(source_index)
             .ok_or(TD0Error::ChunkItemParse)?;
@@ -655,13 +899,10 @@ impl TD0File for SSXPTD0File {
         index_1: usize,
         index_2: usize,
     ) -> TD0Result<()> {
-        let chunk =
-            self.chunks
-                .get(chunk_name)
-                .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                    chunk_name.to_string(),
-                    "unknown chunk",
-                )))?;
+        let chunk = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
         let item_1_range = chunk.item_range(index_1).ok_or(TD0Error::ChunkItemParse)?;
         let item_2_range = chunk.item_range(index_2).ok_or(TD0Error::ChunkItemParse)?;
 
@@ -681,13 +922,10 @@ impl TD0File for SSXPTD0File {
     }
 
     fn chunk_items_reorder(&mut self, chunk_name: &str, new_order: &[usize]) -> TD0Result<()> {
-        let chunk =
-            self.chunks
-                .get(chunk_name)
-                .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                    chunk_name.to_string(),
-                    "unknown chunk",
-                )))?;
+        let chunk = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
 
         // Check preconditions
         // new_order must have correct number of elements
@@ -702,7 +940,7 @@ impl TD0File for SSXPTD0File {
             )));
         }
 
-        let mut new_buf: Vec<u8> = vec![0; chunk.size - size_of::<ChunkHeader>()];
+        let mut new_buf: Vec<u8> = vec![0; usize_from_u32(chunk.size) - size_of::<ChunkHeader>()];
 
         let item_size = chunk.item_size();
         let mut pos: usize = 0;
@@ -719,7 +957,10 @@ impl TD0File for SSXPTD0File {
         }
 
         self.buf
-            .get_mut(chunk.pos + chunk.header.first_item_offset()..chunk.pos + chunk.size)
+            .get_mut(
+                usize_from_u32(chunk.pos) + chunk.header.first_item_offset()
+                    ..usize_from_u32(chunk.pos + chunk.size),
+            )
             .expect("item indexes are correct.")
             .copy_from_slice(&new_buf);
 
@@ -750,31 +991,12 @@ impl TD0File for SSXPTD0File {
     }
 
     fn try_from_bytes(bytes: &[u8]) -> TD0Result<Self> {
-        let _ = id_chunk_from_buf(bytes)?;
-        let (chunk_order, tag_offsets) = collect_offsets(bytes)?;
-        let mut chunks: HashMap<String, Chunk> = HashMap::new();
-        for (chunk_name, &offset) in tag_offsets.iter() {
-            if chunks.contains_key(chunk_name) {
-                return Err(TD0Error::FileParse("duplicate manifest chunk".to_string()));
-            }
-
-            let tag = manifest_tag_from_buf(bytes, offset)?;
-            chunks.insert(
-                chunk_name.clone(),
-                Chunk {
-                    header: chunk_header_from_buf(bytes, tag)?,
-                    pos: tag.chunk_pos(),
-                    size: tag.chunk_size(),
-                },
-            );
-        }
+        let meta: SSXPTD0FileMetadata = SSXPTD0FileMetadata::new_from_buf(bytes)?;
 
         Ok(Self {
             buf: bytes.to_vec(),
-            chunks,
             dirty: false,
-            chunk_order,
-            tag_offsets,
+            meta,
         })
     }
 
@@ -789,25 +1011,19 @@ impl TD0File for SSXPTD0File {
     }
 
     fn chunk_num_items(&self, chunk_name: &str) -> Option<usize> {
-        self.chunks.get(chunk_name).map(|ch| ch.num_items())
+        self.meta.chunk(chunk_name).map(|ch| ch.num_items())
     }
 
     fn chunk_raw(&self, chunk_name: &str) -> Option<&[u8]> {
-        let &tag_offset = self.tag_offsets.get(chunk_name)?;
-
-        let tag = manifest_tag_from_buf(self.buf.as_bytes(), tag_offset)
-            .expect("verified that tag exists.");
+        let tag = self.meta.manifest_tag(chunk_name)?;
         self.buf.get(tag.chunk_range())
     }
 
     fn chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem> {
-        let chunk =
-            self.chunks
-                .get(chunk_name)
-                .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                    chunk_name.to_string(),
-                    "unknown chunk",
-                )))?;
+        let chunk = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
         let bytes = chunk
             .item_range(item_index)
             .and_then(|irange| self.buf.get(irange))
@@ -827,13 +1043,10 @@ impl TD0File for SSXPTD0File {
         chunk_name: &str,
         item_index: usize,
     ) -> TD0Result<&mut dyn TD0ChunkItem> {
-        let chunk =
-            self.chunks
-                .get(chunk_name)
-                .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                    chunk_name.to_string(),
-                    "unknown chunk",
-                )))?;
+        let chunk = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
         let firmware_version = self.firmware_version()?.clone();
         let bytes = chunk
             .item_range(item_index)
@@ -854,13 +1067,11 @@ impl TD0File for SSXPTD0File {
         chunk_name: &str,
         item_index: usize,
     ) -> TD0Result<Box<dyn TD0ChunkItem>> {
-        let chunk =
-            self.chunks
-                .get(chunk_name)
-                .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                    chunk_name.to_string(),
-                    "unknown chunk",
-                )))?;
+        let chunk = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
+
         let bytes = chunk
             .item_range(item_index)
             .and_then(|irange| self.buf.get(irange))
@@ -888,13 +1099,11 @@ impl TD0File for SSXPTD0File {
     }
 
     fn chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]> {
-        let chunk =
-            self.chunks
-                .get(chunk_name)
-                .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                    chunk_name.to_string(),
-                    "unknown chunk",
-                )))?;
+        let chunk = self
+            .meta
+            .chunk(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
+
         self.buf
             .get(
                 chunk
@@ -908,11 +1117,13 @@ impl TD0File for SSXPTD0File {
     }
 
     fn chunk_pos(&self, chunk_name: &str) -> Option<usize> {
-        self.chunks.get(chunk_name).map(|ch| ch.pos)
+        self.meta.chunk(chunk_name).map(|ch| usize_from_u32(ch.pos))
     }
 
     fn chunk_size(&self, chunk_name: &str) -> Option<usize> {
-        self.chunks.get(chunk_name).map(|ch| ch.size)
+        self.meta
+            .chunk(chunk_name)
+            .map(|ch| usize_from_u32(ch.size))
     }
 
     fn manifest(&self) -> TD0Result<TD0Manifest> {
@@ -933,21 +1144,22 @@ impl TD0File for SSXPTD0File {
         checksum_actual.clone_from_slice(self.read_checksum().expect("enough bytes for a hash."));
 
         let chunks: Vec<ChunkManifest> = self
-            .chunk_order
+            .meta
+            .tag_order
             .iter()
             .map(|ch_name| {
                 (
                     ch_name,
-                    self.chunks
-                        .get(ch_name)
+                    self.meta
+                        .chunk(ch_name)
                         .expect("should be a chunk for each item in the chunk index."),
                 )
             })
             .map(|(name, ch)| {
                 ChunkManifest::new(
                     name.clone(),
-                    ch.pos,
-                    ch.size,
+                    usize_from_u32(ch.pos),
+                    usize_from_u32(ch.size),
                     ch.num_items(),
                     ch.item_size(),
                 )
@@ -1002,10 +1214,8 @@ impl TD0File for SSXPTD0File {
         pos += size_of::<TD0ManifestTag>();
         header_tag.set_tag("HDRa")?;
         header_tag.set_model("SSXP")?;
-        header_tag.set_chunk_pos(u32::try_from(HEADER_SIZE).unwrap());
-        header_tag.set_chunk_size(
-            u32::try_from(size_of::<ChunkHeader>() + size_of::<HDRaItem>()).unwrap(),
-        );
+        header_tag.set_chunk_pos(HEADER_SIZE)?;
+        header_tag.set_chunk_size(size_of::<ChunkHeader>() + size_of::<HDRaItem>())?;
 
         // Set buf bytes from the default backup chunk header.
         let chunk_header = HDRaItem::default_header();
@@ -1030,31 +1240,12 @@ impl TD0File for SSXPTD0File {
             .expect("buf is large enough for checksum.")
             .copy_from_slice(hasher.finalize().as_bytes());
 
-        // Re-read chunk header to get an owned copy for this object.
-        let chunk_header = ChunkHeader::read_from_bytes(
-            buf.get_mut(HEADER_SIZE..HEADER_SIZE + size_of::<ChunkHeader>())
-                .expect("allocated more than this."),
-        )
-        .map_err(|_| TD0Error::FileParse("can't read created HDRa chunk header.".to_string()))?;
-
-        let backup_chunk: Chunk = Chunk {
-            header: chunk_header,
-            pos: HEADER_SIZE,
-            size: size_of::<ChunkHeader>() + size_of::<HDRaItem>(),
-        };
+        let meta: SSXPTD0FileMetadata = SSXPTD0FileMetadata::new_from_buf(&buf)?;
 
         Ok(Self {
             buf,
-            chunk_order: vec!["HDRa".to_string()],
-            chunks: [("HDRa".to_string(), backup_chunk)]
-                .iter()
-                .cloned()
-                .collect(),
             dirty: false,
-            tag_offsets: [("HDRa".to_string(), size_of::<TD0IdChunk>())]
-                .iter()
-                .cloned()
-                .collect(),
+            meta,
         })
     }
 
@@ -1063,7 +1254,7 @@ impl TD0File for SSXPTD0File {
     }
 
     fn list_chunks(&self) -> Vec<String> {
-        self.chunk_order.clone()
+        self.meta.tag_order.clone()
     }
 
     fn validate_load(&self) -> TD0Result<()> {
@@ -1096,7 +1287,7 @@ impl core::fmt::Debug for SSXPTD0File {
             f,
             "SSXPTD0File(buffer size: {}, num chunks: {})",
             self.buf.len(),
-            self.chunk_order.len()
+            self.meta.tag_order.len()
         )
     }
 }
@@ -1118,8 +1309,8 @@ mod tests {
         };
         let chunk: Chunk = Chunk {
             header: ch_header,
-            pos: CHUNK_POS,
-            size: 100 + HDR_SIZE,
+            pos: try_u32_from_usize(CHUNK_POS).expect("or test is broken."),
+            size: try_u32_from_usize(100 + HDR_SIZE).expect("or test is broken."),
         };
         assert_eq!(chunk.item_pos(0), Some(CHUNK_POS + HDR_SIZE));
         assert_eq!(chunk.item_pos(1), Some(CHUNK_POS + HDR_SIZE + 20));
@@ -1147,7 +1338,7 @@ mod tests {
         };
         let chunk: Chunk = Chunk {
             header: ch_header,
-            pos: CHUNK_POS,
+            pos: try_u32_from_usize(CHUNK_POS).expect("or test is broken."),
             size: 116,
         };
 

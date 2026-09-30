@@ -5,10 +5,7 @@
 use core::ops::Range;
 use indexmap::{IndexMap, IndexSet};
 use serde::Serialize;
-use td0::{
-    InvalidChunkError, OutOfRangeError, TD0ChunkItem, TD0Error, TD0File, TD0Result, TD0Value,
-    parse_td0_file,
-};
+use td0::{TD0ChunkItem, TD0Error, TD0File, TD0Result, TD0Value, parse_td0_file};
 
 pub type ItemValues = IndexMap<String, TD0Value>;
 pub type IndexedItemValues = IndexMap<usize, ItemValues>;
@@ -16,10 +13,7 @@ pub type IndexedItemValues = IndexMap<usize, ItemValues>;
 pub fn validate_chunk_name(td0file: &dyn TD0File, chunk_name: &str) -> TD0Result<()> {
     match td0file.chunk_pos(chunk_name) {
         Some(_) => Ok(()),
-        None => Err(TD0Error::InvalidChunk(InvalidChunkError::new(
-            chunk_name.to_string(),
-            "unknown chunk",
-        ))),
+        None => Err(TD0Error::unknown_chunk_error(chunk_name)),
     }
 }
 
@@ -29,16 +23,14 @@ fn validate_chunk_item_range(
     chunk_name: &str,
 ) -> TD0Result<()> {
     td0file.chunk_num_items(chunk_name).map_or_else(
-        || Err(TD0Error::InvalidChunk(InvalidChunkError::new(
-            chunk_name.to_string(),
-            "unknown chunk",
-        ))),
+        || Err(TD0Error::unknown_chunk_error(chunk_name)),
         |num_items| {
             if range.end > num_items {
-                Err(TD0Error::OutOfRange(OutOfRangeError::new(
+                Err(TD0Error::out_of_range_error(
                     0,
-                    i64::try_from(num_items).expect("chunk manifest num_items < i64::MAX"),
-                )))
+                    i64::try_from(num_items)
+                        .map_err(|err| TD0Error::InvalidInput(format!("{err}")))?,
+                ))
             } else {
                 Ok(())
             }
@@ -74,12 +66,9 @@ fn requested_fields_or_all<'a>(
     chunk_name: &str,
     fields: &'a Option<Vec<String>>,
 ) -> TD0Result<Vec<&'a str>> {
-    let Some(default_item) = td0file.chunk_item_default(chunk_name) else {
-        return Err(TD0Error::InvalidChunk(InvalidChunkError::new(
-            chunk_name.to_string(),
-            "unknown chunk",
-        )));
-    };
+    let default_item = td0file
+        .chunk_item_default(chunk_name)
+        .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))?;
 
     match fields {
         Some(flds) => {
@@ -101,10 +90,7 @@ pub fn command_dump_chunk_item<'a>(
 pub fn command_dump_chunk<'a>(td0file: &'a dyn TD0File, chunk_name: &str) -> TD0Result<&'a [u8]> {
     td0file
         .chunk_raw(chunk_name)
-        .ok_or_else(|| TD0Error::InvalidChunk(InvalidChunkError::new(
-            chunk_name.to_string(),
-            "unknown chunk",
-        )))
+        .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))
 }
 
 #[expect(

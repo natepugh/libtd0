@@ -9,9 +9,10 @@ use crate::result::TD0Error;
 use core::ops::{Div, Mul, Range};
 use num_traits::Bounded;
 use result::TD0Result;
+use zerocopy::{ByteOrder, I16, LittleEndian, U16, U32};
+
 #[cfg(feature = "serde")]
 use serde::Serializer;
-use zerocopy::{ByteOrder, I16, U16};
 
 pub const SZ_MD5_DIGEST: usize = 16;
 pub const VOLUME_MIN: f32 = -60.0f32;
@@ -53,6 +54,15 @@ pub enum TD0ValueRaw {
 pub enum TD0DeviceModel {
     SPDSXPro,
     Unknown,
+}
+
+impl TD0DeviceModel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::SPDSXPro => "SSXP",
+            Self::Unknown => "UNKN",
+        }
+    }
 }
 
 impl TryFrom<&str> for TD0DeviceModel {
@@ -326,6 +336,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
 
 pub trait TD0File: Send + Sync + core::fmt::Debug {
     fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> TD0Result<()>;
+    fn remove_chunk(&mut self, chunk_name: &str) -> TD0Result<()>;
     fn chunk_item_replace(
         &mut self,
         chunk_name: &str,
@@ -713,6 +724,16 @@ where
     let end = r1.end.min(r2.end);
 
     if start > end { None } else { Some(start..end) }
+}
+
+pub fn try_u32_le_from_usize(val: usize) -> TD0Result<U32<LittleEndian>> {
+    Ok(U32::from(
+        u32::try_from(val).map_err(|_| result::create_u32_oob_error())?,
+    ))
+}
+
+pub fn try_u32_from_usize(val: usize) -> TD0Result<u32> {
+    u32::try_from(val).map_err(|_| result::create_u32_oob_error())
 }
 
 #[cfg(test)]

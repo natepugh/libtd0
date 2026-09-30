@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use clap::{Parser, Subcommand};
-use td0::{InvalidChunkError, TD0Error, TD0File, parse_td0_file};
+use td0::{TD0Error, TD0File, parse_td0_file};
 
 use std::error::Error;
 use std::fs;
@@ -271,13 +271,7 @@ fn main() {
         Commands::ListFields { chunk_name } => {
             let td0file = parse_td0_file_or_exit(&cli.file);
             let Some(chunk_item) = td0file.chunk_item_default(chunk_name) else {
-                exit_td0_err(
-                    &TD0Error::InvalidChunk(InvalidChunkError::new(
-                        chunk_name.clone(),
-                        "invalid chunk (has no defaults.)",
-                    )),
-                    ERR_INVALID_CHUNK,
-                );
+                exit_err("invalid chunk", ERR_INVALID_CHUNK);
             };
             let text_output = match cli.output_format {
                 OutputFormat::Json => serde_json::to_string(&chunk_item.list_fields())
