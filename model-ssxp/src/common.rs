@@ -443,7 +443,12 @@ fn get_chunk_header_bytes<'a>(buf: &'a [u8], manifest_tag: &TD0ManifestTag) -> T
 
 fn chunk_header_from_buf(buf: &[u8], manifest_tag: &TD0ManifestTag) -> TD0Result<ChunkHeader> {
     let bytes = get_chunk_header_bytes(buf, manifest_tag)?;
-    Ok(ChunkHeader::read_from_bytes(bytes).expect("Did a checked retrieve of bytes prior."))
+    ChunkHeader::try_read_from_bytes(bytes).map_err(|_| {
+        TD0Error::InvalidChunk(InvalidChunkError::new(
+            manifest_tag.tag(),
+            "unable to parse chunk header.",
+        ))
+    })
 }
 
 fn chunk_header_ref_from_buf<'a>(
