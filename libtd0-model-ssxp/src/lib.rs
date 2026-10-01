@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn test_ssxp_td0file_new() {
-        let td0file = SSXPTD0File::new().expect("Test is broken.");
+        let td0file = SSXPTD0File::new();
 
         // NOTE: The following (commented) line loads the bytes that the
         //       annotated code below generates. This test will generate
@@ -198,7 +198,7 @@ mod tests {
         calc_and_append_checksum(&mut expected);
 
         //
-        let mut td0file = SSXPTD0File::new().expect("Test is broken.");
+        let mut td0file = SSXPTD0File::new();
         td0file
             .add_chunk("TGLa", NUM_ITEMS)
             .expect("can successfully add a chunk.");
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_add_chunk_and_retrieve_items() {
-        let mut td0file = SSXPTD0File::new().expect("Test is broken.");
+        let mut td0file = SSXPTD0File::new();
         td0file
             .add_chunk("TGLa", 3)
             .expect("can successfully add a chunk.");
@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn _01_test_replace_chunk_item() {
         let expected = get_test_data(PathBuf::from("_01_after_add_chunk.TD0"));
-        let mut td0file = SSXPTD0File::new().unwrap();
+        let mut td0file = SSXPTD0File::new();
         td0file.add_chunk("TGLa", 3).unwrap();
         let _ = td0file.finalize();
 
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_ssxp_td0file_new_is_valid() {
-        let td0file = SSXPTD0File::new().expect("Test is broken.");
+        let td0file = SSXPTD0File::new();
         assert_eq!(Ok(()), td0file.validate_load());
     }
 }

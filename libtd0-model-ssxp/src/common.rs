@@ -551,7 +551,23 @@ impl SSXPTD0File {
                 "unable to read HDRa backup data.".to_string(),
             ))?;
 
-        HDRaItem::ref_from_bytes(bytes)
+        HDRaItem::try_ref_from_bytes(bytes)
+            .map_err(|_| TD0Error::FileParse("unable to parse HDRa backup data.".to_string()))
+    }
+
+    fn backup_header_mut(&mut self) -> TD0Result<&mut HDRaItem> {
+        let chunk = self.meta.chunk("HDRa").ok_or(TD0Error::FileParse(
+            "missing HDRa backup manifest.".to_string(),
+        ))?;
+
+        let bytes = chunk
+            .item_range(0)
+            .and_then(|irange| self.buf.get_mut(irange))
+            .ok_or(TD0Error::FileParse(
+                "unable to read HDRa backup data.".to_string(),
+            ))?;
+
+        HDRaItem::try_mut_from_bytes(bytes)
             .map_err(|_| TD0Error::FileParse("unable to parse HDRa backup data.".to_string()))
     }
 
@@ -597,6 +613,13 @@ impl SSXPTD0File {
             .ok_or(TD0Error::unknown_chunk_error(chunk_name))?
             .pos;
         manifest_tag_from_buf_mut(&mut self.buf, usize_from_u32(pos))
+    }
+
+    pub fn new_with(firmware_version: &str) -> TD0Result<Self> {
+        let mut newobj = Self::new();
+        let backup_chunk = newobj.backup_header_mut().unwrap();
+        backup_chunk.firmware.copy_from_slice(firmware_version.as_bytes());
+        Ok(newobj)
     }
 
     pub fn read_checksum(&self) -> Option<&[u8]> {
@@ -1194,64 +1217,56 @@ impl TD0File for SSXPTD0File {
         ))
     }
 
-    fn new() -> TD0Result<Self> {
+    fn new() -> Self {
         const HEADER_SIZE: usize = size_of::<TD0IdChunk>() + size_of::<TD0ManifestTag>();
         const BODY_SIZE: usize = size_of::<ChunkHeader>() + size_of::<HDRaItem>();
         const BUF_SIZE: usize = HEADER_SIZE + BODY_SIZE + SZ_MD5_DIGEST;
 
         // Set values for TDOa ID tag.
         let mut buf = vec![0u8; BUF_SIZE];
-        let id_tag = TD0IdChunk::mut_from_bytes(buf.get_mut(..size_of::<TD0IdChunk>()).unwrap())
-            .map_err(|_| TD0Error::FileParse("can't create TD0a id chunk.".to_string()))?;
+        let id_tag = TD0IdChunk::mut_from_bytes(
+            buf.get_mut(..size_of::<TD0IdChunk>()).unwrap()
+        ).unwrap();
         id_tag.set_magic(&TD0_MAGIC);
         id_tag.set_bytes_remaining(
-            u16::try_from(HEADER_SIZE - OFFSET_BYTES_REMAINING)
-                .expect("much smaller than u16::MAX."),
+            u16::try_from(HEADER_SIZE - OFFSET_BYTES_REMAINING).unwrap()
         );
         let mut pos: usize = size_of::<TD0IdChunk>();
 
         // Set values for HDRa tag.
         let header_tag = TD0ManifestTag::mut_from_bytes(
-            buf.get_mut(pos..pos + size_of::<TD0ManifestTag>())
-                .expect("allocated more than this."),
-        )
-        .map_err(|_| TD0Error::FileParse("can't create HDRa manifest tag.".to_string()))?;
+            buf.get_mut(pos..pos + size_of::<TD0ManifestTag>()).unwrap()
+        ).unwrap();
         pos += size_of::<TD0ManifestTag>();
-        header_tag.set_tag("HDRa")?;
-        header_tag.set_model("SSXP")?;
-        header_tag.set_chunk_pos(HEADER_SIZE)?;
-        header_tag.set_chunk_size(size_of::<ChunkHeader>() + size_of::<HDRaItem>())?;
+        header_tag.set_tag("HDRa").unwrap();
+        header_tag.set_model("SSXP").unwrap();
+        header_tag.set_chunk_pos(HEADER_SIZE).unwrap();
+        header_tag.set_chunk_size(size_of::<ChunkHeader>() + size_of::<HDRaItem>()).unwrap();
 
         // Set buf bytes from the default backup chunk header.
         let chunk_header = HDRaItem::default_header();
-        buf.get_mut(pos..pos + size_of::<ChunkHeader>())
-            .expect("allocated more than this.")
+        buf.get_mut(pos..pos + size_of::<ChunkHeader>()).unwrap()
             .copy_from_slice(IntoBytes::as_bytes(&chunk_header));
         pos += size_of::<ChunkHeader>();
 
         // Set buf bytes from the default (v1.10) backup HDRaItem.
         let item = HDRaItem::new_default_v1_10();
-        buf.get_mut(pos..pos + size_of::<HDRaItem>())
-            .expect("allocated more than this.")
+        buf.get_mut(pos..pos + size_of::<HDRaItem>()).unwrap()
             .copy_from_slice(IntoBytes::as_bytes(&item));
 
         // Write checksum.
         let mut hasher: md5::Md5 = md5::Md5::new();
-        hasher.update(
-            buf.get(..BUF_SIZE - SZ_MD5_DIGEST)
-                .expect("buf is large enough for checksum."),
-        );
-        buf.get_mut(BUF_SIZE - SZ_MD5_DIGEST..)
-            .expect("buf is large enough for checksum.")
+        hasher.update(buf.get(..BUF_SIZE - SZ_MD5_DIGEST).unwrap());
+        buf.get_mut(BUF_SIZE - SZ_MD5_DIGEST..).unwrap()
             .copy_from_slice(hasher.finalize().as_bytes());
 
-        let meta: SSXPTD0FileMetadata = SSXPTD0FileMetadata::new_from_buf(&buf)?;
+        let meta: SSXPTD0FileMetadata = SSXPTD0FileMetadata::new_from_buf(&buf).expect("all data is bespoke.");
 
-        Ok(Self {
+        Self {
             buf,
             dirty: false,
             meta,
-        })
+        }
     }
 
     fn to_bytes(&self) -> Vec<u8> {
