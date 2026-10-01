@@ -4,12 +4,13 @@
 
 pub mod header;
 pub mod result;
+pub mod type_impls;
 
-use crate::result::TD0Error;
-use core::ops::{Div, Mul, Range};
+use core::ops::Range;
+
 use num_traits::Bounded;
 use result::TD0Result;
-use zerocopy::{ByteOrder, I16, LittleEndian, U16, U32};
+use zerocopy::{LittleEndian, U32};
 
 #[cfg(feature = "serde")]
 use serde::Serializer;
@@ -21,308 +22,6 @@ pub const VOLUME_MINUS_INF_FLOAT: f32 = f32::NEG_INFINITY;
 pub const VOLUME_MINUS_INF_I16: i16 = -601;
 pub const VOLUME_MINUS_INF_DISPLAY: &str = "-inf";
 
-#[derive(Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
-pub enum TD0Value {
-    /// This value is rounded to one decimal place (0.1) upon display and
-    /// before setting the value of any field. To prevent unexpected results,
-    /// ensure that your f32 value has already been rounded to one decimal
-    /// place _before_ creating a TD0Value::Decimal.
-    Decimal(f32),
-    I16(i16),
-    I8(i8),
-    Slice(Box<[u8]>),
-    Text(String),
-    U16(u16),
-    U32(u32),
-    U8(u8),
-}
-
-#[derive(Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
-pub enum TD0ValueRaw {
-    I16(i16),
-    I8(i8),
-    Slice(Box<[u8]>),
-    U16(u16),
-    U32(u32),
-    U8(u8),
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-pub enum TD0DeviceModel {
-    SPDSXPro,
-    Unknown,
-}
-
-impl TD0DeviceModel {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::SPDSXPro => "SSXP",
-            Self::Unknown => "UNKN",
-        }
-    }
-}
-
-impl TryFrom<&str> for TD0DeviceModel {
-    type Error = TD0Error;
-
-    fn try_from(val: &str) -> Result<Self, Self::Error> {
-        match val {
-            "SPDSXPro" => Ok(Self::SPDSXPro),
-            "Unknown" => Ok(Self::Unknown),
-            _ => Err(TD0Error::InvalidInput(
-                "input string is not a valid TD0DeviceModel.".to_string(),
-            )),
-        }
-    }
-}
-
-impl core::fmt::Display for TD0DeviceModel {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let strval = match self {
-            Self::SPDSXPro => "SPDSXPro",
-            Self::Unknown => "Unknown",
-        };
-        write!(f, "{strval}")
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-pub enum TD0BackupType {
-    Kit,
-    System,
-    Unknown,
-}
-
-impl core::fmt::Display for TD0BackupType {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let strval = match self {
-            Self::Kit => "Kit",
-            Self::System => "System",
-            Self::Unknown => "Unknown",
-        };
-        write!(f, "{strval}")
-    }
-}
-
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ChunkManifest {
-    name: String,
-    pos: usize,
-    size: usize,
-    num_items: usize,
-    item_size: usize,
-}
-
-impl ChunkManifest {
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
-    pub fn pos(&self) -> usize {
-        self.pos
-    }
-    pub fn size(&self) -> usize {
-        self.size
-    }
-    pub fn num_items(&self) -> usize {
-        self.num_items
-    }
-    pub fn item_size(&self) -> usize {
-        self.item_size
-    }
-
-    pub fn new(name: String, pos: usize, size: usize, num_items: usize, item_size: usize) -> Self {
-        Self {
-            name,
-            pos,
-            size,
-            num_items,
-            item_size,
-        }
-    }
-}
-
-impl core::fmt::Display for ChunkManifest {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "{}:  pos: {}  size: {}  num_items: {}  item_size: {}",
-            self.name, self.pos, self.size, self.num_items, self.item_size
-        )
-    }
-}
-
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Clone, Debug)]
-pub struct TD0Manifest {
-    backup_name: String,
-    backup_type: TD0BackupType,
-
-    #[cfg_attr(
-        feature = "serde",
-        serde(serialize_with = "serde_checksum_bytes_to_string")
-    )]
-    checksum_actual: [u8; 16],
-
-    #[cfg_attr(
-        feature = "serde",
-        serde(serialize_with = "serde_checksum_bytes_to_string")
-    )]
-    checksum_calculated: [u8; 16],
-    device_model: TD0DeviceModel,
-    device_firmware_version: String,
-    device_firmware_build: String,
-    device_serial: String,
-    size_actual: usize,
-    size_calculated: usize,
-    chunks: Vec<ChunkManifest>,
-}
-
-impl TD0Manifest {
-    pub fn backup_name(&self) -> String {
-        self.backup_name.clone()
-    }
-
-    pub fn backup_type(&self) -> TD0BackupType {
-        self.backup_type
-    }
-
-    pub fn checksum_actual(&self) -> String {
-        checksum_bytes_to_string(&self.checksum_actual)
-    }
-
-    pub fn checksum_calculated(&self) -> String {
-        checksum_bytes_to_string(&self.checksum_calculated)
-    }
-
-    pub fn device_model(&self) -> TD0DeviceModel {
-        self.device_model
-    }
-
-    pub fn device_firmware_version(&self) -> String {
-        self.device_firmware_version.clone()
-    }
-
-    pub fn device_firmware_build(&self) -> String {
-        self.device_firmware_build.clone()
-    }
-
-    pub fn device_serial(&self) -> String {
-        self.device_serial.clone()
-    }
-
-    pub fn size_actual(&self) -> usize {
-        self.size_actual
-    }
-
-    pub fn size_calculated(&self) -> usize {
-        self.size_calculated
-    }
-
-    pub fn chunks(&self) -> &[ChunkManifest] {
-        &self.chunks
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "A TD0Manifest is composed of many items."
-    )]
-    pub fn new(
-        backup_name: impl Into<String>,
-        backup_type: impl Into<TD0BackupType>,
-        checksum_actual: &[u8],
-        checksum_calculated: &[u8],
-        device_model: impl Into<TD0DeviceModel>,
-        device_firmware_version: impl Into<String>,
-        device_firmware_build: impl Into<String>,
-        device_serial: impl Into<String>,
-        size_actual: usize,
-        size_calculated: usize,
-        chunks: Vec<ChunkManifest>,
-    ) -> Self {
-        let mut my_checksum_actual: [u8; 16] = [0u8; 16];
-        let input_slice_def = 0..checksum_actual.len().clamp(0, 16usize);
-        my_checksum_actual
-            .get_mut(input_slice_def.clone())
-            .unwrap()
-            .copy_from_slice(&checksum_actual[input_slice_def]);
-
-        let mut my_checksum_calculated: [u8; 16] = [0u8; 16];
-        let input_slice_def = 0..checksum_calculated.len().clamp(0, 16usize);
-        my_checksum_calculated
-            .get_mut(input_slice_def.clone())
-            .unwrap()
-            .copy_from_slice(&checksum_calculated[input_slice_def]);
-
-        Self {
-            backup_name: backup_name.into(),
-            backup_type: backup_type.into(),
-            checksum_actual: my_checksum_actual,
-            checksum_calculated: my_checksum_calculated,
-            device_model: device_model.into(),
-            device_firmware_version: device_firmware_version.into(),
-            device_firmware_build: device_firmware_build.into(),
-            device_serial: device_serial.into(),
-            size_actual,
-            size_calculated,
-            chunks,
-        }
-    }
-}
-
-pub fn checksum_bytes_to_string(val: &[u8]) -> String {
-    val.iter()
-        .map(|byte| format!("{:02x}", byte))
-        .collect::<String>()
-}
-
-#[cfg(feature = "serde")]
-fn serde_checksum_bytes_to_string<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    serializer.serialize_str(checksum_bytes_to_string(bytes).as_str())
-}
-
-impl core::fmt::Display for TD0Manifest {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "Backup Name: {}\n\
-             Backup Type: {:?}\n\
-             Checksum from File   : {}\n\
-             Checksum (calculated): {}\n\
-             Device Model: {}\n\
-             Device Firmware: {}\n\
-             Device Firmware Build: {}\n\
-             Device Serial: {}\n\
-             Actual Size: {}\n\
-             Calculated Size: {}\n\
-             Chunks:
-    {}",
-            self.backup_name,
-            self.backup_type,
-            checksum_bytes_to_string(&self.checksum_actual),
-            checksum_bytes_to_string(&self.checksum_calculated),
-            self.device_model,
-            self.device_firmware_version,
-            self.device_firmware_build,
-            self.device_serial,
-            self.size_actual,
-            self.size_calculated,
-            self.chunks
-                .iter()
-                .map(|ch| format!("{}", ch))
-                .collect::<Vec<String>>()
-                .join("\n    "),
-        )
-    }
-}
-
 pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     fn as_bytes(&self) -> &[u8];
     fn field_options(&self, field: &str) -> Option<&'static [&'static str]>;
@@ -333,7 +32,6 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     fn set_field_value(&mut self, field: &str, value: &TD0Value) -> TD0Result<()>;
     fn set_field_value_raw(&mut self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
 }
-
 pub trait TD0File: Send + Sync + core::fmt::Debug {
     fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> TD0Result<()>;
     fn remove_chunk(&mut self, chunk_name: &str) -> TD0Result<()>;
@@ -380,7 +78,7 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     fn chunk_size(&self, chunk_name: &str) -> Option<usize>;
     fn list_chunks(&self) -> Vec<String>;
     fn manifest(&self) -> TD0Result<TD0Manifest>;
-    fn new() -> TD0Result<Self>
+    fn new() -> Self
     where
         Self: Sized;
     fn to_bytes(&self) -> Vec<u8>;
@@ -388,40 +86,114 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     fn validate_save(&self) -> TD0Result<()>;
 }
 
-impl TD0Value {
-    pub fn text_from_u8_array(source: &[u8], pad_val: &u8) -> Self {
-        for pos in (0..source.len()).rev() {
-            if source[pos] != *pad_val {
-                return Self::Text(String::from_utf8_lossy(&source[..=pos]).to_string());
-            }
-        }
-
-        Self::Text("".to_string())
-    }
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChunkManifest {
+    name: String,
+    pos: usize,
+    size: usize,
+    num_items: usize,
+    item_size: usize,
 }
 
-impl core::fmt::Display for TD0Value {
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct IntEncodedDecimal(pub f32);
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub enum TD0BackupType {
+    Kit,
+    System,
+    Unknown,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub enum TD0DeviceModel {
+    SPDSXPro,
+    Unknown,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Clone, Debug)]
+pub struct TD0Manifest {
+    backup_name: String,
+    backup_type: TD0BackupType,
+
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "serde_checksum_bytes_to_string")
+    )]
+    checksum_actual: [u8; 16],
+
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "serde_checksum_bytes_to_string")
+    )]
+    checksum_calculated: [u8; 16],
+    device_model: TD0DeviceModel,
+    device_firmware_version: String,
+    device_firmware_build: String,
+    device_serial: String,
+    size_actual: usize,
+    size_calculated: usize,
+    chunks: Vec<ChunkManifest>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
+pub enum TD0Value {
+    /// This value is rounded to one decimal place (0.1) upon display and
+    /// before setting the value of any field. To prevent unexpected results,
+    /// ensure that your f32 value has already been rounded to one decimal
+    /// place _before_ creating a TD0Value::Decimal.
+    Decimal(f32),
+    I16(i16),
+    I8(i8),
+    Slice(Box<[u8]>),
+    Text(String),
+    U16(u16),
+    U32(u32),
+    U8(u8),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
+pub enum TD0ValueRaw {
+    I16(i16),
+    I8(i8),
+    Slice(Box<[u8]>),
+    U16(u16),
+    U32(u32),
+    U8(u8),
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct Volume(pub f32);
+impl core::fmt::Display for Volume {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let repr: String = match self {
-            Self::Slice(val) => format!("{val:?}"),
-            Self::Decimal(val) => format!("{val:.1}"),
-            Self::I16(val) => val.to_string(),
-            Self::I8(val) => val.to_string(),
-            Self::Text(val) => val.to_string(),
-            Self::U16(val) => val.to_string(),
-            Self::U32(val) => val.to_string(),
-            Self::U8(val) => val.to_string(),
-        };
-
-        write!(f, "{}", repr)
+        if self.0.eq(&VOLUME_MINUS_INF_FLOAT) {
+            write!(f, "{}", VOLUME_MINUS_INF_DISPLAY)
+        } else {
+            write!(f, "{:.1}", self.0)
+        }
     }
 }
 
-pub fn in_range_inclusive<T>(val: T, min: Option<T>, max: Option<T>) -> bool
+pub fn calc_range_overlap<T>(r1: Range<T>, r2: Range<T>) -> Option<Range<T>>
 where
-    T: PartialOrd + Bounded,
+    T: Ord,
 {
-    (min.unwrap_or(T::min_value())..=max.unwrap_or(T::max_value())).contains(&val)
+    let start = r1.start.max(r2.start);
+    let end = r1.end.min(r2.end);
+
+    if start > end { None } else { Some(start..end) }
+}
+
+pub fn checksum_bytes_to_string(val: &[u8]) -> String {
+    val.iter()
+        .map(|byte| format!("{:02x}", byte))
+        .collect::<String>()
 }
 
 pub fn copy_ascii_str_to_u8_slice(src: &String, dest: &mut [u8], pad_byte: u8) -> TD0Result<()> {
@@ -464,266 +236,23 @@ pub fn copy_slice_to_native_padded(src: &[u8], dest: &mut [u8], pad: u8) -> TD0R
     Ok(())
 }
 
-pub fn try_new_bounded<T>(val: T, min: T, max: T) -> Option<T>
+pub fn in_range_inclusive<T>(val: T, min: Option<T>, max: Option<T>) -> bool
 where
-    T: PartialOrd + Bounded + Copy,
+    T: PartialOrd + Bounded,
 {
-    if !in_range_inclusive(val, Some(min), Some(max)) {
-        None
-    } else {
-        Some(val)
-    }
+    (min.unwrap_or(T::min_value())..=max.unwrap_or(T::max_value())).contains(&val)
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct IntEncodedDecimal(pub f32);
-
-impl IntEncodedDecimal {
-    pub fn val(&self) -> f32 {
-        self.0
-    }
-    pub fn val_mut(&mut self) -> &f32 {
-        &mut self.0
-    }
-}
-
-impl core::fmt::Display for IntEncodedDecimal {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:.1}", self.0)
-    }
-}
-
-impl core::str::FromStr for IntEncodedDecimal {
-    type Err = result::TD0Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let selfobj = Self(s.parse::<f32>().map_err(|_| {
-            result::TD0Error::InvalidInput("input string not parsable as a Decimal.".to_string())
-        })?);
-        Ok(selfobj)
-    }
-}
-
-impl From<i8> for IntEncodedDecimal {
-    fn from(val: i8) -> Self {
-        Self(f32::from(val).div(10.0f32))
-    }
-}
-
-impl TryFrom<IntEncodedDecimal> for i8 {
-    type Error = <i8 as TryFrom<i32>>::Error;
-
-    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
-        i8::try_from(val.0.mul(10.0f32).round() as i32)
-    }
-}
-
-impl From<u8> for IntEncodedDecimal {
-    fn from(val: u8) -> Self {
-        Self(f32::from(val).div(10.0f32))
-    }
-}
-
-impl TryFrom<IntEncodedDecimal> for u8 {
-    type Error = <u8 as TryFrom<i32>>::Error;
-
-    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
-        u8::try_from(val.0.mul(10.0f32).round() as i32)
-    }
-}
-
-impl From<f32> for IntEncodedDecimal {
-    fn from(val: f32) -> Self {
-        Self(val)
-    }
-}
-
-impl From<IntEncodedDecimal> for f32 {
-    fn from(val: IntEncodedDecimal) -> f32 {
-        val.0
-    }
-}
-
-impl From<i32> for IntEncodedDecimal {
-    fn from(val: i32) -> Self {
-        Self((val as f32).div(10.0f32))
-    }
-}
-
-impl From<IntEncodedDecimal> for i32 {
-    fn from(val: IntEncodedDecimal) -> i32 {
-        val.0.mul(10.0f32).round() as i32
-    }
-}
-
-impl From<i16> for IntEncodedDecimal {
-    fn from(val: i16) -> Self {
-        Self(f32::from(val).div(10.0f32))
-    }
-}
-
-impl TryFrom<IntEncodedDecimal> for i16 {
-    type Error = <i16 as TryFrom<i32>>::Error;
-
-    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
-        i16::try_from(val.0.mul(10.0f32).round() as i32)
-    }
-}
-
-impl From<u16> for IntEncodedDecimal {
-    fn from(val: u16) -> Self {
-        Self(f32::from(val).div(10.0f32))
-    }
-}
-
-impl TryFrom<IntEncodedDecimal> for u16 {
-    type Error = <u16 as TryFrom<i32>>::Error;
-
-    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
-        u16::try_from(val.0.mul(10.0f32).round() as i32)
-    }
-}
-
-impl<T: ByteOrder> From<U16<T>> for IntEncodedDecimal {
-    fn from(val: U16<T>) -> Self {
-        Self(f32::from(val.get()).div(10.0f32))
-    }
-}
-
-impl<T: ByteOrder> TryFrom<IntEncodedDecimal> for U16<T> {
-    type Error = <u16 as TryFrom<i32>>::Error;
-
-    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
-        let i32val = val.0.mul(10.0f32).round() as i32;
-        Ok(U16::from(u16::try_from(i32val)?))
-    }
-}
-
-impl<T: ByteOrder> From<I16<T>> for IntEncodedDecimal {
-    fn from(val: I16<T>) -> Self {
-        Self(f32::from(val.get()).div(10.0f32))
-    }
-}
-
-impl<T: ByteOrder> TryFrom<IntEncodedDecimal> for I16<T> {
-    type Error = <i16 as TryFrom<i32>>::Error;
-
-    fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
-        let i32val = val.0.mul(10.0f32).round() as i32;
-        Ok(I16::from(i16::try_from(i32val)?))
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct Volume(pub f32);
-impl core::fmt::Display for Volume {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if self.0.eq(&VOLUME_MINUS_INF_FLOAT) {
-            write!(f, "{}", VOLUME_MINUS_INF_DISPLAY)
-        } else {
-            write!(f, "{:.1}", self.0)
-        }
-    }
-}
-
-impl Volume {
-    fn validate_impl_range(val: &f32) -> Result<(), result::TD0Error> {
-        if (val.lt(&VOLUME_MIN) || val.gt(&VOLUME_MAX)) && val.ne(&VOLUME_MINUS_INF_FLOAT) {
-            Err(result::TD0Error::OutOfRangeDecimal(
-                result::OutOfRangeErrorTD0Decimal::new(VOLUME_MIN, VOLUME_MAX),
-            ))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub fn validate(&self) -> Result<(), result::TD0Error> {
-        Self::validate_impl_range(&self.0)
-    }
-}
-
-impl core::str::FromStr for Volume {
-    type Err = result::TD0Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.eq_ignore_ascii_case(VOLUME_MINUS_INF_DISPLAY) {
-            Ok(Self(VOLUME_MINUS_INF_FLOAT))
-        } else {
-            let selfobj = Self(s.parse::<f32>().map_err(|_| {
-                result::TD0Error::InvalidInput(
-                    "input string not parsable as a Decimal.".to_string(),
-                )
-            })?);
-            selfobj.validate()?;
-            Ok(selfobj)
-        }
-    }
-}
-
-impl TryFrom<f32> for Volume {
-    type Error = result::TD0Error;
-    fn try_from(value: f32) -> Result<Self, Self::Error> {
-        let selfobj = Self(value);
-        selfobj.validate()?;
-        Ok(selfobj)
-    }
-}
-
-impl From<Volume> for f32 {
-    fn from(value: Volume) -> Self {
-        value.0
-    }
-}
-
-impl TryFrom<i16> for Volume {
-    type Error = result::TD0Error;
-    fn try_from(value: i16) -> Result<Self, Self::Error> {
-        let f32_value = if value == VOLUME_MINUS_INF_I16 {
-            // Special handling for "-Infinity" value.
-            VOLUME_MINUS_INF_FLOAT
-        } else {
-            f32::from(value).div(10.0f32)
-        };
-        let selfobj = Self(f32_value);
-        selfobj.validate()?;
-        Ok(selfobj)
-    }
-}
-
-impl TryFrom<Volume> for i16 {
-    type Error = <i16 as TryFrom<i32>>::Error;
-
-    fn try_from(val: Volume) -> Result<Self, Self::Error> {
-        if val.0 == VOLUME_MINUS_INF_FLOAT {
-            Ok(VOLUME_MINUS_INF_I16)
-        } else {
-            i16::try_from(val.0.mul(10.0f32).round() as i32)
-        }
-    }
-}
-
-impl<T: ByteOrder> TryFrom<Volume> for I16<T> {
-    type Error = <i16 as TryFrom<i32>>::Error;
-
-    fn try_from(val: Volume) -> Result<Self, Self::Error> {
-        if val.0 == VOLUME_MINUS_INF_FLOAT {
-            Ok(I16::from(VOLUME_MINUS_INF_I16))
-        } else {
-            Ok(I16::from(i16::try_from(val.0.mul(10.0f32).round() as i32)?))
-        }
-    }
-}
-
-pub fn usize_from_u32(val: u32) -> usize {
-    usize::try_from(val).expect("platform usize is >= 32 bits")
-}
-
-pub fn calc_range_overlap<T>(r1: Range<T>, r2: Range<T>) -> Option<Range<T>>
+#[cfg(feature = "serde")]
+fn serde_checksum_bytes_to_string<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
 where
-    T: Ord,
+    S: Serializer,
 {
-    let start = r1.start.max(r2.start);
-    let end = r1.end.min(r2.end);
+    serializer.serialize_str(checksum_bytes_to_string(bytes).as_str())
+}
 
-    if start > end { None } else { Some(start..end) }
+pub fn try_u32_from_usize(val: usize) -> TD0Result<u32> {
+    u32::try_from(val).map_err(|_| result::create_u32_oob_error())
 }
 
 pub fn try_u32_le_from_usize(val: usize) -> TD0Result<U32<LittleEndian>> {
@@ -732,14 +261,15 @@ pub fn try_u32_le_from_usize(val: usize) -> TD0Result<U32<LittleEndian>> {
     ))
 }
 
-pub fn try_u32_from_usize(val: usize) -> TD0Result<u32> {
-    u32::try_from(val).map_err(|_| result::create_u32_oob_error())
+pub fn usize_from_u32(val: u32) -> usize {
+    usize::try_from(val).expect("platform usize is >= 32 bits")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use core::debug_assert_matches;
+    use core::ops::Mul as _; // Required for f32.mul()
     use core::str::FromStr;
 
     #[test]
