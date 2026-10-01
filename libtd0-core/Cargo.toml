@@ -14,6 +14,10 @@ repository = "https://github.com/natepugh/libtd0"
 keywords = ["libtd0", "td0"]
 categories = ["parsing", "parser-implementations"]
 
+[lib]
+name = "td0_core"
+path = "src/lib.rs"
+
 [dependencies]
 zerocopy = { version = "0.8.55", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"], optional = true }

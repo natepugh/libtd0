@@ -3,28 +3,28 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [package]
-name = "libtd0-derive"
+name = "libtd0-model-ssxp"
 version = "0.1.0"
 edition = "2024"
 
 authors = ["Nathan Pugh <natepugh@gmail.com>"]
-description = "Derive macros for internal use in libtd0. Use the `libtd0` crate instead."
+description = "SPD-SX Pro model implementation for libtd0. Use the `libtd0` crate instead."
 license = "GPL-3.0-or-later"
 repository = "https://github.com/natepugh/libtd0"
-keywords = ["libtd0", "td0"]
+keywords = ["libtd0", "td0", "SPD-SX Pro"]
 categories = ["parsing", "parser-implementations"]
 
 [lib]
-name = "td0_derive"
+name = "td0_model_ssxp"
 path = "src/lib.rs"
-proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0.107"
-quote = "1.0.47"
-syn = { version = "3.0.3", features = ["extra-traits", "full"] }
 libtd0-core = { path = "../libtd0-core" }
-num-traits = "0.2.19"
+libtd0-derive = { path = "../libtd0-derive" }
+md-5 = "0.11.0"
+zerocopy = "0.8.52"
+zerocopy-derive = "0.8.52"
 
-[build-dependencies]
-proc-macro2 = "1.0.107"
+[dev-dependencies]
+hexout = "0.3.2"
+pretty_assertions = "1.4.1"

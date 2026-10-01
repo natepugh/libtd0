@@ -1,0 +1,21 @@
+[package]
+name = "libtd0-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "td0file"
+path = "src/main.rs"
+
+[dependencies]
+# libtd0 dependencies
+libtd0 = { path = "../libtd0" }
+libtd0-core = { path = "../libtd0-core", features=["serde"] }
+
+# External dependencies
+clap = { version = "4.6.1", features = ["derive"] }
+csv = { version = "1.4.0", }
+hexout = { version = "0.3.2", }
+indexmap = { version = "2.14.0", features = ["serde"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", }

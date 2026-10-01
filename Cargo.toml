@@ -3,73 +3,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [workspace]
-
-[package]
-name = "libtd0"
-version = "0.1.0"
-edition = "2024"
-
-authors = ["Nathan Pugh <natepugh@gmail.com>"]
-description = "A backup file reader and editor for Roland's .TD0 file format."
-license = "GPL-3.0-or-later"
-repository = "https://github.com/natepugh/libtd0"
-keywords = ["libtd0", "td0", "Roland"]
-categories = ["parsing", "parser-implementations"]
-
-[lib]
-name = "td0"
-path = "src/lib.rs"
-
-[[bin]]
-name = "td0file"
-path = "src/bin/main.rs"
-required-features = ["cli"]
-
-[features]
-default = []
-cli = [
-    "dep:clap",
-    "dep:csv",
-    "dep:hexout",
-    "dep:indexmap",
-    "dep:serde",
-    "dep:serde_json",
-    "dep:serde_with",
-    "indexmap/serde",
-    "libtd0-core/serde",
+resolver = "3"
+members = [
+    "libtd0",
+    "libtd0-cli",
+    "libtd0-core",
+    "libtd0-derive",
+    "libtd0-model-ssxp",
+    "libtd0-python",
 ]
 
-model-spdsx-pro = [
-    "model-ssxp",
-    "multi-model/model-ssxp",
-]
-
-python-bindings = [
-    "dep:pytd0",
-]
-
-[dependencies]
-# Internal crates
-libtd0-core = { path = "libtd0-core" }
-libtd0-derive = { path = "libtd0-derive" }
-model-ssxp = { path = "model-ssxp", optional = true }
-multi-model = { path = "multi-model" }
-pytd0 = { path = "pytd0", optional = true }
-
-# External dependencies.
-clap = { version = "4.6.1", features = ["derive"], optional = true }
-csv = { version = "1.4.0", optional = true }
-hexout = { version = "0.3.2", optional = true }
-indexmap = { version = "2.14.0", optional = true }
-md-5 = "0.11.0"
-serde = { version = "1.0.229", features = ["derive"], optional = true }
-serde_json = { version = "1.0.151", optional = true }
-serde_with = { version = "3.22.0", optional = true }
-zerocopy = "0.8.52"
-zerocopy-derive = "0.8.52"
-
-## TODO: Uncomment these clippy configs once major features are added.
-[lints.clippy]
+[workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }

@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "libtd0"
+version = "0.1.0"
+edition = "2024"
+
+authors = ["Nathan Pugh <natepugh@gmail.com>"]
+description = "A backup file reader and editor for Roland's .TD0 file format."
+license = "GPL-3.0-or-later"
+repository = "https://github.com/natepugh/libtd0"
+keywords = ["libtd0", "td0", "Roland"]
+categories = ["parsing", "parser-implementations"]
+
+[lib]
+name = "td0"
+path = "src/lib.rs"
+
+[features]
+default = [
+    "model-spdsx-pro",
+]
+
+model-spdsx-pro = [
+    "libtd0-model-ssxp",
+]
+
+[dependencies]
+# Internal crates
+libtd0-core = { path = "../libtd0-core" }
+libtd0-derive = { path = "../libtd0-derive" }
+libtd0-model-ssxp = { path = "../libtd0-model-ssxp", optional = true }
+
+# External dependencies
+serde = { version = "1.0.229", features = ["derive"], optional = true }
+serde_json = { version = "1.0.151", optional = true }
+zerocopy = "0.8.52"
+zerocopy-derive = "0.8.52"
+
+### TODO: Uncomment these clippy configs once major features are added.
+[lints]
+workspace = true
