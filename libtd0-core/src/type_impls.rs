@@ -25,9 +25,9 @@ impl ChunkManifest {
         self.item_size
     }
 
-    pub fn new(name: String, pos: usize, size: usize, num_items: usize, item_size: usize) -> Self {
+    pub fn new(name: impl Into<String>, pos: usize, size: usize, num_items: usize, item_size: usize) -> Self {
         Self {
-            name,
+            name: name.into(),
             pos,
             size,
             num_items,

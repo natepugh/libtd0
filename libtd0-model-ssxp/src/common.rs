@@ -1202,7 +1202,7 @@ impl TD0File for SSXPTD0File {
             })
             .map(|(name, ch)| {
                 ChunkManifest::new(
-                    name.clone(),
+                    name,
                     usize_from_u32(ch.pos),
                     usize_from_u32(ch.size),
                     ch.num_items(),
