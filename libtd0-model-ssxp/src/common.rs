@@ -35,6 +35,10 @@ const BACKUP_TAG_KIT: &str = "SSXPROKT";
 /// Backup header tag for whole system backup.
 const BACKUP_TAG_SYSTEM: &str = "SSXPROBK";
 
+// Default firmware if none is supplied.
+const DEFAULT_FIRMWARE: &str = "2.00";
+
+
 fn device_model_from_tag_value(val: &str) -> TD0DeviceModel {
     match val {
         "SSXP" => TD0DeviceModel::SPDSXPro,
@@ -615,10 +619,23 @@ impl SSXPTD0File {
         manifest_tag_from_buf_mut(&mut self.buf, usize_from_u32(pos))
     }
 
-    pub fn new_with(firmware_version: &str) -> TD0Result<Self> {
+    pub fn new_with(firmware_version: Option<&str>, backup_type: Option<TD0BackupType>) -> TD0Result<Self> {
         let mut newobj = Self::new();
         let backup_chunk = newobj.backup_header_mut().unwrap();
+
+        let firmware_version = firmware_version.unwrap_or(DEFAULT_FIRMWARE);
+
+        if firmware_version.len() != 4 {
+            return Err(TD0Error::UnsupportedDeviceFirmwareVersion(firmware_version.to_string()));
+        }
         backup_chunk.firmware.copy_from_slice(firmware_version.as_bytes());
+        let backup_str = match backup_type {
+            Some(TD0BackupType::Kit) => BACKUP_TAG_KIT,
+            Some(TD0BackupType::System) => BACKUP_TAG_SYSTEM,
+            Some(TD0BackupType::Unknown) => BACKUP_TAG_KIT,
+            None => BACKUP_TAG_KIT,
+        };
+        backup_chunk.tag.copy_from_slice(backup_str.as_bytes());
         Ok(newobj)
     }
 
