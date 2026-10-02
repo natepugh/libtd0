@@ -129,7 +129,9 @@ pub fn new_td0_file(model: TD0DeviceModel, version: &str) -> TD0Result<Box<dyn T
         #[cfg(feature = "model-spdsx-pro")]
         (TD0DeviceModel::SPDSXPro, "1.10") => Ok(Box::new(SSXPTD0File::new()) as Box<dyn TD0File>),
         #[cfg(feature = "model-spdsx-pro")]
-        (TD0DeviceModel::SPDSXPro, "2.0") => Ok(Box::new(SSXPTD0File::new_with(Some(version), None)?)),
+        (TD0DeviceModel::SPDSXPro, "2.00") => {
+            Ok(Box::new(SSXPTD0File::new_with(Some(version), None)?))
+        }
         #[cfg(feature = "model-spdsx-pro")]
         (TD0DeviceModel::SPDSXPro, _) => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
             version.to_string(),
