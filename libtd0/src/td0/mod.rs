@@ -16,9 +16,9 @@ mod tests;
 fn read_td0_id_chunk(bytes: &[u8]) -> TD0Result<TD0IdChunk> {
     use zerocopy::FromBytes;
 
-    let buf = bytes.get(..SZ_HDR_CHUNK).ok_or_else(|| TD0Error::FileParse(
-        "unable to read first chunk".to_string(),
-    ))?;
+    let buf = bytes
+        .get(..SZ_HDR_CHUNK)
+        .ok_or_else(|| TD0Error::FileParse("unable to read first chunk".to_string()))?;
 
     Ok(TD0IdChunk::read_from_bytes(buf).expect("SZ_HDR_CHUNK is correct."))
 }
@@ -83,11 +83,12 @@ pub fn parse_td0_file(bytes: &[u8]) -> TD0Result<Box<dyn TD0File>> {
         .map_err(|_| TD0Error::FileParse("invalid or missing `TD0a` id chunk.".to_string()))?;
 
     let pos: usize = size_of::<TD0IdChunk>();
-    let next_chunk: TD0ManifestTag =
-        TD0ManifestTag::read_from_bytes(bytes.get(pos..pos + SZ_HDR_CHUNK).ok_or_else(||
-            TD0Error::FileParse("can't determine TD0 device model.".to_string()),
-        )?)
-        .map_err(|_| TD0Error::FileParse("can't determine TD0 device model.".to_string()))?;
+    let next_chunk: TD0ManifestTag = TD0ManifestTag::read_from_bytes(
+        bytes
+            .get(pos..pos + SZ_HDR_CHUNK)
+            .ok_or_else(|| TD0Error::FileParse("can't determine TD0 device model.".to_string()))?,
+    )
+    .map_err(|_| TD0Error::FileParse("can't determine TD0 device model.".to_string()))?;
     // The model of the first chunk should be the model of the entire backup file.
     // Verify that now and the backup file must validate further.
     match next_chunk.model().as_str() {
@@ -100,16 +101,29 @@ pub fn parse_td0_file(bytes: &[u8]) -> TD0Result<Box<dyn TD0File>> {
 }
 
 /// Creates a new [`TD0File`] object with the correct implementation based on the
-/// `model` and `version` parameters. 
+/// `model` and `version` parameters.
+///
+/// # Warning
+/// This function exists solely as a convenience to developers and testers of this library.
+/// DO NOT attmept to load a backup created by this function into your hardware device.
 ///
 /// # Errors
-/// 
+///
 /// - [`TD0Error::UnsupportedDeviceFirmwareVersion`] - The firmware revision of
-///   the device that created the backup file is not supported by this library. 
+///   the device that created the backup file is not supported by this library.
 ///   Support may be added in the future.
-/// - [`TD0Error::UnsupportedDeviceModel`] - The device model is not supported 
+/// - [`TD0Error::UnsupportedDeviceModel`] - The device model is not supported
 ///   by this library. Support may be added in the future.
-/// 
+///
+/// # Example
+/// ```
+/// # use td0::TD0Error;
+/// use td0::{TD0DeviceModel, TD0File, new_td0_file};
+///
+/// let td0file : Box<dyn TD0File> = new_td0_file(TD0DeviceModel::SPDSXPro, "2.00")?;
+/// assert_eq!(td0file.list_chunks(), vec!["HDRa"]);
+/// # Ok::<(), TD0Error>(())
+/// ```
 pub fn new_td0_file(model: TD0DeviceModel, version: &str) -> TD0Result<Box<dyn TD0File>> {
     match (model, version) {
         #[cfg(feature = "model-spdsx-pro")]
