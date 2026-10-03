@@ -123,22 +123,29 @@ pub enum TD0Error {
     DataType(String),
     /// The checksum stored in the file does not match the file data.
     ChecksumMismatch,
-    /// The requested [`TD0ChunkItem`] is invalid or otherwise unparsable.
+    /// The requested [TD0ChunkItem](super::TD0ChunkItem) is invalid or otherwise unparsable.
     ChunkItemParse,
-    /// The file is unable to be parsed into a [`TD0File`].
+    /// The file is unable to be parsed into a [TD0File](super::TD0File).
     FileParse(String),
     /// The file is too large for limits inherent to the file type.
     FileTooLarge,
     /// The requested chunk is invalid, missing, or otherwise unparsable.
     InvalidChunk(InvalidChunkError),
-    /// The requested [`TD0ChunkItem`] field doesn't exist.
+    /// The requested [TD0ChunkItem](super::TD0ChunkItem) field doesn't exist.
     InvalidField(String),
+    /// The supplied input isn't valid.
     InvalidInput(String),
+    /// The supplied input isn't in the correct range.
     OutOfRange(OutOfRangeError),
+    /// The supplied input isn't in the correct range (Decimal input).
     OutOfRangeDecimal(OutOfRangeErrorTD0Decimal),
+    /// The field is Read-Only and can't be edited.
     ReadOnlyField(String),
+    /// The firmware version is not supported by this library. Support may be added in the future.
     UnsupportedDeviceFirmwareVersion(String),
+    /// The device model is not supported by this library. Support may be added in the future.
     UnsupportedDeviceModel(String),
+    /// A validaton check failed.
     ValidationFailed(String),
 }
 
@@ -168,6 +175,8 @@ impl Display for TD0Error {
 }
 impl Error for TD0Error {}
 
+/// A result type for functons that return data from this library.
+/// All errors are [`TD0Error`].
 pub type TD0Result<T> = Result<T, TD0Error>;
 
 impl TD0Error {

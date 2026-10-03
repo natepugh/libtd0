@@ -28,6 +28,6 @@ pub(crate) mod td0;
 //
 pub use td0_core::result::{TD0Error, TD0Result};
 pub use td0_core::{
-    TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File, TD0Manifest, TD0Value, TD0ValueRaw,
+    ChunkManifest, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File, TD0Manifest, TD0Value, TD0ValueRaw,
 };
 pub use td0::{new_td0_file, parse_td0_file};

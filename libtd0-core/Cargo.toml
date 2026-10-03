@@ -19,11 +19,22 @@ name = "td0_core"
 path = "src/lib.rs"
 
 [dependencies]
-zerocopy = { version = "0.8.55", features = ["derive"] }
-serde = { version = "1.0.229", features = ["derive"], optional = true }
+document-features = { version = "0.2.12" }
 num-traits = "0.2.19"
+zerocopy = { version = "0.8.55", features = ["derive"] }
 zerocopy-derive = "0.8.56"
+
+#! ### Optional dependencies
+## Enable this feature to enable serde serialization of [`TD0Manifest`] objects.
+serde = { version = "1.0.229", features = ["derive"], optional = true }
+
+[dev-dependencies]
+libtd0 = { path = "../libtd0" }
 
 [features]
 default = []
 serde = ["dep:serde", "serde/derive"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

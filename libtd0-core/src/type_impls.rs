@@ -25,6 +25,16 @@ impl ChunkManifest {
         self.item_size
     }
 
+    /// Create a new ChunkManfest struct.
+    ///
+    /// # Example
+    /// ```
+    /// use td0::ChunkManifest;
+    ///
+    /// let chunk_manifest : ChunkManifest = ChunkManifest::new("FOOa", 16, 96, 5, 16);
+    /// assert_eq!(chunk_manifest.to_string().as_str(), "FOOa:  pos: 16  size: 96  num_items: 5  item_size: 16");
+    /// ```
+    ///
     pub fn new(name: impl Into<String>, pos: usize, size: usize, num_items: usize, item_size: usize) -> Self {
         Self {
             name: name.into(),

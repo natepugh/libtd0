@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
+//! Core types and shared functionality for libtd0.
+//! ## Feature flags
+#![doc = document_features::document_features!()]
 
 pub mod header;
 pub mod result;
@@ -86,6 +89,9 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     fn validate_save(&self) -> TD0Result<()>;
 }
 
+/// A representation of a [`TD0File`] data chunk.
+/// [`TD0Manifest`] structs contain one ChunkManifest item for each data chunk
+/// in the file.
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChunkManifest {
@@ -99,21 +105,32 @@ pub struct ChunkManifest {
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct IntEncodedDecimal(pub f32);
 
+/// The type of backup a [`TD0File`] contains.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum TD0BackupType {
+    /// A backup of a single kit.
     Kit,
+    /// A backup of the entire set of system settings including all kits.
     System,
+    /// This library's default when none of the above apply.
     Unknown,
 }
 
+/// The model of the device that created the [`TD0File`] backup.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum TD0DeviceModel {
+    /// Roland SPD-SX Pro (NOT compatible with the original SPD-SX.)
     SPDSXPro,
+    /// This library's default when none of the above apply.
     Unknown,
 }
 
+/// Publicly accessible metadata for a [`TD0File`]-implementing struct.
+///
+/// ## Feature flags
+#[doc = document_features::document_features!()]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Clone, Debug)]
 pub struct TD0Manifest {
@@ -140,32 +157,55 @@ pub struct TD0Manifest {
     chunks: Vec<ChunkManifest>,
 }
 
+/// The value type returned from [TD0ChunkItem::field_value()], and required as
+/// the value parameter in [TD0ChunkItem::set_field_value()].
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
 pub enum TD0Value {
+    /// A decimal value such as 12.0 or -7.2.
+    ///
+    /// NOTE:
     /// This value is rounded to one decimal place (0.1) upon display and
     /// before setting the value of any field. To prevent unexpected results,
     /// ensure that your f32 value has already been rounded to one decimal
-    /// place _before_ creating a TD0Value::Decimal.
+    /// place _before_ creating a [TD0Value::Decimal].
     Decimal(f32),
-    I16(i16),
+    /// A signed 8-bit integer.
     I8(i8),
+    /// A signed 16-bit integer.
+    I16(i16),
+    /// A boxed slice of bytes.
     Slice(Box<[u8]>),
+    /// A text string.
+    ///
+    /// NOTE: The currently implemented hardware device supports only
+    /// the printable ASCII characters (32 - 126).
     Text(String),
-    U16(u16),
-    U32(u32),
+    /// An unsigned 8-bit integer.
     U8(u8),
+    /// An unsigned 16-bit integer.
+    U16(u16),
+    /// An unsigned 32-bit integer.
+    U32(u32),
 }
 
+/// The value type returned from [TD0ChunkItem::field_value_raw()], and required as
+/// the value parameter in [TD0ChunkItem::set_field_value_raw()].
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
 pub enum TD0ValueRaw {
-    I16(i16),
+    /// A signed 8-bit integer.
     I8(i8),
+    /// A signed 16-bit integer.
+    I16(i16),
+    /// A boxed slice of bytes.
     Slice(Box<[u8]>),
-    U16(u16),
-    U32(u32),
+    /// An unsigned 8-bit integer.
     U8(u8),
+    /// An unsigned 16-bit integer.
+    U16(u16),
+    /// An unsigned 32-bit integer.
+    U32(u32),
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
