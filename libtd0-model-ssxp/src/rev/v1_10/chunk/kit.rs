@@ -6,6 +6,8 @@ use td0_derive::{TD0ChunkItemDerive, repeat_fields};
 use zerocopy::{I16, LittleEndian, U16};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
+#[cfg(faster_incomplete_compile)]
+#[expect(unused_imports, reason = "faster incomplete compilation.")]
 use crate::strings::{
     CLICK_MODES, CLICK_SOUNDS, DELAYSYNC_VALUES, DIRECT_ROUTES, EQ_HI_FREQS, EQ_LOW_FREQS,
     EQ_MID_FREQS, EQ_Q_VALS, EXP_PARAMS, EXP_PEDAL_MIDI_CHANNELS, EXP_PEDAL_MODES, LED_COLORS,
@@ -37,6 +39,22 @@ use crate::strings::{
 //     +-led_07-+-led_08-+-led_09-+
 //
 
+// WARNING !! WARNING !! WARNING !! WARNING !!
+// There are TWO (2) versions of this struct in this file, one has all (2200+) of the fields and one that compiles quickly.
+// At the moment these two options are mutually exclusive. The incomplete, quick-to-compile version
+// allows for nearly real-time `cargo check` and `cargo clippy` execution, which otherwise can take up to a minute.
+//
+// The slow compilation is being caused by two macros from the libtd0-derive crate: the derive macro TD0ChunkItemDerive,
+// and the attribute macro repeat_fields. An intelligent re-write of these macros would likely speed the complete
+// compilation up immensely.
+//
+// When compiling for release DO NOT use the coonfig flag `faster_incomplete_compile` as it will compile in
+// the incomplete version, severely limiting the functionality of this program.
+//
+// To configure rust-analyzer for the quick checks, set the additional cargo check env option: "RUSTFLAGS": "--cfg faster_incomplete_compile".
+//
+// The struct immediately below this comment is the complete, slow compiling version.
+#[cfg(not(faster_incomplete_compile))]
 #[repeat_fields]
 #[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
@@ -1243,6 +1261,65 @@ pub struct KITaItem {
     #[repeat_section_last]
     #[td0_field(field_type = "Slice")]
     layer_2_unknown_12: [u8; 12], //  Padding?
+}
+
+// WARNING !! WARNING !! WARNING !! WARNING !!
+// There are TWO (2) versions of this struct in this file, one has all (2200+) of the fields and one that compiles quickly.
+// At the moment these two options are mutually exclusive.
+//
+// The struct immediately below this comment is the incomplete, quickly-compiling version.
+//
+// Please see the WARNING near the top of this file for a more detailed explanation.
+#[cfg(faster_incomplete_compile)]
+#[repeat_fields]
+#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
+#[repr(C, packed)]
+pub struct KITaItem {
+    #[td0_field(field_type = "Text", pad_byte = 0x20)]
+    name: [u8; 16],
+
+    #[td0_field(field_type = "Text", pad_byte = 0x20)]
+    memo: [u8; 64],
+
+    /* General Kit Settings */
+    #[td0_field(field_type = "Volume")]
+    volume: I16<LittleEndian>,
+
+    #[td0_field(field_type = "EnumStr", collection = "SYS_KIT_SWITCH")]
+    click_setting: u8,
+
+    #[td0_field(field_type = "U8")]
+    unknown_1: u8,
+
+    #[td0_field(field_type = "TD0Decimal", min = 20.0, max = 260.0)]
+    tempo: U16<LittleEndian>,
+
+    #[td0_field(field_type = "Slice")]
+    unknown_2: [u8; 3],
+
+    #[repeat(count = 4, format = "mfx_{}_routing")]
+    #[td0_field(field_type = "EnumStr", collection = "MFX_ROUTES")]
+    mfx_1_routing: u8,
+
+    /* MFX Settings */
+    #[repeat_section(count = 4, prefix_format = "mfx_{}")]
+    #[td0_field(field_type = "EnumStr", collection = "MFX")]
+    effect_select: u8,
+
+    #[td0_field(field_type = "EnumStr", collection = "OFF_ON")]
+    enable: u8,
+
+    #[td0_field(field_type = "Volume")]
+    volume: I16<LittleEndian>,
+
+    #[td0_field(field_type = "Slice")]
+    unknown: [u8; 4],
+
+    #[repeat_section_last]
+    #[repeat(count = 32, format = "param_{}")]
+    #[td0_field(field_type = "U16")]
+    param_1: U16<LittleEndian>,
+
 }
 
 #[cfg(test)]

@@ -28,3 +28,6 @@ zerocopy-derive = "0.8.52"
 [dev-dependencies]
 hexout = "0.3.2"
 pretty_assertions = "1.4.1"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(faster_incomplete_compile)'] }
