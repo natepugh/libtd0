@@ -1061,15 +1061,24 @@ fn build_chunkitem_set_field_value(td0fields: &[TD0Field]) -> ImplItemFn {
         }
     );
 
+    // Create a series of match arms, representing each valid (field, TD0ValueType) combo.
     let mut set_fields_clauses: Vec<Arm> = td0fields.iter().map(build_setter_expr).collect();
+    // Create DataType errors for all fields.
+    set_fields_clauses.extend(td0fields.iter().map(build_setter_data_type_error).collect::<Vec<Arm>>());
     set_fields_clauses.push(parse_quote!(
-        _ => Err(td0_core::result::TD0Error::InvalidFieldOrType)
+        _ => Err(td0_core::result::TD0Error::InvalidField(field.to_string()))
     ));
 
     for arm in set_fields_clauses.iter() {
         push_arm_to_fn_match(&mut fn_skel, arm);
     }
     fn_skel
+}
+
+fn build_setter_data_type_error(td0field: &TD0Field) -> Arm {
+    let field_ident: Ident =  td0field.ident.clone();
+    let error_msg = format!("invalid data type setting field '{}'. Expected {}", td0field.ident, td0field.field_type_name);
+    parse_quote!((#field_ident, _) => Err(td0_core::result::TD0Error::DataType(#error_msg.to_string())),)
 }
 
 fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
@@ -1084,8 +1093,9 @@ fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     );
 
     let mut set_fields_clauses: Vec<Arm> = td0fields.iter().map(build_setter_expr_raw).collect();
+    set_fields_clauses.extend(td0fields.iter().map(build_setter_data_type_error).collect::<Vec<Arm>>());
     set_fields_clauses.push(parse_quote!(
-        _ => Err(td0_core::result::TD0Error::InvalidFieldOrType)
+        _ => Err(td0_core::result::TD0Error::InvalidField(field.to_string()))
     ));
 
     for arm in set_fields_clauses.iter() {

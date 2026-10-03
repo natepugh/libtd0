@@ -204,7 +204,7 @@ pub fn parse_chunk_item_field_value(
         Some("U32") => Ok(TD0Value::U32(val.parse().map_err(|_| {
             TD0Error::InvalidInput(format!("invalid value for field '{field}'"))
         })?)),
-        _ => Err(TD0Error::InvalidFieldOrType),
+        _ => Err(TD0Error::DataType(format!("invalid data type for field '{field}"))),
     }
 }
 
@@ -219,12 +219,12 @@ pub fn command_set_chunk_item_values(
     for (field, value) in values {
         let parsed_value = parse_chunk_item_field_value(&*chunk_item, field, value)?;
         let Some(before) = chunk_item.field_value(field) else {
-            return Err(TD0Error::InvalidFieldOrType);
+            return Err(TD0Error::InvalidField(field.clone()));
         };
 
         chunk_item.set_field_value(field, &parsed_value)?;
         let Some(after) = chunk_item.field_value(field) else {
-            return Err(TD0Error::InvalidFieldOrType);
+            return Err(TD0Error::InvalidField(field.clone()));
         };
         diffs.push(ChunkFieldDiffItem {
             field: chunk_name.to_string(),

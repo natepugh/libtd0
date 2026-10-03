@@ -115,15 +115,24 @@ impl OutOfRangeError {
     }
 }
 
+/// The Error type for all errors emitted by this library.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum TD0Error {
+    /// The wrong data type was used when attempting to set a value.
+    DataType(String),
+    /// The checksum stored in the file does not match the file data.
     ChecksumMismatch,
+    /// The requested [`TD0ChunkItem`] is invalid or otherwise unparsable.
     ChunkItemParse,
+    /// The file is unable to be parsed into a [`TD0File`].
     FileParse(String),
+    /// The file is too large for limits inherent to the file type.
     FileTooLarge,
+    /// The requested chunk is invalid, missing, or otherwise unparsable.
     InvalidChunk(InvalidChunkError),
-    InvalidFieldOrType,
+    /// The requested [`TD0ChunkItem`] field doesn't exist.
+    InvalidField(String),
     InvalidInput(String),
     OutOfRange(OutOfRangeError),
     OutOfRangeDecimal(OutOfRangeErrorTD0Decimal),
@@ -136,14 +145,13 @@ pub enum TD0Error {
 impl Display for TD0Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let repr: String = match self {
+            Self::DataType(message) => message.clone(),
             Self::ChecksumMismatch => "checksum mismatch.".to_string(),
             Self::ChunkItemParse => "unable to parse chunk item.".to_string(),
             Self::FileParse(err) => err.to_string(),
             Self::FileTooLarge => "the file is too large to complete this operation.".to_string(),
             Self::InvalidChunk(val) => val.to_string(),
-            Self::InvalidFieldOrType => {
-                "unknown field or invalid input type for field.".to_string()
-            }
+            Self::InvalidField(field) => format!("unknown field '{field}'"),
             Self::InvalidInput(msg) => msg.clone(),
             Self::OutOfRange(val) => val.to_string(),
             Self::OutOfRangeDecimal(val) => val.to_string(),
