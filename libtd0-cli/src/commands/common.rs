@@ -84,7 +84,8 @@ pub fn command_dump_chunk_item<'a>(
     chunk_name: &'a str,
     item_num: usize,
 ) -> TD0Result<&'a [u8]> {
-    td0file.chunk_item_raw(chunk_name, item_num)
+    let item = td0file.chunk_item(chunk_name, item_num)?;
+    Ok(item.as_bytes())
 }
 
 pub fn command_dump_chunk<'a>(td0file: &'a dyn TD0File, chunk_name: &str) -> TD0Result<&'a [u8]> {

@@ -1143,24 +1143,6 @@ impl TD0File for SSXPTD0File {
         }
     }
 
-    fn chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]> {
-        let chunk = self
-            .meta
-            .chunk(chunk_name)
-            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
-
-        self.buf
-            .get(
-                chunk
-                    .item_range(item_index)
-                    .ok_or(TD0Error::ChunkItemParse)?,
-            )
-            .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                chunk_name.to_string(),
-                "unable to read raw chunk data.",
-            )))
-    }
-
     fn chunk_pos(&self, chunk_name: &str) -> Option<usize> {
         self.meta.chunk(chunk_name).map(|ch| usize_from_u32(ch.pos))
     }

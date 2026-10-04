@@ -74,7 +74,6 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
         item_index: usize,
     ) -> TD0Result<Box<dyn TD0ChunkItem>>;
     fn chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>>;
-    fn chunk_item_raw(&self, chunk_name: &str, item_index: usize) -> TD0Result<&[u8]>;
     fn chunk_num_items(&self, chunk_name: &str) -> Option<usize>;
     fn chunk_pos(&self, chunk_name: &str) -> Option<usize>;
     fn chunk_raw(&self, chunk_name: &str) -> Option<&[u8]>;
