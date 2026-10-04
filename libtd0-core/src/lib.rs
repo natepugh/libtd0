@@ -25,70 +25,108 @@ pub const VOLUME_MINUS_INF_FLOAT: f32 = f32::NEG_INFINITY;
 pub const VOLUME_MINUS_INF_I16: i16 = -601;
 pub const VOLUME_MINUS_INF_DISPLAY: &str = "-inf";
 
+/// Data accessors for individual data chunk items. (e.g. a single Kit configuration or
+/// a single sample metadata tag.) Contains methods to describe available fields, read
+/// those fields' values and write those values.
+///
+/// TD0ChunkItems aren't created directly, but rather retrieved from a [TD0File] instance.
 pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
+    /// Return a borrowed reference to this object's buffer.
     fn as_bytes(&self) -> &[u8];
+    /// Return the set of valid options for field `field`.
     fn field_options(&self, field: &str) -> Option<&'static [&'static str]>;
+    /// Return the data type of field `field`.
     fn field_type(&self, field: &str) -> Option<&'static str>;
+    /// Return the value of the field `field`.
     fn field_value(&self, field: &str) -> Option<TD0Value>;
+    /// Return the raw value of field `field`.
     fn field_value_raw(&self, field: &str) -> Option<TD0ValueRaw>;
+    /// Return this chunk item's field names.
     fn list_fields(&self) -> &'static [&'static str];
+    /// Set the value of field `field` to `value`.
     fn set_field_value(&mut self, field: &str, value: &TD0Value) -> TD0Result<()>;
+    /// Set the raw value of field `field` to `raw_value`.
     fn set_field_value_raw(&mut self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
 }
+
+/// Interface to the data in a .TD0 file.
 pub trait TD0File: Send + Sync + core::fmt::Debug {
+    /// Add a chunk of `chunk_name` type to the file.
     fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> TD0Result<()>;
+    /// Add chunk `chunk_name` from the file.
     fn remove_chunk(&mut self, chunk_name: &str) -> TD0Result<()>;
+    /// Replace a chunk item with a new `TD0ChunkItem`.
     fn chunk_item_replace(
         &mut self,
         chunk_name: &str,
         item_index: usize,
         source: &dyn TD0ChunkItem,
     ) -> TD0Result<()>;
+    /// Copy a chunk item in `chunk_name` to `dest_index` overwriting the item at that index.
     fn chunk_items_copy(
         &mut self,
         chunk_name: &str,
         source_index: usize,
         dest_index: usize,
     ) -> TD0Result<()>;
+    /// Swap two chunk items in `chunk_name`.
     fn chunk_items_swap(
         &mut self,
         chunk_name: &str,
         index_1: usize,
         index_2: usize,
     ) -> TD0Result<()>;
+    /// Reorder all chunk items in `chunk_name`.
     fn chunk_items_reorder(&mut self, chunk_name: &str, new_order: &[usize]) -> TD0Result<()>;
+    /// Prepare an edited file for saving.
     fn finalize(&mut self) -> TD0Result<()>;
+    /// Parse a new TD0File from bytes.
     fn try_from_bytes(bytes: &[u8]) -> TD0Result<Self>
     where
         Self: Sized;
+    /// Return an owned copy of the file's bytes.
     fn try_into_bytes(self) -> TD0Result<Vec<u8>>;
+    /// Retrieve a reference to a data item from `chunk_name`.
     fn chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem>;
+    /// Retrieve a mutable reference to a data item from `chunk_name`.
     fn chunk_item_mut(
         &mut self,
         chunk_name: &str,
         item_index: usize,
     ) -> TD0Result<&mut dyn TD0ChunkItem>;
+    /// Retrieve an owned copy of a data item from `chunk_name`.
     fn chunk_item_owned(
         &self,
         chunk_name: &str,
         item_index: usize,
     ) -> TD0Result<Box<dyn TD0ChunkItem>>;
+    /// Return a default chunk item for `chunk_name`.
     fn chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>>;
+    /// Return the number of items in `chunk_name`.
     fn chunk_num_items(&self, chunk_name: &str) -> Option<usize>;
+    /// Return the absolute position of `chunk_name`.
     fn chunk_pos(&self, chunk_name: &str) -> Option<usize>;
+    /// Return a borrowed reference to the bytes of a `chunk_name`.
     fn chunk_raw(&self, chunk_name: &str) -> Option<&[u8]>;
+    /// Return the size of chunk `chunk_name`.
     fn chunk_size(&self, chunk_name: &str) -> Option<usize>;
+    /// Return a list of chunk names in this file.
     fn list_chunks(&self) -> Vec<String>;
+    /// Return a [TD0Manifest] containing metadata about the file an its data chunks.
     fn manifest(&self) -> TD0Result<TD0Manifest>;
+    /// Return a [TD0Manifest] containing metadata about the file an its data chunks.
     fn new() -> Self
     where
         Self: Sized;
+    /// Return a copy of this file's bytes.
     fn to_bytes(&self) -> Vec<u8>;
+    /// Perform a post-parse validation of the file.
     fn validate_load(&self) -> TD0Result<()>;
+    /// Perform a pre-save validation of the file.
     fn validate_save(&self) -> TD0Result<()>;
 }
 
-/// A representation of a [`TD0File`] data chunk.
+/// A read-only representation of a [`TD0File`] data chunk.
 /// [`TD0Manifest`] structs contain one ChunkManifest item for each data chunk
 /// in the file.
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
