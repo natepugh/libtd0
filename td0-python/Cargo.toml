@@ -3,15 +3,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [package]
-name = "libtd0-python"
+name = "td0-python"
 version = "0.1.0"
 edition = "2024"
 
 authors = ["Nathan Pugh <natepugh@gmail.com>"]
-description = "Python3 bindings for libtd0."
+description = "Python3 bindings for td0, a library that supports reading and editing the .TD0 e-kit/sample pad backup file format."
 license = "GPL-3.0-or-later"
 repository = "https://github.com/natepugh/libtd0"
-keywords = ["libtd0", "td0"]
+keywords = ["td0", "sampler", "sample pad", "drum kit", "Python"]
 categories = ["parsing", "parser-implementations"]
 
 [lib]
@@ -19,8 +19,8 @@ name = "pytd0"
 crate-type = ["cdylib"]
 
 [dependencies]
-libtd0-core = { path = "../libtd0-core" }
-libtd0 = { path = "../libtd0" }
+td0-core = { path = "../td0-core" }
+td0 = { path = "../td0" }
 
 pyo3 = { version = "0.29.2", features = ["abi3", "abi3t", "experimental-inspect", "rust_decimal"] }
 rust_decimal = "1.43.0"

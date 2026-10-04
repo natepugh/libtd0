@@ -1,0 +1,29 @@
+[package]
+name = "td0-cli"
+version = "0.1.0"
+edition = "2024"
+
+authors = ["Nathan Pugh <natepugh@gmail.com>"]
+description = "CLI utility for reading and editing the .TD0 e-kit/sample pad backup file format."
+license = "GPL-3.0-or-later"
+repository = "https://github.com/natepugh/libtd0"
+keywords = ["td0", "sampler", "sample pad", "drum kit"]
+categories = ["parsing", "parser-implementations"]
+
+
+[[bin]]
+name = "td0file"
+path = "src/main.rs"
+
+[dependencies]
+# td0 dependencies
+td0 = { path = "../td0" }
+td0-core = { path = "../td0-core", features=["serde"] }
+
+# External dependencies
+clap = { version = "4.6.1", features = ["derive"] }
+csv = { version = "1.4.0", }
+hexout = { version = "0.3.2", }
+indexmap = { version = "2.14.0", features = ["serde"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", }

@@ -5,12 +5,12 @@
 [workspace]
 resolver = "3"
 members = [
-    "libtd0",
-    "libtd0-cli",
-    "libtd0-core",
-    "libtd0-derive",
-    "libtd0-model-ssxp",
-    "libtd0-python",
+    "td0",
+    "td0-cli",
+    "td0-core",
+    "td0-derive",
+    "td0-model-ssxp",
+    "td0-python",
 ]
 
 [workspace.lints.clippy]

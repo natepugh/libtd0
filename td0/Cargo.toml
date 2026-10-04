@@ -3,20 +3,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [package]
-name = "libtd0"
+name = "td0"
 version = "0.1.0"
 edition = "2024"
 
 authors = ["Nathan Pugh <natepugh@gmail.com>"]
-description = "A backup file reader and editor for Roland's .TD0 file format."
+description = "Library that supports reading and editing the .TD0 e-kit/sample pad backup file format."
 license = "GPL-3.0-or-later"
 repository = "https://github.com/natepugh/libtd0"
-keywords = ["libtd0", "td0", "Roland"]
+keywords = ["td0", "sampler", "sample pad", "drum kit"]
 categories = ["parsing", "parser-implementations"]
-
-[lib]
-name = "td0"
-path = "src/lib.rs"
 
 [features]
 default = [
@@ -24,14 +20,14 @@ default = [
 ]
 
 model-spdsx-pro = [
-    "libtd0-model-ssxp",
+    "td0-model-ssxp",
 ]
 
 [dependencies]
 # Internal crates
-libtd0-core = { path = "../libtd0-core" }
-libtd0-derive = { path = "../libtd0-derive" }
-libtd0-model-ssxp = { path = "../libtd0-model-ssxp", optional = true }
+td0-core = { path = "../td0-core" }
+td0-derive = { path = "../td0-derive" }
+td0-model-ssxp = { path = "../td0-model-ssxp", optional = true }
 
 # External dependencies
 serde = { version = "1.0.229", features = ["derive"], optional = true }
