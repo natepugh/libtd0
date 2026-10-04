@@ -149,13 +149,12 @@ fn main() {
                 Ok(val) => val,
                 Err(err) => exit_td0_err(&err, ERR_UNKNOWN),
             };
-            #[expect(clippy::todo, reason = "todo is unreachable, checked for above.")]
             let text_output = match cli.output_format {
                 OutputFormat::Json => {
                     serde_json::to_string(&manifest_data).expect("Could not serialize output.")
                 }
                 OutputFormat::Csv => {
-                    todo!();
+                    unreachable!();
                 }
                 OutputFormat::Text => format!("{manifest_data}"),
             };
