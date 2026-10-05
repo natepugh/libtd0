@@ -1102,8 +1102,8 @@ impl TD0File for SSXPTD0File {
             .ok_or(TD0Error::ChunkItemParse)?;
 
         match firmware_version.as_str() {
-            "1.10" => v1_10_chunk_item_from_bytes_mut(chunk_name, bytes),
-            "2.00" => v2_0_chunk_item_from_bytes_mut(chunk_name, bytes),
+            "1.10" => { self.dirty = true; v1_10_chunk_item_from_bytes_mut(chunk_name, bytes) },
+            "2.00" => { self.dirty = true; v2_0_chunk_item_from_bytes_mut(chunk_name, bytes) },
             unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
                 unexpected_version.to_string(),
             )),
