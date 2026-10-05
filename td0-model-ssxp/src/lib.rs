@@ -130,7 +130,7 @@ mod tests {
         calc_and_append_checksum(&mut expected);
 
         assert_eq!(
-            fmt_hex(td0file.try_into_bytes().unwrap().as_bytes()),
+            fmt_hex(td0file.try_to_bytes().unwrap().as_bytes()),
             fmt_hex(expected.as_bytes())
         );
     }
@@ -204,7 +204,7 @@ mod tests {
             .expect("can successfully add a chunk.");
         td0file.finalize().expect("finalize works");
         assert_eq!(
-            fmt_hex(td0file.try_into_bytes().unwrap().as_bytes()),
+            fmt_hex(td0file.try_to_bytes().unwrap().as_bytes()),
             fmt_hex(expected.as_bytes())
         );
     }

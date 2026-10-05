@@ -85,7 +85,8 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     where
         Self: Sized;
     /// Return an owned copy of the file's bytes.
-    fn try_into_bytes(self) -> TD0Result<Vec<u8>>;
+    fn try_to_bytes(&self) -> TD0Result<Vec<u8>>;
+
     /// Retrieve a reference to a data item from `chunk_name`.
     fn chunk_item_ref(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem>;
 

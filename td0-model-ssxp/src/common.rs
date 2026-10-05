@@ -1045,13 +1045,13 @@ impl TD0File for SSXPTD0File {
         })
     }
 
-    fn try_into_bytes(self) -> TD0Result<Vec<u8>> {
+    fn try_to_bytes(&self) -> TD0Result<Vec<u8>> {
         if self.dirty {
             Err(TD0Error::FileParse(
                 "file must be finalized before saving. Call TD0File::finalize() first.".to_string(),
             ))
         } else {
-            Ok(self.buf)
+            Ok(self.buf.clone())
         }
     }
 
