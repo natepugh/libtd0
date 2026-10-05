@@ -42,12 +42,6 @@ const BACKUP_TAG_SYSTEM: &str = "SSXPROBK";
 // Default firmware if none is supplied.
 const DEFAULT_FIRMWARE: &str = "2.00";
 
-fn device_model_from_tag_value(val: &str) -> TD0DeviceModel {
-    match val {
-        "SSXP" => TD0DeviceModel::SPDSXPro,
-        _ => TD0DeviceModel::Unknown,
-    }
-}
 
 /// The header of a `TD0Chunk` in a `TD0File`.
 #[derive(Copy, Clone, Debug, Default, FromBytes, PartialEq, Immutable, IntoBytes, KnownLayout)]
@@ -112,6 +106,7 @@ impl fmt::Display for ChunkHeader {
 #[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
 pub struct HDRaItem {
+    // e.g. "SSXPROBK"
     #[td0_field(field_type = "Text", pad_byte = 0)]
     tag: [u8; 8],
 
@@ -485,13 +480,6 @@ fn id_chunk_from_buf_mut(buf: &mut [u8]) -> TD0Result<&mut TD0IdChunk> {
     .map_err(|_| TD0Error::FileParse("unable to parse TD0 ID chunk.".to_string()))
 }
 
-fn manifest_tag_from_buf(buf: &[u8], pos: usize) -> TD0Result<&TD0ManifestTag> {
-    TD0ManifestTag::try_ref_from_bytes(buf.get(pos..pos + size_of::<TD0ManifestTag>()).ok_or(
-        TD0Error::FileParse("unable to read manifest tag.".to_string()),
-    )?)
-    .map_err(|_| TD0Error::FileParse("invalid manifest tag.".to_string()))
-}
-
 fn manifest_tag_from_buf_owned(buf: &[u8], pos: usize) -> TD0Result<TD0ManifestTag> {
     TD0ManifestTag::try_read_from_bytes(buf.get(pos..pos + size_of::<TD0ManifestTag>()).ok_or(
         TD0Error::FileParse("unable to read manifest tag.".to_string()),
@@ -602,24 +590,6 @@ impl SSXPTD0File {
         let backup_header = self.backup_header()?;
 
         Ok(backup_header.field_value("firmware").unwrap().to_string())
-    }
-
-    pub fn manifest_tag(&self, chunk_name: &str) -> TD0Result<&TD0ManifestTag> {
-        let pos = self
-            .meta
-            .chunk(chunk_name)
-            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?
-            .pos;
-        manifest_tag_from_buf(&self.buf, usize_from_u32(pos))
-    }
-
-    pub fn manifest_tag_mut(&mut self, chunk_name: &str) -> TD0Result<&mut TD0ManifestTag> {
-        let pos = self
-            .meta
-            .chunk(chunk_name)
-            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?
-            .pos;
-        manifest_tag_from_buf_mut(&mut self.buf, usize_from_u32(pos))
     }
 
     pub fn new_with(
@@ -1168,7 +1138,10 @@ impl TD0File for SSXPTD0File {
 
     fn manifest(&self) -> TD0Result<TD0Manifest> {
         let backup_chunk = self.backup_header()?;
-        let backup_tag = self.manifest_tag("HDRa")?;
+        let backup_tag = self
+            .meta
+            .manifest_tag("HDRa")
+            .ok_or(TD0Error::unknown_chunk_error("HDRa"))?;
         let backup_type = match backup_chunk
             .field_value("tag")
             .unwrap()
@@ -1213,12 +1186,12 @@ impl TD0File for SSXPTD0File {
             backup_type,
             checksum_actual.as_slice(),
             &self.calc_checksum()[..],
-            device_model_from_tag_value(backup_tag.model().as_str()),
-            backup_chunk
-                .field_value("build")
-                .map_or("Unknown".to_string(), |val| val.to_string()),
+            TD0DeviceModel::try_from(backup_tag.model().as_str())?,
             backup_chunk
                 .field_value("firmware")
+                .map_or("Unknown".to_string(), |val| val.to_string()),
+            backup_chunk
+                .field_value("build")
                 .map_or("Unknown".to_string(), |val| val.to_string()),
             backup_chunk
                 .field_value("device_serial")

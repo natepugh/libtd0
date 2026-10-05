@@ -16,6 +16,9 @@ mod tests {
     use hexout::{HexOutSettings, hex_out};
     use md5::Digest as _;
     use pretty_assertions::assert_eq;
+    use td0_core::TD0BackupType;
+    use td0_core::TD0DeviceModel;
+    use td0_core::TD0Manifest;
     use zerocopy::{IntoBytes, LittleEndian, U16, U32};
 
     use super::common::SSXPTD0File;
@@ -288,5 +291,25 @@ mod tests {
     fn test_ssxp_td0file_new_is_valid() {
         let td0file = SSXPTD0File::new();
         assert_eq!(Ok(()), td0file.validate_load());
+    }
+
+    #[test]
+    fn test_manifest() {
+        let td0file = SSXPTD0File::try_from_bytes(&get_test_data(PathBuf::from("new_v1_10.TD0")))
+            .expect("or test is broken");
+        let manifest: TD0Manifest = td0file.manifest().expect("or test is broken");
+        assert_eq!(manifest.backup_name().trim_end(), "USER KIT");
+        assert_eq!(manifest.backup_type(), TD0BackupType::Kit);
+        assert_eq!(manifest.checksum_actual(), manifest.checksum_calculated());
+        assert_eq!(
+            manifest.checksum_actual().as_str(),
+            "d4690edab87afa219f9c02c26bd64d4b"
+        );
+        assert_eq!(manifest.device_model(), TD0DeviceModel::SPDSXPro);
+        assert_eq!(manifest.device_firmware_version().as_str(), "1.10");
+        assert_eq!(manifest.device_firmware_build().as_str(), "0083");
+        assert_eq!(manifest.device_serial().as_str(), "XXXXXXX");
+        assert_eq!(manifest.size_actual(), 128);
+        assert_eq!(manifest.size_calculated(), 128);
     }
 }
