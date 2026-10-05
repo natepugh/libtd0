@@ -503,7 +503,10 @@ mod pytd0 {
         }
 
         pub fn to_bytes(&self) -> PyResult<Vec<u8>> {
-            Ok(self._impl.to_bytes())
+            self._impl.try_to_bytes().map_err(|err| match err{
+                TD0Error::ValidationFailed(msg) => PyErr::new::<PyValueError, _>(msg),
+                _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
+            })
         }
 
         pub fn get_chunk_item(

@@ -1283,10 +1283,6 @@ impl TD0File for SSXPTD0File {
         }
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
-        self.buf.clone()
-    }
-
     fn list_chunks(&self) -> Vec<String> {
         self.meta.tag_order.clone()
     }
