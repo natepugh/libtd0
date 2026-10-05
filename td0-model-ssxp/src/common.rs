@@ -917,7 +917,7 @@ impl TD0File for SSXPTD0File {
         Ok(())
     }
 
-    fn chunk_items_copy(
+    fn chunk_item_copy(
         &mut self,
         chunk_name: &str,
         source_index: usize,

@@ -461,7 +461,7 @@ mod pytd0 {
             dest_index: usize,
         ) -> PyResult<()> {
             self._impl
-                .chunk_items_copy(chunk_name, source_index, dest_index)
+                .chunk_item_copy(chunk_name, source_index, dest_index)
                 .map_err(map_chunk_item_error)
         }
 
@@ -514,7 +514,7 @@ mod pytd0 {
             Ok(TD0ChunkItem {
                 _impl: self
                     ._impl
-                    .chunk_item_owned(chunk_name, item_index)
+                    .chunk_item(chunk_name, item_index)
                     .map_err(map_chunk_item_error)?,
             })
         }

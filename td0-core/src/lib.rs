@@ -63,7 +63,7 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
         source: &dyn TD0ChunkItem,
     ) -> TD0Result<()>;
     /// Copy a chunk item in `chunk_name` to `dest_index` overwriting the item at that index.
-    fn chunk_items_copy(
+    fn chunk_item_copy(
         &mut self,
         chunk_name: &str,
         source_index: usize,
