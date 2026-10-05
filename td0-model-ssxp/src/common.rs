@@ -897,9 +897,10 @@ impl TD0File for SSXPTD0File {
             .meta
             .chunk(chunk_name)
             .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
-        let dest_range = chunk
-            .item_range(dest_index)
-            .ok_or(TD0Error::ChunkItemParse)?;
+        let dest_range =
+            chunk
+                .item_range(dest_index)
+                .ok_or_else(|| TD0Error::out_of_range_error_from_usize(0, chunk.num_items()))?;
 
         let source_bytes = source.as_bytes();
         if source_bytes.len() != dest_range.len() {
@@ -929,10 +930,10 @@ impl TD0File for SSXPTD0File {
             .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
         let source_range = chunk
             .item_range(source_index)
-            .ok_or(TD0Error::ChunkItemParse)?;
+            .ok_or_else(|| TD0Error::out_of_range_error_from_usize(0, chunk.num_items()))?;
         let dest_range = chunk
             .item_range(dest_index)
-            .ok_or(TD0Error::ChunkItemParse)?;
+            .ok_or_else(|| TD0Error::out_of_range_error_from_usize(0, chunk.num_items()))?;
         self.buf.copy_within(source_range, dest_range.start);
         self.dirty = true;
         Ok(())
@@ -948,8 +949,10 @@ impl TD0File for SSXPTD0File {
             .meta
             .chunk(chunk_name)
             .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
-        let item_1_range = chunk.item_range(index_1).ok_or(TD0Error::ChunkItemParse)?;
-        let item_2_range = chunk.item_range(index_2).ok_or(TD0Error::ChunkItemParse)?;
+        let item_1_range = chunk.item_range(index_1)
+            .ok_or_else(|| TD0Error::out_of_range_error_from_usize(0, chunk.num_items()))?;
+        let item_2_range = chunk.item_range(index_2)
+            .ok_or_else(|| TD0Error::out_of_range_error_from_usize(0, chunk.num_items()))?;
 
         let item_1_bytes = self
             .buf
@@ -1047,7 +1050,7 @@ impl TD0File for SSXPTD0File {
 
     fn try_to_bytes(&self) -> TD0Result<Vec<u8>> {
         if self.dirty {
-            Err(TD0Error::FileParse(
+            Err(TD0Error::ValidationFailed(
                 "file must be finalized before saving. Call TD0File::finalize() first.".to_string(),
             ))
         } else {

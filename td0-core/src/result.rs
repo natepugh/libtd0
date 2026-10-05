@@ -183,7 +183,7 @@ impl TD0Error {
     pub fn unknown_chunk_error(chunk_name: impl Into<String>) -> Self {
         Self::InvalidChunk(InvalidChunkError {
             chunk_name: chunk_name.into(),
-            reason: "unkonwn chunk.",
+            reason: "unknown chunk.",
         })
     }
 
@@ -191,6 +191,22 @@ impl TD0Error {
         Self::OutOfRange(OutOfRangeError {
             min: min.into(),
             max: max.into(),
+        })
+    }
+
+    pub fn out_of_range_error_from_usize(min: usize, max: usize) -> Self {
+        let i64_min  = i64::try_from(min);
+        if i64_min.is_err() {
+            return TD0Error::DataType("min value of too great a magnitude to fit in a i64!".to_string());
+        }
+        let i64_max  = i64::try_from(max);
+        if i64_max.is_err() {
+            return TD0Error::DataType("max value of too great a magnitude to fit in a i64!".to_string());
+        }
+
+        Self::OutOfRange(OutOfRangeError {
+            min: i64_min.unwrap(),
+            max: i64_max.unwrap(),
         })
     }
 }

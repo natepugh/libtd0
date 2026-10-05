@@ -372,6 +372,10 @@ impl TD0Value {
 
         Self::Text("".to_string())
     }
+
+    pub fn new_text_value(text: impl Into<String>) -> Self {
+        Self::Text(text.into())
+    }
 }
 
 impl core::fmt::Display for TD0Value {
