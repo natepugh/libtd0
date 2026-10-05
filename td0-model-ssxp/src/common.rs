@@ -18,15 +18,17 @@ use crate::rev::v2_0::{
 
 use ::core::fmt;
 use ::core::ops::Range;
+use md5::Digest as _;
+use std::collections::{HashMap, HashSet};
 use td0_core::header::{OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
-use td0_core::result::{InvalidChunkError, TD0Error, TD0Result, create_u32_oob_error};
+use td0_core::result::{
+    InvalidChunkError, TD0Error, TD0Result, create_u32_oob_error,
+};
 use td0_core::{
     ChunkManifest, SZ_MD5_DIGEST, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File,
     TD0Manifest, try_u32_from_usize, usize_from_u32,
 };
 use td0_derive::TD0ChunkItemDerive;
-use md5::Digest as _;
-use std::collections::{HashMap, HashSet};
 use zerocopy::{FromBytes, FromZeros, IntoBytes, LittleEndian, TryFromBytes, U32};
 use zerocopy_derive::{Immutable, KnownLayout};
 
@@ -37,7 +39,6 @@ const BACKUP_TAG_SYSTEM: &str = "SSXPROBK";
 
 // Default firmware if none is supplied.
 const DEFAULT_FIRMWARE: &str = "2.00";
-
 
 fn device_model_from_tag_value(val: &str) -> TD0DeviceModel {
     match val {
@@ -619,16 +620,23 @@ impl SSXPTD0File {
         manifest_tag_from_buf_mut(&mut self.buf, usize_from_u32(pos))
     }
 
-    pub fn new_with(firmware_version: Option<&str>, backup_type: Option<TD0BackupType>) -> TD0Result<Self> {
+    pub fn new_with(
+        firmware_version: Option<&str>,
+        backup_type: Option<TD0BackupType>,
+    ) -> TD0Result<Self> {
         let mut newobj = Self::new();
         let backup_chunk = newobj.backup_header_mut().unwrap();
 
         let firmware_version = firmware_version.unwrap_or(DEFAULT_FIRMWARE);
 
         if firmware_version.len() != 4 {
-            return Err(TD0Error::UnsupportedDeviceFirmwareVersion(firmware_version.to_string()));
+            return Err(TD0Error::UnsupportedDeviceFirmwareVersion(
+                firmware_version.to_string(),
+            ));
         }
-        backup_chunk.firmware.copy_from_slice(firmware_version.as_bytes());
+        backup_chunk
+            .firmware
+            .copy_from_slice(firmware_version.as_bytes());
         let backup_str = match backup_type {
             Some(TD0BackupType::Kit) => BACKUP_TAG_KIT,
             Some(TD0BackupType::System) => BACKUP_TAG_SYSTEM,
@@ -1226,43 +1234,47 @@ impl TD0File for SSXPTD0File {
 
         // Set values for TDOa ID tag.
         let mut buf = vec![0u8; BUF_SIZE];
-        let id_tag = TD0IdChunk::mut_from_bytes(
-            buf.get_mut(..size_of::<TD0IdChunk>()).unwrap()
-        ).unwrap();
+        let id_tag =
+            TD0IdChunk::mut_from_bytes(buf.get_mut(..size_of::<TD0IdChunk>()).unwrap()).unwrap();
         id_tag.set_magic(&TD0_MAGIC);
-        id_tag.set_bytes_remaining(
-            u16::try_from(HEADER_SIZE - OFFSET_BYTES_REMAINING).unwrap()
-        );
+        id_tag.set_bytes_remaining(u16::try_from(HEADER_SIZE - OFFSET_BYTES_REMAINING).unwrap());
         let mut pos: usize = size_of::<TD0IdChunk>();
 
         // Set values for HDRa tag.
         let header_tag = TD0ManifestTag::mut_from_bytes(
-            buf.get_mut(pos..pos + size_of::<TD0ManifestTag>()).unwrap()
-        ).unwrap();
+            buf.get_mut(pos..pos + size_of::<TD0ManifestTag>()).unwrap(),
+        )
+        .unwrap();
         pos += size_of::<TD0ManifestTag>();
         header_tag.set_tag("HDRa").unwrap();
         header_tag.set_model("SSXP").unwrap();
         header_tag.set_chunk_pos(HEADER_SIZE).unwrap();
-        header_tag.set_chunk_size(size_of::<ChunkHeader>() + size_of::<HDRaItem>()).unwrap();
+        header_tag
+            .set_chunk_size(size_of::<ChunkHeader>() + size_of::<HDRaItem>())
+            .unwrap();
 
         // Set buf bytes from the default backup chunk header.
         let chunk_header = HDRaItem::default_header();
-        buf.get_mut(pos..pos + size_of::<ChunkHeader>()).unwrap()
+        buf.get_mut(pos..pos + size_of::<ChunkHeader>())
+            .unwrap()
             .copy_from_slice(IntoBytes::as_bytes(&chunk_header));
         pos += size_of::<ChunkHeader>();
 
         // Set buf bytes from the default (v1.10) backup HDRaItem.
         let item = HDRaItem::new_default_v1_10();
-        buf.get_mut(pos..pos + size_of::<HDRaItem>()).unwrap()
+        buf.get_mut(pos..pos + size_of::<HDRaItem>())
+            .unwrap()
             .copy_from_slice(IntoBytes::as_bytes(&item));
 
         // Write checksum.
         let mut hasher: md5::Md5 = md5::Md5::new();
         hasher.update(buf.get(..BUF_SIZE - SZ_MD5_DIGEST).unwrap());
-        buf.get_mut(BUF_SIZE - SZ_MD5_DIGEST..).unwrap()
+        buf.get_mut(BUF_SIZE - SZ_MD5_DIGEST..)
+            .unwrap()
             .copy_from_slice(hasher.finalize().as_bytes());
 
-        let meta: SSXPTD0FileMetadata = SSXPTD0FileMetadata::new_from_buf(&buf).expect("all data is bespoke.");
+        let meta: SSXPTD0FileMetadata =
+            SSXPTD0FileMetadata::new_from_buf(&buf).expect("all data is bespoke.");
 
         Self {
             buf,
