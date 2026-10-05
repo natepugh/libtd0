@@ -7,7 +7,6 @@ use super::{
 use core::ops::{Div, Mul};
 use zerocopy::{ByteOrder, I16, U16};
 
-
 impl ChunkManifest {
     pub fn name(&self) -> String {
         self.name.clone()
@@ -35,7 +34,13 @@ impl ChunkManifest {
     /// assert_eq!(chunk_manifest.to_string().as_str(), "FOOa:  pos: 16  size: 96  num_items: 5  item_size: 16");
     /// ```
     ///
-    pub fn new(name: impl Into<String>, pos: usize, size: usize, num_items: usize, item_size: usize) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        pos: usize,
+        size: usize,
+        num_items: usize,
+        item_size: usize,
+    ) -> Self {
         Self {
             name: name.into(),
             pos,

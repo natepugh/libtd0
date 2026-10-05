@@ -8,15 +8,15 @@ use pyo3::{PyErr, PyResult};
 #[pymodule]
 mod pytd0 {
     use super::*;
+    use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
+    use rust_decimal::prelude::FromPrimitive;
+    use td0::{new_td0_file, parse_td0_file};
     use td0_core::{
         ChunkManifest as Impl_ChunkManifest, TD0BackupType as Impl_TD0BackupType,
         TD0ChunkItem as Impl_TD0ChunkItem, TD0DeviceModel as Impl_TD0DeviceModel,
         TD0File as Impl_TD0File, TD0Manifest as Impl_TD0Manifest, TD0Value as Impl_TD0Value,
         TD0ValueRaw as Impl_TD0ValueRaw, result::TD0Error,
     };
-    use td0::{new_td0_file, parse_td0_file};
-    use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
-    use rust_decimal::prelude::FromPrimitive;
 
     fn map_chunk_item_error(err: TD0Error) -> PyErr {
         match err {
@@ -503,7 +503,7 @@ mod pytd0 {
         }
 
         pub fn to_bytes(&self) -> PyResult<Vec<u8>> {
-            self._impl.try_to_bytes().map_err(|err| match err{
+            self._impl.try_to_bytes().map_err(|err| match err {
                 TD0Error::ValidationFailed(msg) => PyErr::new::<PyValueError, _>(msg),
                 _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
             })

@@ -195,13 +195,17 @@ impl TD0Error {
     }
 
     pub fn out_of_range_error_from_usize(min: usize, max: usize) -> Self {
-        let i64_min  = i64::try_from(min);
+        let i64_min = i64::try_from(min);
         if i64_min.is_err() {
-            return TD0Error::DataType("min value of too great a magnitude to fit in a i64!".to_string());
+            return TD0Error::DataType(
+                "min value of too great a magnitude to fit in a i64!".to_string(),
+            );
         }
-        let i64_max  = i64::try_from(max);
+        let i64_max = i64::try_from(max);
         if i64_max.is_err() {
-            return TD0Error::DataType("max value of too great a magnitude to fit in a i64!".to_string());
+            return TD0Error::DataType(
+                "max value of too great a magnitude to fit in a i64!".to_string(),
+            );
         }
 
         Self::OutOfRange(OutOfRangeError {

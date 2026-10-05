@@ -6,7 +6,10 @@ use td0_derive::{TD0ChunkItemDerive, repeat_fields};
 use zerocopy::{I16, LittleEndian, U16};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-#[cfg_attr(faster_incomplete_compile, expect(unused_imports, reason = "faster incomplete compilation."))]
+#[cfg_attr(
+    faster_incomplete_compile,
+    expect(unused_imports, reason = "faster incomplete compilation.")
+)]
 use crate::strings::{
     CLICK_MODES, CLICK_SOUNDS, DELAYSYNC_VALUES, DIRECT_ROUTES, EQ_HI_FREQS, EQ_LOW_FREQS,
     EQ_MID_FREQS, EQ_Q_VALS, EXP_PARAMS, EXP_PEDAL_MIDI_CHANNELS, EXP_PEDAL_MODES, LED_COLORS,
@@ -1318,7 +1321,6 @@ pub struct KITaItem {
     #[repeat(count = 32, format = "param_{}")]
     #[td0_field(field_type = "U16")]
     param_1: U16<LittleEndian>,
-
 }
 
 #[cfg(test)]

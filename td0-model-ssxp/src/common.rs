@@ -23,9 +23,7 @@ use ::core::ops::Range;
 use md5::Digest as _;
 use std::collections::{HashMap, HashSet};
 use td0_core::header::{OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
-use td0_core::result::{
-    InvalidChunkError, TD0Error, TD0Result, create_u32_oob_error,
-};
+use td0_core::result::{InvalidChunkError, TD0Error, TD0Result, create_u32_oob_error};
 use td0_core::{
     ChunkManifest, SZ_MD5_DIGEST, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File,
     TD0Manifest, try_u32_from_usize, usize_from_u32,
@@ -41,7 +39,6 @@ const BACKUP_TAG_SYSTEM: &str = "SSXPROBK";
 
 // Default firmware if none is supplied.
 const DEFAULT_FIRMWARE: &str = "2.00";
-
 
 /// The header of a `TD0Chunk` in a `TD0File`.
 #[derive(Copy, Clone, Debug, Default, FromBytes, PartialEq, Immutable, IntoBytes, KnownLayout)]
@@ -877,10 +874,9 @@ impl TD0File for SSXPTD0File {
             .meta
             .chunk(chunk_name)
             .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
-        let dest_range =
-            chunk
-                .item_range(dest_index)
-                .ok_or_else(|| TD0Error::out_of_range_error_from_usize(0, chunk.num_items()))?;
+        let dest_range = chunk
+            .item_range(dest_index)
+            .ok_or_else(|| TD0Error::out_of_range_error_from_usize(0, chunk.num_items()))?;
 
         let source_bytes = source.as_bytes();
         if source_bytes.len() != dest_range.len() {
@@ -929,9 +925,11 @@ impl TD0File for SSXPTD0File {
             .meta
             .chunk(chunk_name)
             .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
-        let item_1_range = chunk.item_range(index_1)
+        let item_1_range = chunk
+            .item_range(index_1)
             .ok_or_else(|| TD0Error::out_of_range_error_from_usize(0, chunk.num_items()))?;
-        let item_2_range = chunk.item_range(index_2)
+        let item_2_range = chunk
+            .item_range(index_2)
             .ok_or_else(|| TD0Error::out_of_range_error_from_usize(0, chunk.num_items()))?;
 
         let item_1_bytes = self
@@ -1082,19 +1080,21 @@ impl TD0File for SSXPTD0File {
             .ok_or(TD0Error::ChunkItemParse)?;
 
         match firmware_version.as_str() {
-            "1.10" => { self.dirty = true; v1_10_chunk_item_from_bytes_mut(chunk_name, bytes) },
-            "2.00" => { self.dirty = true; v2_0_chunk_item_from_bytes_mut(chunk_name, bytes) },
+            "1.10" => {
+                self.dirty = true;
+                v1_10_chunk_item_from_bytes_mut(chunk_name, bytes)
+            }
+            "2.00" => {
+                self.dirty = true;
+                v2_0_chunk_item_from_bytes_mut(chunk_name, bytes)
+            }
             unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
                 unexpected_version.to_string(),
             )),
         }
     }
 
-    fn chunk_item(
-        &self,
-        chunk_name: &str,
-        item_index: usize,
-    ) -> TD0Result<Box<dyn TD0ChunkItem>> {
+    fn chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<Box<dyn TD0ChunkItem>> {
         let chunk = self
             .meta
             .chunk(chunk_name)

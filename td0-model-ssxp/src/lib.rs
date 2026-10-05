@@ -243,7 +243,12 @@ mod tests {
         let _ = td0file.finalize();
 
         assert_eq!(
-            fmt_hex(td0file.try_to_bytes().expect("File is not stale.").as_bytes()),
+            fmt_hex(
+                td0file
+                    .try_to_bytes()
+                    .expect("File is not stale.")
+                    .as_bytes()
+            ),
             fmt_hex(expected.as_bytes()),
             "test setup successful."
         );
@@ -259,7 +264,12 @@ mod tests {
 
         let expected2 = get_test_data(PathBuf::from("_01_after_replace_item.TD0"));
         assert_eq!(
-            fmt_hex(td0file.try_to_bytes().expect("finalize() called.").as_bytes()),
+            fmt_hex(
+                td0file
+                    .try_to_bytes()
+                    .expect("finalize() called.")
+                    .as_bytes()
+            ),
             fmt_hex(expected2.as_bytes()),
             "replace item successful."
         );
@@ -281,7 +291,12 @@ mod tests {
         let _ = td0file.finalize();
 
         assert_eq!(
-            fmt_hex(td0file.try_to_bytes().expect("finalize() called.").as_bytes()),
+            fmt_hex(
+                td0file
+                    .try_to_bytes()
+                    .expect("finalize() called.")
+                    .as_bytes()
+            ),
             fmt_hex(expected.as_bytes()),
             "remove chunk produced correct output."
         );

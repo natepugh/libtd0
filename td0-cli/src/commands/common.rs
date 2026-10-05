@@ -205,7 +205,9 @@ pub fn parse_chunk_item_field_value(
         Some("U32") => Ok(TD0Value::U32(val.parse().map_err(|_| {
             TD0Error::InvalidInput(format!("invalid value for field '{field}'"))
         })?)),
-        _ => Err(TD0Error::DataType(format!("invalid data type for field '{field}"))),
+        _ => Err(TD0Error::DataType(format!(
+            "invalid data type for field '{field}"
+        ))),
     }
 }
 

@@ -416,10 +416,7 @@ fn test_setters() {
         "`td0_decimal_bounded` Bounded field setter should set value."
     );
     assert_matches!(
-        ts.set_field_value(
-            "td0_decimal_bounded",
-            &td0_core::TD0Value::Decimal(260.0)
-        ),
+        ts.set_field_value("td0_decimal_bounded", &td0_core::TD0Value::Decimal(260.0)),
         Ok { .. },
         "`td0_decimal_bounded` Bounded field setter should accept max value."
     );
@@ -430,18 +427,12 @@ fn test_setters() {
     );
     let val_before = ts.field_value("td0_decimal_bounded");
     assert_matches!(
-        ts.set_field_value(
-            "td0_decimal_bounded",
-            &td0_core::TD0Value::Decimal(19.9999)
-        ),
+        ts.set_field_value("td0_decimal_bounded", &td0_core::TD0Value::Decimal(19.9999)),
         Err(TD0Error::OutOfRangeDecimal(..)),
         "`td0_decimal_bounded` Bounded field setter should Error if less than min."
     );
     assert_matches!(
-        ts.set_field_value(
-            "td0_decimal_bounded",
-            &td0_core::TD0Value::Decimal(260.1)
-        ),
+        ts.set_field_value("td0_decimal_bounded", &td0_core::TD0Value::Decimal(260.1)),
         Err(TD0Error::OutOfRangeDecimal(..)),
         "`td0_decimal_bounded` Bounded field setter should Error if greater than max."
     );
