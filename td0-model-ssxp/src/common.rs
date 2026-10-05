@@ -1064,7 +1064,7 @@ impl TD0File for SSXPTD0File {
         self.buf.get(tag.chunk_range())
     }
 
-    fn chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem> {
+    fn chunk_item_ref(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem> {
         let chunk = self
             .meta
             .chunk(chunk_name)
@@ -1107,7 +1107,7 @@ impl TD0File for SSXPTD0File {
         }
     }
 
-    fn chunk_item_owned(
+    fn chunk_item(
         &self,
         chunk_name: &str,
         item_index: usize,

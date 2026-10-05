@@ -216,17 +216,17 @@ mod tests {
             .add_chunk("TGLa", 3)
             .expect("can successfully add a chunk.");
         assert_matches!(
-            td0file.chunk_item("TGLa", 0),
+            td0file.chunk_item_ref("TGLa", 0),
             Ok(_),
             "can retrieve a chunk item after add_chunk."
         );
         assert_matches!(
-            td0file.chunk_item("TGLa", 2),
+            td0file.chunk_item_ref("TGLa", 2),
             Ok(_),
             "can retrieve the last chunk item after add_chunk."
         );
         assert_matches!(
-            td0file.chunk_item("TGLa", 3),
+            td0file.chunk_item_ref("TGLa", 3),
             Err(TD0Error::ChunkItemParse),
             "can't retrieve spurious chunk items."
         );

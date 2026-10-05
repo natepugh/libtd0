@@ -87,19 +87,17 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     /// Return an owned copy of the file's bytes.
     fn try_into_bytes(self) -> TD0Result<Vec<u8>>;
     /// Retrieve a reference to a data item from `chunk_name`.
-    fn chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem>;
+    fn chunk_item_ref(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem>;
+
     /// Retrieve a mutable reference to a data item from `chunk_name`.
     fn chunk_item_mut(
         &mut self,
         chunk_name: &str,
         item_index: usize,
     ) -> TD0Result<&mut dyn TD0ChunkItem>;
-    /// Retrieve an owned copy of a data item from `chunk_name`.
-    fn chunk_item_owned(
-        &self,
-        chunk_name: &str,
-        item_index: usize,
-    ) -> TD0Result<Box<dyn TD0ChunkItem>>;
+
+    /// Return an owned copy of a data item from `chunk_name`.
+    fn chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<Box<dyn TD0ChunkItem>>;
     /// Return a default chunk item for `chunk_name`.
     fn chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>>;
     /// Return the number of items in `chunk_name`.

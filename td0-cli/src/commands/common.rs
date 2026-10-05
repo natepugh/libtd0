@@ -84,7 +84,7 @@ pub fn command_dump_chunk_item<'a>(
     chunk_name: &'a str,
     item_num: usize,
 ) -> TD0Result<&'a [u8]> {
-    let item = td0file.chunk_item(chunk_name, item_num)?;
+    let item = td0file.chunk_item_ref(chunk_name, item_num)?;
     Ok(item.as_bytes())
 }
 
@@ -118,7 +118,7 @@ pub fn command_dump_chunk_values(
     let mut output: IndexedItemValues = IndexedItemValues::new();
 
     for idx in item_range {
-        if let Ok(item) = td0file.chunk_item(chunk_name, idx) {
+        if let Ok(item) = td0file.chunk_item_ref(chunk_name, idx) {
             let mut vals: ItemValues = ItemValues::new();
             for field in &fields {
                 vals.insert(
@@ -150,8 +150,8 @@ pub fn command_compare_chunk_items(
     chunk_name_2: &str,
     item_num: usize,
 ) -> TD0Result<Vec<ChunkFieldDiffItem>> {
-    let chunk_1_item = td0file.chunk_item(chunk_name_1, item_num)?;
-    let chunk_2_item = td0file.chunk_item(chunk_name_2, item_num)?;
+    let chunk_1_item = td0file.chunk_item_ref(chunk_name_1, item_num)?;
+    let chunk_2_item = td0file.chunk_item_ref(chunk_name_2, item_num)?;
 
     let chunk_1_fields: IndexSet<&str> = chunk_1_item.list_fields().iter().copied().collect();
     let chunk_2_fields: IndexSet<&str> = chunk_2_item.list_fields().iter().copied().collect();
@@ -252,7 +252,7 @@ pub fn command_reorder_chunk_items(
     for idx in 0..num_items {
         before.push(
             td0file
-                .chunk_item(chunk_name, idx)?
+                .chunk_item_ref(chunk_name, idx)?
                 .field_value(display_field)
                 .ok_or(TD0Error::ChunkItemParse)?,
         );
@@ -264,7 +264,7 @@ pub fn command_reorder_chunk_items(
     for idx in 0..num_items {
         after.push(
             td0file
-                .chunk_item(chunk_name, idx)?
+                .chunk_item_ref(chunk_name, idx)?
                 .field_value(display_field)
                 .ok_or(TD0Error::ChunkItemParse)?,
         );
