@@ -7,6 +7,7 @@ use crate::rev::v1_10::{
     chunk_item_from_bytes_mut as v1_10_chunk_item_from_bytes_mut,
     chunk_item_from_bytes_owned as v1_10_chunk_item_from_bytes_owned,
     get_default_chunk_item as v1_10_get_default_chunk_item,
+    valid_chunk_names as v1_10_valid_chunk_names,
 };
 
 use crate::rev::v2_0::{
@@ -14,6 +15,7 @@ use crate::rev::v2_0::{
     chunk_item_from_bytes_mut as v2_0_chunk_item_from_bytes_mut,
     chunk_item_from_bytes_owned as v2_0_chunk_item_from_bytes_owned,
     get_default_chunk_item as v2_0_get_default_chunk_item,
+    valid_chunk_names as v2_0_valid_chunk_names,
 };
 
 use ::core::fmt;
@@ -1285,6 +1287,16 @@ impl TD0File for SSXPTD0File {
 
     fn list_chunks(&self) -> Vec<String> {
         self.meta.tag_order.clone()
+    }
+
+    fn valid_chunk_names(&self) -> TD0Result<&'static [&'static str]> {
+        match self.firmware_version()?.as_str() {
+            "1.10" => Ok(v1_10_valid_chunk_names()),
+            "2.00" => Ok(v2_0_valid_chunk_names()),
+            unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
+                unexpected_version.to_string(),
+            )),
+        }
     }
 
     fn validate_load(&self) -> TD0Result<()> {

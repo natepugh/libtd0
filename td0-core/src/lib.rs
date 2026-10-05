@@ -118,6 +118,8 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     where
         Self: Sized;
 
+    fn valid_chunk_names(&self) -> TD0Result<&'static [&'static str]>;
+
     /// Perform a post-parse validation of the file.
     fn validate_load(&self) -> TD0Result<()>;
     /// Perform a pre-save validation of the file.
