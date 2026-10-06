@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use super::result::{OutOfRangeErrorTD0Decimal, TD0Error};
 use super::{
     ChunkManifest, IntEncodedDecimal, TD0BackupType, TD0DeviceModel, TD0Manifest, TD0Value,

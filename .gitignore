@@ -7,4 +7,4 @@
 src/pytd0
 Cargo.lock
 .vscode/
-src/pytd0_old/
+**/pytd0_old/
