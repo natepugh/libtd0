@@ -32,20 +32,278 @@ pub const VOLUME_MINUS_INF_DISPLAY: &str = "-inf";
 /// TD0ChunkItems aren't created directly, but rather retrieved from a [TD0File] instance.
 pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// Return a borrowed reference to this object's buffer.
+    ///
+    /// Example:
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File};
+    ///
+    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa` There are 10 TGLa items.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/example_tgl_items.TD0");
+    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// let chunk_item = td0file.chunk_item("TGLa", 2)?;
+    /// assert_eq!(chunk_item.as_bytes(), b"Kick Proc/Elec  ");
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
     fn as_bytes(&self) -> &[u8];
-    /// Return the set of valid options for field `field`.
+
+    /// Return the set of valid options for field `field`. Return None if the field doesn't have a restricted set
+    /// of options.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File};
+    ///
+    /// // Load the initial file, which contains a single chunk: `HDRa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// # // NOTE FOR DOCTEST MAKERS: CHOOSE KIT FIELDS HERE THAT ARE COMPATIBLE WITH THE (faster_incomplete_compile)
+    /// # // CFG OPTION! OTHERWISE THAT OPTION CANNOT BE USED WHEN RUNNING DOCTESTS.
+    /// #
+    /// // Get a default KITa `TDOChunkItem` and call its field_options. TD0Error::ChunkItemParse is used here for
+    /// // brevity, it's not a good fit otherwise.
+    /// let default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa").ok_or(TD0Error::ChunkItemParse)?;
+    /// assert_eq!(
+    ///     default_kit.field_options("click_mode").ok_or(TD0Error::ChunkItemParse)?,
+    ///     &["PLAY INTERNAL CLICK", "PLAY WAVE as CLICK", "PLAY WAVE as CLICK-TRACK",]
+    /// );
+    ///
+    /// // field_options() returns None when the field doesn't have a restricted set of options.
+    /// assert_eq!(default_kit.field_options("name"), None);
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
     fn field_options(&self, field: &str) -> Option<&'static [&'static str]>;
-    /// Return the data type of field `field`.
+
+    /// Return the name of the [TD0Value] data type of `field`. Return None if the `field` is not valid for this item.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File};
+    ///
+    /// // Load the initial file, which contains a single chunk: `HDRa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// # // NOTE FOR DOCTEST MAKERS: CHOOSE KIT FIELDS HERE THAT ARE COMPATIBLE WITH THE (faster_incomplete_compile)
+    /// # // CFG OPTION! OTHERWISE THAT OPTION CANNOT BE USED WHEN RUNNING DOCTESTS.
+    /// #
+    /// // Get a default KITa `TDOChunkItem` and call its field_type. TD0Error::ChunkItemParse is used here for
+    /// // brevity, it's not a good fit otherwise.
+    /// let default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa").ok_or(TD0Error::ChunkItemParse)?;
+    /// assert_eq!(default_kit.field_type("name"), Some("Text"));
+    /// assert_eq!(default_kit.field_type("volume"), Some("Decimal"));
+    /// assert_eq!(default_kit.field_type("click_pan"), Some("I8"));
+    ///
+    /// // field_options() returns None when the field isn't valid for this item.
+    /// assert_eq!(default_kit.field_options("foo"), None);
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
     fn field_type(&self, field: &str) -> Option<&'static str>;
-    /// Return the value of the field `field`.
+
+    /// Return the value of `field` as a Option<[TD0Value]>, or None if `field` is not a valid field for this item.
+    ///
+    /// Example:
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0Value};
+    ///
+    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa` There are 10 TGLa items.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/example_tgl_items.TD0");
+    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// let chunk_item = td0file.chunk_item("TGLa", 9)?;
+    /// assert_eq!(chunk_item.field_value("name"), Some(TD0Value::new_text_value("HiHat")));
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
     fn field_value(&self, field: &str) -> Option<TD0Value>;
-    /// Return the raw value of field `field`.
+
+    /// Return the raw value of `field` as a Option<[TD0ValueRaw]>, or None if `field` is not a valid field
+    /// for this item.
+    ///
+    /// Example:
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0ValueRaw};
+    ///
+    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa` There are 10 TGLa items.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/example_tgl_items.TD0");
+    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// // The raw value of a TD0Value::Text field (such as "name") is a boxed [u8] array.
+    /// let chunk_item = td0file.chunk_item("TGLa", 4)?;
+    /// assert_eq!(
+    ///     chunk_item.field_value_raw("name"),
+    ///     Some(TD0ValueRaw::Slice(Box::from(*b"Snare Proc/Elec ")))
+    /// );
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
     fn field_value_raw(&self, field: &str) -> Option<TD0ValueRaw>;
-    /// Return this chunk item's field names.
+
+    /// Return this chunk item's field names as an &str array.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File};
+    ///
+    /// // Load the initial file, which contains a single chunk: `HDRa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// // Get a default TGLa `TDOChunkItem` and call its list_fields. It has one field, "name".
+    /// // Some other chunk types' collection of fields, while interesting, are not brief.
+    /// let default_tgl : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("TGLa").ok_or(TD0Error::ChunkItemParse)?;
+    /// assert_eq!(default_tgl.list_fields(), ["name"]);
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
     fn list_fields(&self) -> &'static [&'static str];
-    /// Set the value of field `field` to `value`.
+
+    /// Set the value of `field` to [TD0Value] `value`.
+    ///
+    /// # Errors
+    /// - [TD0Error::InvalidField](crate::result::TD0Error::InvalidField) if `field` is not valid for this item type.
+    /// - [TD0Error::DataType](crate::result::TD0Error::DataType) if `value` is not the correct [TD0Value]
+    ///   variant for `field`. To determine the variant, use [TD0ChunkItem::field_type].
+    /// - [TD0Error::OutOfRange](crate::result::TD0Error::OutOfRange)
+    ///   - if `value` is outside of the allowable range (for int types.)
+    ///   - if `value` is too long (for Text types.)
+    /// - [TD0Error::OutOfRangeDecimal](crate::result::TD0Error::OutOfRangeDecimal) if `value` is outside of the
+    ///   allowable range (for Decimal types.)
+    /// - [TD0Error::InvalidInput](crate::result::TD0Error::InvalidInput) if `value` is of the correct type but not
+    ///   an allowable value, and none of the OutOfRange errors apply.
+    ///   Some possible reasons:
+    ///   - `field` requires only ASCII printable characters, and `value` doesn't conform.
+    ///   - `field` has a set of allowable options that `value` doesn't belong to.
+    /// - [TD0Error::ReadOnlyField](crate::result::TD0Error::ReadOnlyField) if `field` is not editable. Used as
+    ///   a safety feature when it's not yet determined what a range of bytes in the raw data represents.
+    ///   An escape hatch exists for the clever, or foolhardy,
+    ///   [set_field_value_raw](TD0ChunkItem::set_field_value_raw) allows setting any field.
+    ///
+    /// # Examples
+    ///
+    /// ## Setting a [Text](TD0Value::Text) field
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0Value};
+    ///
+    /// // Load the initial file.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// // Get a default KITa `TDOChunkItem` and set its "name" field, which is a text field.
+    /// let mut default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa")
+    ///     .ok_or(TD0Error::unknown_chunk_error("KITa"))?;
+    /// let set_result = default_kit.set_field_value(
+    ///     "name",
+    ///     &TD0Value::new_text_value("Kilt, er, kit")
+    /// );
+    /// assert!(set_result.is_ok());
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
+    /// ## Setting an integer field.
+    /// The example shows how to set a [TD0Value::I8] field. The other integer types
+    /// are set in the same way, using a TD0Value of that type instad. See [TD0Value].
+    /// ```
+    /// # use td0::TD0Error;
+    /// # use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0Value};
+    /// # const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// # let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    /// # let mut default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa")
+    /// #    .ok_or(TD0Error::unknown_chunk_error("KITa"))?;
+    /// // (Identical test setup as "Setting a Text field section." omitted here.)
+    /// let set_result = default_kit.set_field_value(
+    ///     "click_pan",
+    ///     &TD0Value::I8(-12)
+    /// );
+    /// assert!(set_result.is_ok());
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
+    /// # Setting a [Decimal](TD0Value::Decimal) field
+    /// Decimal fields are set with a f32, rounded to a single decimal point.
+    /// Ensure that your f32 value is rounded ahead of time to avoid any unexpected results.
+    /// See the note here: [TD0Value::Decimal]
+    /// ```
+    /// # use td0::TD0Error;
+    /// # use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0Value};
+    /// # const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// # let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    /// # let mut default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa")
+    /// #    .ok_or(TD0Error::unknown_chunk_error("KITa"))?;
+    /// // (Identical test setup as "Setting a Text field section." omitted here.)
+    ///
+    /// let my_tempo : f32 = 125.5_f32;
+    /// let set_result = default_kit.set_field_value(
+    ///     "tempo",
+    ///     &TD0Value::Decimal(my_tempo)
+    /// );
+    /// assert!(set_result.is_ok());
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
     fn set_field_value(&mut self, field: &str, value: &TD0Value) -> TD0Result<()>;
-    /// Set the raw value of field `field` to `raw_value`.
+
+    /// Set the raw value of `field` to [TD0ValueRaw] `raw_value`.
+    ///
+    /// # Errors
+    /// - [TD0Error::InvalidField](crate::result::TD0Error::InvalidField) if `field` is not valid for this item type.
+    /// - [TD0Error::DataType](crate::result::TD0Error::DataType) if `value` is not the correct [TD0ValueRaw]
+    ///   variant for `field`. To determine the variant, use [TD0ChunkItem::field_type].
+    /// - [TD0Error::InvalidInput](crate::result::TD0Error::InvalidInput) if `value` is of the correct type but not
+    ///   an allowable value, (e.g. a [TD0ValueRaw::Slice] is the wrong size.)
+    ///
+    /// # Warning!
+    /// The intended use of this method is as an escape hatch during development and debugging.
+    /// It does not perform any of the data validation that
+    /// [set_field_value](TD0ChunkItem::set_field_value) does and is inhereently unsafe to
+    /// use for editing any backup file that may get loaded into an actual physical device.
+    ///
+    /// THE AUTHOR(S) OF THIS LIBRARY ASSUME NO RESPONSIBILITY FOR YOU BRICKING YOUR SAMPLE
+    /// PAD TEN MINUTES BEFORE GIG (WHAT WERE YOU EVEN THINKING?) AND GETTING FIRED, DESTROYING
+    /// YOUR REPUTATION, MISSING OUT ON YOUR "BIG BREAK", ETC.
+    ///
+    /// # Examples
+    ///
+    /// ## Setting the raw data of a [Text](TD0Value::Text) as a boxed [u8] slice.
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0ValueRaw};
+    ///
+    /// // Load the initial file.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// // Get a default KITa `TDOChunkItem`.
+    /// let mut default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa")
+    ///     .ok_or(TD0Error::unknown_chunk_error("KITa"))?;
+    ///
+    /// // Set its "name" field, a Text field. Note the spaces used to pad the str
+    /// // to 16 characters- the "name" field is 16 bytes in size.
+    /// let set_result = default_kit.set_field_value_raw(
+    ///     "name",
+    ///     &TD0ValueRaw::Slice(Box::new(*b"I Like Danger   "))
+    /// );
+    /// assert!(set_result.is_ok());
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
     fn set_field_value_raw(&mut self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
 }
 
