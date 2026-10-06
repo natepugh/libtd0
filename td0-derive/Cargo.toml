@@ -24,7 +24,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1.0.107"
 quote = "1.0.47"
-syn = { version = "3.0.3", features = ["extra-traits", "full"] }
+syn = { version = "3.0.6", features = ["extra-traits", "full"] }
 td0-core = { path = "../td0-core" }
 num-traits = "0.2.19"
 

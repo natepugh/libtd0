@@ -32,8 +32,8 @@ td0-model-ssxp = { path = "../td0-model-ssxp", optional = true }
 # External dependencies
 serde = { version = "1.0.229", features = ["derive"], optional = true }
 serde_json = { version = "1.0.151", optional = true }
-zerocopy = "0.8.52"
-zerocopy-derive = "0.8.52"
+zerocopy = "0.8.60"
+zerocopy-derive = "0.8.60"
 
 ### TODO: Uncomment these clippy configs once major features are added.
 [lints]

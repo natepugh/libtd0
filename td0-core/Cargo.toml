@@ -21,8 +21,8 @@ categories = ["parsing", "parser-implementations"]
 [dependencies]
 document-features = { version = "0.2.12" }
 num-traits = "0.2.19"
-zerocopy = { version = "0.8.55", features = ["derive"] }
-zerocopy-derive = "0.8.56"
+zerocopy = { version = "0.8.60", features = ["derive"] }
+zerocopy-derive = "0.8.60"
 
 #! ### Optional dependencies
 ## Enable this feature to enable serde serialization of [`TD0Manifest`] objects.
