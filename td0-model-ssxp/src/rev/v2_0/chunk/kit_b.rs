@@ -1313,6 +1313,12 @@ pub struct KITbItem {
 
     #[td0_field(field_type = "TD0Decimal", min = 20.0, max = 260.0)]
     tempo: U16<LittleEndian>,
+
+    #[td0_field(field_type = "EnumStr", collection = "CLICK_MODES")]
+    click_mode: u8, // Click Mode
+
+    #[td0_field(field_type = "I8", min = -15, max = 15)]
+    click_pan: i8, // Click pan: -15 = 100% L, 15 = 100% R.  Only int vals, -15 .. 0 .. 15
 }
 
 #[cfg(test)]

@@ -806,10 +806,10 @@ pub fn checksum_bytes_to_string(val: &[u8]) -> String {
 
 pub fn copy_ascii_str_to_u8_slice(src: &String, dest: &mut [u8], pad_byte: u8) -> TD0Result<()> {
     if src.len() > dest.len() {
-        return Err(result::TD0Error::OutOfRange(result::OutOfRangeError::new(
+        return Err(result::TD0Error::out_of_range_error_from_usize(
             0,
-            i64::try_from(dest.len()).expect("dest.len() is not larger than i64."),
-        )));
+            dest.len(),
+        ));
     }
     if !src.is_ascii() {
         return Err(result::TD0Error::InvalidInput(

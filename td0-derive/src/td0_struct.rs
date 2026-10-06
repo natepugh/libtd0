@@ -985,18 +985,9 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
             }
         ),
         NativeType::Slice(_) => {
-            let inner: Stmt = match &td0field.field_type {
-                TD0FieldType::Text(attr) => {
-                    let pad = attr.pad_byte.unwrap_or(0);
-                    parse_quote!(td0_core::copy_slice_to_native_padded(val, &mut self.#ident, #pad)?;)
-                }
-                _ => {
-                    parse_quote!(td0_core::copy_slice_to_native(val, &mut self.#ident)?;)
-                }
-            };
             parse_quote!(
                 (#ident_str, td0_core::TD0ValueRaw::Slice(val)) => {
-                    #inner
+                    td0_core::copy_slice_to_native(val, &mut self.#ident)?;
                     Ok(())
                 }
             )
@@ -1117,12 +1108,25 @@ fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     fn_skel
 }
 
+fn field_type_func_result(field: &TD0Field) -> &'static str {
+    match field.field_type {
+        TD0FieldType::EnumStr(_) | TD0FieldType::Text(_) => "Text",
+        TD0FieldType::I16(_) => "I16",
+        TD0FieldType::I8(_) => "I8",
+        TD0FieldType::Slice(_) => "Slice",
+        TD0FieldType::TD0Decimal(_) | TD0FieldType::Volume(_) => "Decimal",
+        TD0FieldType::U32(_) => "U16",
+        TD0FieldType::U16(_) => "U16",
+        TD0FieldType::U8(_) => "U8",
+    }
+}
+
 fn build_chunkitem_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
     let arms: Vec<Arm> = td0fields
         .iter()
         .map(|field| {
             let field_name_str = field.ident.to_string();
-            let field_type_str = &field.field_type_name;
+            let field_type_str = field_type_func_result(field);
             parse_quote!( #field_name_str => Some(#field_type_str) )
         })
         .collect();

@@ -1290,37 +1290,14 @@ pub struct KITaItem {
     #[td0_field(field_type = "EnumStr", collection = "SYS_KIT_SWITCH")]
     click_setting: u8,
 
-    #[td0_field(field_type = "U8")]
-    unknown_1: u8,
-
     #[td0_field(field_type = "TD0Decimal", min = 20.0, max = 260.0)]
     tempo: U16<LittleEndian>,
 
-    #[td0_field(field_type = "Slice")]
-    unknown_2: [u8; 3],
+    #[td0_field(field_type = "EnumStr", collection = "CLICK_MODES")]
+    click_mode: u8, // Click Mode
 
-    #[repeat(count = 4, format = "mfx_{}_routing")]
-    #[td0_field(field_type = "EnumStr", collection = "MFX_ROUTES")]
-    mfx_1_routing: u8,
-
-    /* MFX Settings */
-    #[repeat_section(count = 4, prefix_format = "mfx_{}")]
-    #[td0_field(field_type = "EnumStr", collection = "MFX")]
-    effect_select: u8,
-
-    #[td0_field(field_type = "EnumStr", collection = "OFF_ON")]
-    enable: u8,
-
-    #[td0_field(field_type = "Volume")]
-    volume: I16<LittleEndian>,
-
-    #[td0_field(field_type = "Slice")]
-    unknown: [u8; 4],
-
-    #[repeat_section_last]
-    #[repeat(count = 32, format = "param_{}")]
-    #[td0_field(field_type = "U16")]
-    param_1: U16<LittleEndian>,
+    #[td0_field(field_type = "I8", min = -15, max = 15)]
+    click_pan: i8, // Click pan: -15 = 100% L, 15 = 100% R.  Only int vals, -15 .. 0 .. 15
 }
 
 #[cfg(test)]
