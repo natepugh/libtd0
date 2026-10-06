@@ -828,8 +828,8 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     ///     "HDRa", "KITa", "CURa", "STLa", "STPa", "TGLa", "TRGa", "WVPa",
     /// ]);
     ///
-    /// let file_v2_0 = new_td0_file(TD0DeviceModel::SPDSXPro, "2.00")?;
-    /// assert_eq!(file_v2_0.valid_chunk_names()?, &[
+    /// let file_v2_00 = new_td0_file(TD0DeviceModel::SPDSXPro, "2.00")?;
+    /// assert_eq!(file_v2_00.valid_chunk_names()?, &[
     ///     "HDRa", "KITa", "KITb", "CURa", "PVRa", "STLa", "STPa", "STPb", "TGLa", "TRGa", "WVPa",
     /// ]);
     ///

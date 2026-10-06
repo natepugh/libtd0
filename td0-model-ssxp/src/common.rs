@@ -10,12 +10,12 @@ use crate::rev::v1_10::{
     valid_chunk_names as v1_10_valid_chunk_names,
 };
 
-use crate::rev::v2_0::{
-    chunk_item_from_bytes as v2_0_chunk_item_from_bytes,
-    chunk_item_from_bytes_mut as v2_0_chunk_item_from_bytes_mut,
-    chunk_item_from_bytes_owned as v2_0_chunk_item_from_bytes_owned,
-    get_default_chunk_item as v2_0_get_default_chunk_item,
-    valid_chunk_names as v2_0_valid_chunk_names,
+use crate::rev::v2_00::{
+    chunk_item_from_bytes as v2_00_chunk_item_from_bytes,
+    chunk_item_from_bytes_mut as v2_00_chunk_item_from_bytes_mut,
+    chunk_item_from_bytes_owned as v2_00_chunk_item_from_bytes_owned,
+    get_default_chunk_item as v2_00_get_default_chunk_item,
+    valid_chunk_names as v2_00_valid_chunk_names,
 };
 
 use ::core::fmt;
@@ -134,10 +134,10 @@ pub struct HDRaItem {
 impl HDRaItem {
     const DEFAULT_BACKUP_NAME_KIT: [u8; 16] = *b"USER KIT        ";
     const DEFAULT_BUILD_V1_10: [u8; 4] = *b"0083";
-    const DEFAULT_BUILD_V2_0: [u8; 4] = *b"0000";
+    const DEFAULT_BUILD_V2_00: [u8; 4] = *b"0000";
     const DEFAULT_DEVICE_SERIAL: [u8; 8] = *b"XXXXXXX ";
     const DEFAULT_FIRMWARE_V1_10: [u8; 4] = *b"1.10";
-    const DEFAULT_FIRMWARE_V2_0: [u8; 4] = *b"2.00";
+    const DEFAULT_FIRMWARE_V2_00: [u8; 4] = *b"2.00";
     const DEFAULT_SUFFIX: [u8; 16] = [0xFFu8; 16];
     const DEFAULT_TAG: [u8; 8] = *b"SSXPROKT";
 
@@ -173,7 +173,7 @@ impl HDRaItem {
         dead_code,
         reason = "TODO: Update default SSXPTD0File::new() to return a v2.00 new."
     )]
-    pub fn new_default_v2_0() -> Self {
+    pub fn new_default_v2_00() -> Self {
         let data = [0u8; 8];
 
         let mut tag = [0u8; 8];
@@ -185,8 +185,8 @@ impl HDRaItem {
 
         tag.copy_from_slice(&HDRaItem::DEFAULT_TAG);
         name.copy_from_slice(&HDRaItem::DEFAULT_BACKUP_NAME_KIT);
-        firmware.copy_from_slice(&HDRaItem::DEFAULT_FIRMWARE_V2_0);
-        build.copy_from_slice(&HDRaItem::DEFAULT_BUILD_V2_0);
+        firmware.copy_from_slice(&HDRaItem::DEFAULT_FIRMWARE_V2_00);
+        build.copy_from_slice(&HDRaItem::DEFAULT_BUILD_V2_00);
         device_serial.copy_from_slice(&HDRaItem::DEFAULT_DEVICE_SERIAL);
         suffix.copy_from_slice(&HDRaItem::DEFAULT_SUFFIX);
 
@@ -783,7 +783,7 @@ impl TD0File for SSXPTD0File {
     fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> TD0Result<()> {
         let default_item = match self.firmware_version()?.as_str() {
             "1.10" => v1_10_get_default_chunk_item(chunk_name),
-            "2.00" => v2_0_get_default_chunk_item(chunk_name),
+            "2.00" => v2_00_get_default_chunk_item(chunk_name),
             unexpected_version => {
                 return Err(TD0Error::UnsupportedDeviceFirmwareVersion(
                     unexpected_version.to_string(),
@@ -1059,7 +1059,7 @@ impl TD0File for SSXPTD0File {
 
         match self.firmware_version()?.as_str() {
             "1.10" => v1_10_chunk_item_from_bytes(chunk_name, bytes),
-            "2.00" => v2_0_chunk_item_from_bytes(chunk_name, bytes),
+            "2.00" => v2_00_chunk_item_from_bytes(chunk_name, bytes),
             unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
                 unexpected_version.to_string(),
             )),
@@ -1088,7 +1088,7 @@ impl TD0File for SSXPTD0File {
             }
             "2.00" => {
                 self.dirty = true;
-                v2_0_chunk_item_from_bytes_mut(chunk_name, bytes)
+                v2_00_chunk_item_from_bytes_mut(chunk_name, bytes)
             }
             unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
                 unexpected_version.to_string(),
@@ -1109,7 +1109,7 @@ impl TD0File for SSXPTD0File {
 
         match self.firmware_version()?.as_str() {
             "1.10" => v1_10_chunk_item_from_bytes_owned(chunk_name, bytes),
-            "2.00" => v2_0_chunk_item_from_bytes_owned(chunk_name, bytes),
+            "2.00" => v2_00_chunk_item_from_bytes_owned(chunk_name, bytes),
             unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
                 unexpected_version.to_string(),
             )),
@@ -1123,7 +1123,7 @@ impl TD0File for SSXPTD0File {
             .as_str()
         {
             "1.10" => v1_10_get_default_chunk_item(chunk_name),
-            "2.00" => v2_0_get_default_chunk_item(chunk_name),
+            "2.00" => v2_00_get_default_chunk_item(chunk_name),
             _ => None,
         }
     }
@@ -1267,7 +1267,7 @@ impl TD0File for SSXPTD0File {
     fn valid_chunk_names(&self) -> TD0Result<&'static [&'static str]> {
         match self.firmware_version()?.as_str() {
             "1.10" => Ok(v1_10_valid_chunk_names()),
-            "2.00" => Ok(v2_0_valid_chunk_names()),
+            "2.00" => Ok(v2_00_valid_chunk_names()),
             unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
                 unexpected_version.to_string(),
             )),

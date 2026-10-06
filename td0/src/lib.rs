@@ -9,7 +9,7 @@
 //! |    Model   | Firmware version |
 //! | ---------- | ---------------- |
 //! | SPD-SX Pro |       1.10       |
-//! | SPD-SX Pro |       2.0        |
+//! | SPD-SX Pro |       2.00       |
 //!
 #![allow(clippy::allow_attributes_without_reason)]
 #![allow(clippy::pub_use)]

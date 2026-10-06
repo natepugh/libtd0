@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-#![expect(
-    dead_code,
-    reason = "These imports are referenced via macro-generated code (TD0ChunkItemDerive)."
+
+#![cfg_attr(
+    faster_incomplete_compile,
+    expect(dead_code, reason = "faster incomplete compilation.")
 )]
 
 pub const CLICK_MODES: [&str; 3] = [
