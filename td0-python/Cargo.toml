@@ -17,6 +17,8 @@ categories = ["parsing", "parser-implementations"]
 [lib]
 name = "pytd0"
 crate-type = ["cdylib"]
+ # doctests aren't supported for "cdylib" crates.
+doctest = false
 
 [dependencies]
 td0-core = { path = "../td0-core" }
