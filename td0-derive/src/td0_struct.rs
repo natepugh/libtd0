@@ -528,7 +528,7 @@ fn td0_struct_gen_from_u8_slice_impl(source: &ItemStruct) -> TokenStream {
     quote! {
         #[automatically_derived]
         impl core::convert::TryFrom<&[u8]> for #source_ident  {
-            type Error = td0_core::result::TD0Error;
+            type Error = td0_core::TD0Error;
 
             fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
                 use zerocopy::FromBytes;
@@ -673,33 +673,25 @@ fn build_decimal_setter_expr(
     let min: Expr = parse_quote!(#attr_min as f32);
     let max: Expr = parse_quote!(#attr_max as f32);
     let out_of_range_dec: Expr = parse_quote!(
-        td0_core::result::OutOfRangeErrorTD0Decimal::new(#min, #max)
+        td0_core::TD0Error::out_of_range_error_decimal(#min, #max)
     );
 
     let rhand: Expr = match native_type {
         NativeType::U8 => parse_quote!(
             u8::try_from(td0_core::IntEncodedDecimal::from(val))
-                .map_err(|_| td0_core::result::TD0Error::OutOfRangeDecimal(
-                    #out_of_range_dec
-                ))?
+                .map_err(|_| #out_of_range_dec)?
         ),
         NativeType::U16 => parse_quote!(
             U16::try_from(td0_core::IntEncodedDecimal::from(val))
-                .map_err(|_| td0_core::result::TD0Error::OutOfRangeDecimal(
-                    #out_of_range_dec
-                ))?
+                .map_err(|_| #out_of_range_dec)?
         ),
         NativeType::I8 => parse_quote!(
             i8::try_from(td0_core::IntEncodedDecimal::from(val))
-                .map_err(|_| td0_core::result::TD0Error::OutOfRangeDecimal(
-                    #out_of_range_dec
-                ))?
+                .map_err(|_| #out_of_range_dec)?
         ),
         NativeType::I16 => parse_quote!(
             I16::try_from(td0_core::IntEncodedDecimal::from(val))
-                .map_err(|_| td0_core::result::TD0Error::OutOfRangeDecimal(
-                    #out_of_range_dec
-                ))?
+                .map_err(|_| #out_of_range_dec)?
         ),
         _ => parse_quote!(val.clone()),
     };
@@ -708,7 +700,7 @@ fn build_decimal_setter_expr(
         if td0_core::in_range_inclusive(td0_core::IntEncodedDecimal::from(val).val(), Some(#min), Some(#max)) {
             self.#ident = #rhand;
         } else {
-            return Err(td0_core::result::TD0Error::OutOfRangeDecimal(#out_of_range_dec))
+            return Err(#out_of_range_dec)
         }
     )
 }
@@ -733,7 +725,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             parse_quote!(
                 (#ident_str, td0_core::TD0Value::Text(val)) => {
                     let pos : &usize = &#collection.iter().position(|item| *item == val.as_str())
-                        .ok_or_else(|| td0_core::result::TD0Error::InvalidInput(#err_msg.to_string()))?;
+                        .ok_or_else(|| td0_core::TD0Error::InvalidInput(#err_msg.to_string()))?;
                     self.#ident = u8::try_from(*pos).expect("Collection index must be in range.");
                     Ok(())
                 }
@@ -754,9 +746,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                 (#ident_str, td0_core::TD0Value::Decimal(val)) => {
                     let tmp = td0_core::Volume::try_from(val)?;
                     self.#ident = tmp.try_into().map_err(|_|
-                        td0_core::result::TD0Error::OutOfRangeDecimal(
-                            td0_core::result::OutOfRangeErrorTD0Decimal::new(td0_core::VOLUME_MIN, td0_core::VOLUME_MAX)
-                        )
+                        td0_core::TD0Error::out_of_range_error_decimal(td0_core::Volume::MIN, td0_core::Volume::MAX)
                     )?;
                     Ok(())
                 }
@@ -764,7 +754,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
         }
         TD0FieldType::Slice(_) => parse_quote!(
             (#ident_str, ..) => {
-                Err(td0_core::result::TD0Error::ReadOnlyField(#ident_str.to_string()))
+                Err(td0_core::TD0Error::ReadOnlyField(#ident_str.to_string()))
             }
         ),
         TD0FieldType::I16(attr) => {
@@ -795,9 +785,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                         Ok(())
                     }
                     else {
-                        Err(td0_core::result::TD0Error::OutOfRange(
-                            td0_core::result::OutOfRangeError::new(#min_val, #max_val)
-                        ))
+                        Err(td0_core::TD0Error::out_of_range_error(#min_val, #max_val))
                     }
                 }
             )
@@ -830,9 +818,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                         Ok(())
                     }
                     else {
-                        Err(td0_core::result::TD0Error::OutOfRange(
-                            td0_core::result::OutOfRangeError::new(#min_val, #max_val)
-                        ))
+                        Err(td0_core::TD0Error::out_of_range_error(#min_val, #max_val))
                     }
                 }
             )
@@ -865,9 +851,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                         Ok(())
                     }
                     else {
-                        Err(td0_core::result::TD0Error::OutOfRange(
-                            td0_core::result::OutOfRangeError::new(#min_val, #max_val)
-                        ))
+                        Err(td0_core::TD0Error::out_of_range_error(#min_val, #max_val))
                     }
                 }
             )
@@ -900,9 +884,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                         Ok(())
                     }
                     else {
-                        Err(td0_core::result::TD0Error::OutOfRange(
-                            td0_core::result::OutOfRangeError::new(#min_val, #max_val)
-                        ))
+                        Err(td0_core::TD0Error::out_of_range_error(#min_val, #max_val))
                     }
                 }
             )
@@ -935,9 +917,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
                         Ok(())
                     }
                     else {
-                        Err(td0_core::result::TD0Error::OutOfRange(
-                            td0_core::result::OutOfRangeError::new(#min_val, #max_val)
-                        ))
+                        Err(td0_core::TD0Error::out_of_range_error(#min_val, #max_val))
                     }
                 }
             )
@@ -1047,7 +1027,7 @@ fn build_chunkitem_set_field_value(td0fields: &[TD0Field]) -> ImplItemFn {
             &mut self,
             field: &str,
             value: td0_core::TD0Value,
-        ) -> td0_core::result::TD0Result<()> {
+        ) -> td0_core::TD0Result<()> {
             match (field, value) {}
         }
     );
@@ -1062,7 +1042,7 @@ fn build_chunkitem_set_field_value(td0fields: &[TD0Field]) -> ImplItemFn {
             .collect::<Vec<Arm>>(),
     );
     set_fields_clauses.push(parse_quote!(
-        _ => Err(td0_core::result::TD0Error::InvalidField(field.to_string()))
+        _ => Err(td0_core::TD0Error::InvalidField(field.to_string()))
     ));
 
     for arm in set_fields_clauses.iter() {
@@ -1075,18 +1055,20 @@ fn build_setter_data_type_error(td0field: &TD0Field) -> Arm {
     let field_str: String = td0field.ident.to_string();
     let error_msg = format!(
         "invalid data type setting field '{}'. Expected {}",
-        field_str, field_type_user_name(td0field)
+        field_str,
+        field_type_user_name(td0field)
     );
-    parse_quote!((#field_str, _) => Err(td0_core::result::TD0Error::DataType(#error_msg.to_string())),)
+    parse_quote!((#field_str, _) => Err(td0_core::TD0Error::DataType(#error_msg.to_string())),)
 }
 
 fn build_setter_data_type_error_raw(td0field: &TD0Field) -> Arm {
     let field_str: String = td0field.ident.to_string();
     let error_msg = format!(
         "invalid data type setting field '{}'. Expected {}",
-        field_str, field_type_user_name_raw(td0field)
+        field_str,
+        field_type_user_name_raw(td0field)
     );
-    parse_quote!((#field_str, _) => Err(td0_core::result::TD0Error::DataType(#error_msg.to_string())),)
+    parse_quote!((#field_str, _) => Err(td0_core::TD0Error::DataType(#error_msg.to_string())),)
 }
 
 fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
@@ -1095,7 +1077,7 @@ fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
             &mut self,
             field: &str,
             value: td0_core::TD0ValueRaw,
-        ) -> td0_core::result::TD0Result<()> {
+        ) -> td0_core::TD0Result<()> {
             match (field, value) {}
         }
     );
@@ -1108,7 +1090,7 @@ fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
             .collect::<Vec<Arm>>(),
     );
     set_fields_clauses.push(parse_quote!(
-        _ => Err(td0_core::result::TD0Error::InvalidField(field.to_string()))
+        _ => Err(td0_core::TD0Error::InvalidField(field.to_string()))
     ));
 
     for arm in set_fields_clauses.iter() {

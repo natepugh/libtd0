@@ -19,14 +19,14 @@ use crate::rev::v2_0::{
 };
 
 use ::core::fmt;
-use ::core::ops::Range;
 use md5::Digest as _;
 use std::collections::{HashMap, HashSet};
-use td0_core::header::{OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
-use td0_core::result::{InvalidChunkError, TD0Error, TD0Result, create_u32_oob_error};
 use td0_core::{
-    ChunkManifest, SZ_MD5_DIGEST, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File,
-    TD0Manifest, try_u32_from_usize, usize_from_u32,
+    ChunkManifest, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File, TD0Manifest,
+    try_u32_from_usize, usize_from_u32,
+};
+use td0_core::{
+    OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0Error, TD0IdChunk, TD0ManifestTag, TD0Result,
 };
 use td0_derive::TD0ChunkItemDerive;
 use zerocopy::{FromBytes, FromZeros, IntoBytes, LittleEndian, TryFromBytes, U32};
@@ -39,6 +39,8 @@ const BACKUP_TAG_SYSTEM: &str = "SSXPROBK";
 
 // Default firmware if none is supplied.
 const DEFAULT_FIRMWARE: &str = "2.00";
+
+const SZ_MD5_DIGEST: usize = 16;
 
 /// The header of a `TD0Chunk` in a `TD0File`.
 #[derive(Copy, Clone, Debug, Default, FromBytes, PartialEq, Immutable, IntoBytes, KnownLayout)]
@@ -167,6 +169,10 @@ impl HDRaItem {
         }
     }
 
+    #[expect(
+        dead_code,
+        reason = "TODO: Update default SSXPTD0File::new() to return a v2.00 new."
+    )]
     pub fn new_default_v2_0() -> Self {
         let data = [0u8; 8];
 
@@ -372,11 +378,10 @@ impl SSXPTD0FileMetadata {
             .tags
             .get_mut(chunk_name)
             .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
-        let chunk_pos: i64 = i64::try_from(tag.chunk_pos()).map_err(|_| {
-            TD0Error::InvalidChunk(InvalidChunkError::new(tag.tag(), "chunk offset invalid."))
-        })?;
+        let chunk_pos: i64 = i64::try_from(tag.chunk_pos())
+            .map_err(|_| TD0Error::invalid_chunk_error(tag.tag(), "chunk offset invalid."))?;
         tag.set_chunk_pos(usize_from_u32(
-            u32::try_from(chunk_pos + offset).map_err(|_| create_u32_oob_error())?,
+            u32::try_from(chunk_pos + offset).map_err(|_| TD0Error::out_of_range_error_u32())?,
         ))?;
 
         // Update the position in the chunk metadata.
@@ -399,9 +404,8 @@ impl SSXPTD0FileMetadata {
         // The chunks afterware are decremented by the size of the chunk in addition to the manfiest tag.
         let before_offset: i64 = -i64::try_from(size_of::<TD0ManifestTag>()).unwrap();
         let after_offset: i64 = -before_offset
-            - i64::try_from(remove_tag_size).map_err(|_| {
-                TD0Error::InvalidChunk(InvalidChunkError::new(chunk_name, "chunk size invalid."))
-            })?;
+            - i64::try_from(remove_tag_size)
+                .map_err(|_| TD0Error::invalid_chunk_error(chunk_name, "chunk size invalid."))?;
 
         let mut chunk_offset_changes: HashMap<String, i64> = HashMap::new();
 
@@ -434,19 +438,15 @@ pub struct SSXPTD0File {
 
 fn get_chunk_header_bytes<'a>(buf: &'a [u8], manifest_tag: &TD0ManifestTag) -> TD0Result<&'a [u8]> {
     buf.get(manifest_tag.chunk_pos()..manifest_tag.chunk_pos() + size_of::<ChunkHeader>())
-        .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-            manifest_tag.tag(),
-            "invalid chunk size or position.",
-        )))
+        .ok_or_else(|| {
+            TD0Error::invalid_chunk_error(manifest_tag.tag(), "invalid chunk size or position.")
+        })
 }
 
 fn chunk_header_from_buf(buf: &[u8], manifest_tag: &TD0ManifestTag) -> TD0Result<ChunkHeader> {
     let bytes = get_chunk_header_bytes(buf, manifest_tag)?;
     ChunkHeader::try_read_from_bytes(bytes).map_err(|_| {
-        TD0Error::InvalidChunk(InvalidChunkError::new(
-            manifest_tag.tag(),
-            "unable to parse chunk header.",
-        ))
+        TD0Error::invalid_chunk_error(manifest_tag.tag(), "unable to parse chunk header.")
     })
 }
 
@@ -456,10 +456,7 @@ fn chunk_header_ref_from_buf<'a>(
 ) -> TD0Result<&'a ChunkHeader> {
     let bytes = get_chunk_header_bytes(buf, manifest_tag)?;
     ChunkHeader::try_ref_from_bytes(bytes).map_err(|_| {
-        TD0Error::InvalidChunk(InvalidChunkError::new(
-            manifest_tag.tag(),
-            "unable to parse chunk header.",
-        ))
+        TD0Error::invalid_chunk_error(manifest_tag.tag(), "unable to parse chunk header.")
     })
 }
 
@@ -523,10 +520,6 @@ impl Chunk {
 
     pub fn num_items(&self) -> usize {
         self.header.num_items()
-    }
-
-    pub fn range(&self) -> Range<usize> {
-        usize_from_u32(self.pos)..usize_from_u32(self.pos + self.size)
     }
 }
 
@@ -821,10 +814,9 @@ impl TD0File for SSXPTD0File {
         let new_chunk_header = self
             .meta
             .chunk(chunk_name)
-            .ok_or(TD0Error::InvalidChunk(InvalidChunkError::new(
-                chunk_name,
-                "failed to add chunk to file metadata.",
-            )))?
+            .ok_or_else(|| {
+                TD0Error::invalid_chunk_error(chunk_name, "failed to add chunk to file metadata.")
+            })?
             .header;
         let new_manifest_tag = self
             .meta

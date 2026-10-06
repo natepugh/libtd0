@@ -7,14 +7,10 @@
 
 use std::assert_matches;
 
-use td0_core::{
-    TD0ChunkItem, TD0Value, TD0ValueRaw, VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DISPLAY,
-    VOLUME_MINUS_INF_FLOAT, VOLUME_MINUS_INF_I16, Volume,
-};
+use td0_core::{TD0ChunkItem, TD0Error, TD0Result, TD0Value, TD0ValueRaw, Volume};
 use zerocopy::{I16, LittleEndian, U16, U32};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes};
 
-use td0_core::result::{TD0Error, TD0Result};
 use td0_derive::TD0ChunkItemDerive;
 use td0_derive::repeat_fields;
 
@@ -694,24 +690,24 @@ fn test_setters() {
 
     // volume_field: #[td0_field(field_type = "Volume")]
     assert_matches!(
-        ts.set_field_value("volume_field", td0_core::TD0Value::Decimal(VOLUME_MIN)),
+        ts.set_field_value("volume_field", td0_core::TD0Value::Decimal(Volume::MIN)),
         Ok { .. },
         "`volume_field` Bounded field setter should accept min value."
     );
     assert_eq!(
         ts.field_value("volume_field"),
-        Some(td0_core::TD0Value::Decimal(VOLUME_MIN)),
+        Some(td0_core::TD0Value::Decimal(Volume::MIN)),
         "`volume_field` Bounded field setter should set value."
     );
 
     assert_matches!(
-        ts.set_field_value("volume_field", td0_core::TD0Value::Decimal(VOLUME_MAX)),
+        ts.set_field_value("volume_field", td0_core::TD0Value::Decimal(Volume::MAX)),
         Ok { .. },
         "`volume_field` Bounded field setter should accept max value."
     );
     assert_eq!(
         ts.field_value("volume_field"),
-        Some(td0_core::TD0Value::Decimal(VOLUME_MAX)),
+        Some(td0_core::TD0Value::Decimal(Volume::MAX)),
         "`volume_field` Bounded field setter should set value."
     );
 
@@ -719,7 +715,7 @@ fn test_setters() {
     assert_matches!(
         ts.set_field_value(
             "volume_field",
-            td0_core::TD0Value::Decimal(VOLUME_MIN - 0.01)
+            td0_core::TD0Value::Decimal(Volume::MIN - 0.01)
         ),
         Err(TD0Error::OutOfRangeDecimal(..)),
         "`volume_field` Bounded field setter should Error if less than min."
@@ -727,7 +723,7 @@ fn test_setters() {
     assert_matches!(
         ts.set_field_value(
             "volume_field",
-            td0_core::TD0Value::Decimal(VOLUME_MAX + 0.01)
+            td0_core::TD0Value::Decimal(Volume::MAX + 0.01)
         ),
         Err(TD0Error::OutOfRangeDecimal(..)),
         "`volume_field` Bounded field setter should Error if greater than max."
@@ -741,26 +737,26 @@ fn test_setters() {
         ts.set_field_value(
             "volume_field",
             td0_core::TD0Value::Decimal(
-                Volume::try_from(VOLUME_MINUS_INF_I16)
+                Volume::try_from(Volume::MINUS_INF_I16)
                     .expect(TEST_BROKEN)
                     .into()
             )
         ),
         Ok { .. },
-        "`volume_field` Setter should accept VOLUME_MINUS_INF_I16."
+        "`volume_field` Setter should accept Volume::MINUS_INF_I16."
     );
     assert_eq!(
         ts.field_value("volume_field"),
-        Some(td0_core::TD0Value::Decimal(VOLUME_MINUS_INF_FLOAT)),
-        "`volume_field` Getter should return VOLUME_MINUS_INF."
+        Some(td0_core::TD0Value::Decimal(Volume::MINUS_INF_FLOAT)),
+        "`volume_field` Getter should return Volume::MINUS_INF."
     );
 
     assert_eq!(
         ts.field_value("volume_field")
             .expect(TEST_BROKEN)
             .to_string(),
-        VOLUME_MINUS_INF_DISPLAY,
-        "`volume_field` to_string() should handle VOLUME_MINUS_INF."
+        Volume::MINUS_INF_DISPLAY,
+        "`volume_field` to_string() should handle Volume::MINUS_INF."
     );
     assert_matches!(
         ts.set_field_value("volume_field", td0_core::TD0Value::Decimal(-12.5)),

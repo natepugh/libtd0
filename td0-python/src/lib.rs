@@ -13,9 +13,9 @@ mod pytd0 {
     use td0::{new_td0_file, parse_td0_file};
     use td0_core::{
         ChunkManifest as Impl_ChunkManifest, TD0BackupType as Impl_TD0BackupType,
-        TD0ChunkItem as Impl_TD0ChunkItem, TD0DeviceModel as Impl_TD0DeviceModel,
+        TD0ChunkItem as Impl_TD0ChunkItem, TD0DeviceModel as Impl_TD0DeviceModel, TD0Error,
         TD0File as Impl_TD0File, TD0Manifest as Impl_TD0Manifest, TD0Value as Impl_TD0Value,
-        TD0ValueRaw as Impl_TD0ValueRaw, result::TD0Error,
+        TD0ValueRaw as Impl_TD0ValueRaw,
     };
 
     fn map_chunk_item_error(err: TD0Error) -> PyErr {

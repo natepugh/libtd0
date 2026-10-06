@@ -1,12 +1,17 @@
 // SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![expect(
+    dead_code,
+    reason = "These imports are referenced via macro-generated code (TD0ChunkItemDerive)."
+)]
 
 pub const CLICK_MODES: [&str; 3] = [
     "PLAY INTERNAL CLICK",
     "PLAY WAVE as CLICK",
     "PLAY WAVE as CLICK-TRACK",
 ];
+
 pub const CLICK_SOUNDS: [&str; 10] = [
     "METRONOME",
     "BEEP",

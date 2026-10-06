@@ -2,9 +2,22 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub mod common;
-pub mod rev;
-pub mod strings;
+pub(crate) mod common;
+pub(crate) mod rev;
+pub(crate) mod strings;
+
+// ============================================================================
+//                                   PUBLIC API
+//      Items below this line are public (re-)exports constituting the public
+//      API of this library.
+//
+//      Only items with public visibility are permitted here. Any change to
+//      their signatures (for functions) or publicly accessible members
+//      require updating the library version according to The Cargo Book's
+//      [SemVer Compatibility] https://doc.rust-lang.org/cargo/reference/semver.html
+//      guidelines.
+//
+pub use common::SSXPTD0File;
 
 #[cfg(test)]
 mod tests {
@@ -24,7 +37,7 @@ mod tests {
     use super::common::SSXPTD0File;
     use super::rev::v1_10::get_default_chunk_item;
     use crate::common::ChunkHeader;
-    use td0_core::{TD0File, TD0Value, result::TD0Error};
+    use td0_core::{TD0Error, TD0File, TD0Value};
 
     fn get_test_data(rel_path: PathBuf) -> Vec<u8> {
         let mut test_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

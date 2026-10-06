@@ -2,58 +2,16 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#![doc(hidden)]
+
+use super::helpers::checksum_bytes_to_string;
 use super::result::{OutOfRangeErrorTD0Decimal, TD0Error};
-use super::{
-    ChunkManifest, IntEncodedDecimal, TD0BackupType, TD0DeviceModel, TD0Manifest, TD0Value,
-    VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DISPLAY, VOLUME_MINUS_INF_FLOAT, VOLUME_MINUS_INF_I16,
-    Volume, checksum_bytes_to_string,
+use super::types::{
+    ChunkManifest, IntEncodedDecimal, TD0BackupType, TD0DeviceModel, TD0Manifest, TD0Value, Volume,
 };
+
 use core::ops::{Div, Mul};
 use zerocopy::{ByteOrder, I16, U16};
-
-impl ChunkManifest {
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
-    pub fn pos(&self) -> usize {
-        self.pos
-    }
-    pub fn size(&self) -> usize {
-        self.size
-    }
-    pub fn num_items(&self) -> usize {
-        self.num_items
-    }
-    pub fn item_size(&self) -> usize {
-        self.item_size
-    }
-
-    /// Create a new ChunkManfest struct.
-    ///
-    /// # Example
-    /// ```
-    /// use td0::ChunkManifest;
-    ///
-    /// let chunk_manifest : ChunkManifest = ChunkManifest::new("FOOa", 16, 96, 5, 16);
-    /// assert_eq!(chunk_manifest.to_string().as_str(), "FOOa:  pos: 16  size: 96  num_items: 5  item_size: 16");
-    /// ```
-    ///
-    pub fn new(
-        name: impl Into<String>,
-        pos: usize,
-        size: usize,
-        num_items: usize,
-        item_size: usize,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            pos,
-            size,
-            num_items,
-            item_size,
-        }
-    }
-}
 
 impl core::fmt::Display for ChunkManifest {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -405,10 +363,17 @@ impl core::fmt::Display for TD0Value {
 }
 
 impl Volume {
+    pub const MIN: f32 = -60.0f32;
+    pub const MAX: f32 = 6.0f32;
+    pub const MINUS_INF_DISPLAY: &str = "-inf";
+    pub const MINUS_INF_FLOAT: f32 = f32::NEG_INFINITY;
+    pub const MINUS_INF_I16: i16 = -601;
+
     fn validate_impl_range(val: &f32) -> Result<(), TD0Error> {
-        if (val.lt(&VOLUME_MIN) || val.gt(&VOLUME_MAX)) && val.ne(&VOLUME_MINUS_INF_FLOAT) {
+        if (val.lt(&Self::MIN) || val.gt(&Self::MAX)) && val.ne(&Self::MINUS_INF_FLOAT) {
             Err(TD0Error::OutOfRangeDecimal(OutOfRangeErrorTD0Decimal::new(
-                VOLUME_MIN, VOLUME_MAX,
+                Self::MIN,
+                Self::MAX,
             )))
         } else {
             Ok(())
@@ -423,8 +388,8 @@ impl Volume {
 impl core::str::FromStr for Volume {
     type Err = TD0Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.eq_ignore_ascii_case(VOLUME_MINUS_INF_DISPLAY) {
-            Ok(Self(VOLUME_MINUS_INF_FLOAT))
+        if s.eq_ignore_ascii_case(Self::MINUS_INF_DISPLAY) {
+            Ok(Self(Self::MINUS_INF_FLOAT))
         } else {
             let selfobj = Self(s.parse::<f32>().map_err(|_| {
                 TD0Error::InvalidInput("input string not parsable as a Decimal.".to_string())
@@ -439,8 +404,8 @@ impl<T: ByteOrder> TryFrom<Volume> for I16<T> {
     type Error = <i16 as TryFrom<i32>>::Error;
 
     fn try_from(val: Volume) -> Result<Self, Self::Error> {
-        if val.0 == VOLUME_MINUS_INF_FLOAT {
-            Ok(I16::from(VOLUME_MINUS_INF_I16))
+        if val.0 == Volume::MINUS_INF_FLOAT {
+            Ok(I16::from(Volume::MINUS_INF_I16))
         } else {
             Ok(I16::from(i16::try_from(val.0.mul(10.0f32).round() as i32)?))
         }
@@ -457,8 +422,8 @@ impl TryFrom<Volume> for i16 {
     type Error = <i16 as TryFrom<i32>>::Error;
 
     fn try_from(val: Volume) -> Result<Self, Self::Error> {
-        if val.0 == VOLUME_MINUS_INF_FLOAT {
-            Ok(VOLUME_MINUS_INF_I16)
+        if val.0 == Volume::MINUS_INF_FLOAT {
+            Ok(Volume::MINUS_INF_I16)
         } else {
             i16::try_from(val.0.mul(10.0f32).round() as i32)
         }
@@ -477,9 +442,9 @@ impl TryFrom<f32> for Volume {
 impl TryFrom<i16> for Volume {
     type Error = TD0Error;
     fn try_from(value: i16) -> Result<Self, Self::Error> {
-        let f32_value = if value == VOLUME_MINUS_INF_I16 {
+        let f32_value = if value == Self::MINUS_INF_I16 {
             // Special handling for "-Infinity" value.
-            VOLUME_MINUS_INF_FLOAT
+            Self::MINUS_INF_FLOAT
         } else {
             f32::from(value).div(10.0f32)
         };

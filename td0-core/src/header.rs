@@ -2,13 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use super::result::{TD0Error, TD0Result};
-use super::try_u32_le_from_usize;
-use super::usize_from_u32;
 use zerocopy::{FromBytes, LittleEndian, U16, U32};
 use zerocopy_derive::{Immutable, IntoBytes, KnownLayout};
 
-pub const SZ_HDR_CHUNK: usize = 16;
+use super::helpers::{try_u32_le_from_usize, usize_from_u32};
+use super::result::{TD0Error, TD0Result};
+
 pub const OFFSET_BYTES_REMAINING: usize = 2;
 pub const TD0_MAGIC: [u8; 4] = *b"TD0a";
 
@@ -158,6 +157,7 @@ impl TD0ManifestTag {
     }
 }
 
+#[doc(hidden)]
 impl core::fmt::Display for TD0ManifestTag {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(

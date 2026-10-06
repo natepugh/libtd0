@@ -26,52 +26,6 @@ impl InvalidChunkError {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DeviceModelString {
-    model: String,
-}
-impl Display for DeviceModelString {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("unsupported device model: '{}'", self.model))
-    }
-}
-impl Error for DeviceModelString {}
-impl From<&[u8]> for DeviceModelString {
-    fn from(val: &[u8]) -> Self {
-        Self {
-            model: String::from_utf8_lossy(&val[0..4]).to_string(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct DeviceFirmwareVersionString {
-    firmware_version: String,
-}
-impl Display for DeviceFirmwareVersionString {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!(
-            "unsupported device firmware version: '{}'",
-            self.firmware_version
-        ))
-    }
-}
-impl Error for DeviceFirmwareVersionString {}
-impl From<&[u8]> for DeviceFirmwareVersionString {
-    fn from(val: &[u8]) -> Self {
-        Self {
-            firmware_version: String::from_utf8_lossy(&val[0..4]).to_string(),
-        }
-    }
-}
-impl From<String> for DeviceFirmwareVersionString {
-    fn from(val: String) -> Self {
-        Self {
-            firmware_version: String::from_utf8_lossy(&val.as_bytes()[0..4]).to_string(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub struct OutOfRangeErrorTD0Decimal {
     min: f64,
     max: f64,
@@ -187,6 +141,13 @@ impl TD0Error {
         })
     }
 
+    pub fn invalid_chunk_error(chunk_name: impl Into<String>, reason: &'static str) -> Self {
+        Self::InvalidChunk(InvalidChunkError {
+            chunk_name: chunk_name.into(),
+            reason,
+        })
+    }
+
     pub fn out_of_range_error(min: impl Into<i64>, max: impl Into<i64>) -> Self {
         Self::OutOfRange(OutOfRangeError {
             min: min.into(),
@@ -197,13 +158,13 @@ impl TD0Error {
     pub fn out_of_range_error_from_usize(min: usize, max: usize) -> Self {
         let i64_min = i64::try_from(min);
         if i64_min.is_err() {
-            return TD0Error::DataType(
+            return Self::DataType(
                 "min value of too great a magnitude to fit in a i64!".to_string(),
             );
         }
         let i64_max = i64::try_from(max);
         if i64_max.is_err() {
-            return TD0Error::DataType(
+            return Self::DataType(
                 "max value of too great a magnitude to fit in a i64!".to_string(),
             );
         }
@@ -213,8 +174,12 @@ impl TD0Error {
             max: i64_max.unwrap(),
         })
     }
-}
 
-pub fn create_u32_oob_error() -> TD0Error {
-    TD0Error::OutOfRange(OutOfRangeError::new(0, u32::MAX))
+    pub fn out_of_range_error_u32() -> Self {
+        Self::OutOfRange(OutOfRangeError::new(0, u32::MAX))
+    }
+
+    pub fn out_of_range_error_decimal(min: impl Into<f64>, max: impl Into<f64>) -> Self {
+        Self::OutOfRangeDecimal(OutOfRangeErrorTD0Decimal::new(min.into(), max.into()))
+    }
 }

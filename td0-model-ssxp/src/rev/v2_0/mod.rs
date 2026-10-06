@@ -7,8 +7,7 @@ pub mod chunk;
 use super::v1_10::chunk::{CURaItem, KITaItem, STLaItem, STPaItem, TGLaItem, TRGaItem, WVPaItem};
 use crate::common::HDRaItem;
 use chunk::{KITbItem, PVRaItem, STPbItem};
-use td0_core::TD0ChunkItem;
-use td0_core::result::{InvalidChunkError, TD0Error, TD0Result};
+use td0_core::{TD0ChunkItem, TD0Error, TD0Result};
 use zerocopy::{FromBytes, TryFromBytes};
 
 static _CHUNK_NAMES: [&str; 11] = [
@@ -35,10 +34,7 @@ pub fn chunk_item_from_bytes<'b>(
         "TGLa" => Ok(TGLaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
         "TRGa" => Ok(TRGaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
         "WVPa" => Ok(WVPaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        _ => Err(TD0Error::InvalidChunk(InvalidChunkError::new(
-            chunk_name.to_string(),
-            "unknown chunk",
-        ))),
+        _ => Err(TD0Error::unknown_chunk_error(chunk_name)),
     }
 }
 
@@ -58,10 +54,7 @@ pub fn chunk_item_from_bytes_mut<'b>(
         "TGLa" => Ok(TGLaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
         "TRGa" => Ok(TRGaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
         "WVPa" => Ok(WVPaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        _ => Err(TD0Error::InvalidChunk(InvalidChunkError::new(
-            chunk_name.to_string(),
-            "unknown chunk",
-        ))),
+        _ => Err(TD0Error::unknown_chunk_error(chunk_name)),
     }
 }
 
@@ -103,10 +96,7 @@ pub fn chunk_item_from_bytes_owned(
         "WVPa" => Ok(Box::new(
             WVPaItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
         )),
-        _ => Err(TD0Error::InvalidChunk(InvalidChunkError::new(
-            chunk_name.to_string(),
-            "unknown chunk",
-        ))),
+        _ => Err(TD0Error::unknown_chunk_error(chunk_name)),
     }
 }
 
@@ -124,106 +114,5 @@ pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>>
         "TRGa" => Some(Box::new(TRGaItem::default())),
         "WVPa" => Some(Box::new(WVPaItem::default())),
         _ => None,
-    }
-}
-
-pub fn get_chunk_items(
-    chunk_name: &str,
-    bytes: &mut [u8],
-    item_count: usize,
-) -> TD0Result<Vec<Box<dyn TD0ChunkItem>>> {
-    match chunk_name {
-        "HDRa" => {
-            let elems = <[HDRaItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        "KITa" => {
-            let elems = <[KITaItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        "KITb" => {
-            let elems = <[KITbItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        "CURa" => {
-            let elems = <[CURaItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        "PVRa" => {
-            let elems = <[PVRaItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        "STLa" => {
-            let elems = <[STLaItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        "STPa" => {
-            let elems = <[STPaItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        "STPb" => {
-            let elems = <[STPbItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        "TGLa" => {
-            let elems = <[TGLaItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        "TRGa" => {
-            let elems = <[TRGaItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        "WVPa" => {
-            let elems = <[WVPaItem]>::mut_from_bytes_with_elems(bytes, item_count)
-                .map_err(|_| TD0Error::ChunkItemParse)?;
-            Ok(elems
-                .iter()
-                .map(|elem| Box::new(*elem) as Box<dyn TD0ChunkItem>)
-                .collect())
-        }
-        _ => Err(TD0Error::InvalidChunk(InvalidChunkError::new(
-            chunk_name.to_string(),
-            "unknown chunk",
-        ))),
     }
 }

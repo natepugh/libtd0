@@ -4,11 +4,12 @@
 
 #[cfg(doc)]
 use crate::TD0BackupType;
-use td0_core::header::{SZ_HDR_CHUNK, TD0IdChunk, TD0ManifestTag, validate_id_tag};
-use td0_core::result::{TD0Error, TD0Result};
-use td0_core::{TD0DeviceModel, TD0File};
+use td0_core::{
+    TD0DeviceModel, TD0Error, TD0File, TD0IdChunk, TD0ManifestTag, TD0Result, validate_id_tag,
+};
+
 #[cfg(feature = "model-spdsx-pro")]
-use td0_model_ssxp::common::SSXPTD0File;
+use td0_model_ssxp::SSXPTD0File;
 
 #[cfg(test)]
 mod tests;
@@ -17,10 +18,10 @@ fn read_td0_id_chunk(bytes: &[u8]) -> TD0Result<TD0IdChunk> {
     use zerocopy::FromBytes;
 
     let buf = bytes
-        .get(..SZ_HDR_CHUNK)
+        .get(..size_of::<TD0IdChunk>())
         .ok_or_else(|| TD0Error::FileParse("unable to read first chunk".to_string()))?;
 
-    Ok(TD0IdChunk::read_from_bytes(buf).expect("SZ_HDR_CHUNK is correct."))
+    Ok(TD0IdChunk::read_from_bytes(buf).expect("size_of::<TD0IdChunk>() is correct."))
 }
 
 /// Parses a byte array into a struct that implements the [`TD0File`] trait,
@@ -85,7 +86,7 @@ pub fn parse_td0_file(bytes: &[u8]) -> TD0Result<Box<dyn TD0File>> {
     let pos: usize = size_of::<TD0IdChunk>();
     let next_chunk: TD0ManifestTag = TD0ManifestTag::read_from_bytes(
         bytes
-            .get(pos..pos + SZ_HDR_CHUNK)
+            .get(pos..pos + size_of::<TD0IdChunk>())
             .ok_or_else(|| TD0Error::FileParse("can't determine TD0 device model.".to_string()))?,
     )
     .map_err(|_| TD0Error::FileParse("can't determine TD0 device model.".to_string()))?;
