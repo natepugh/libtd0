@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! # td0, a library for viewing and editing the .TD0 e-kit/sample pad backup file format.
+//! # td0: A parsing and editing library for the .TD0 e-kit/sample pad backup file format.
 //!
 //! ## Compatible models and firmware revisions
 //!

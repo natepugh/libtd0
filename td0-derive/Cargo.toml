@@ -9,7 +9,7 @@ edition = "2024"
 
 authors = ["Nathan Pugh <natepugh@gmail.com>"]
 description = """
-Derive macros for internal use in td0, a library for viewing and editing .TD0 e-kit/sample pad backup files.
+Derive macros for internal use in td0, a parsing and editing library for the .TD0 e-kit/sample pad backup file format.
 
 Use the `td0` crate rather than using this crate directly.
 """

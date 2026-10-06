@@ -9,7 +9,7 @@ edition = "2024"
 
 authors = ["Nathan Pugh <natepugh@gmail.com>"]
 description = """
-SPD-SX Pro model implementation for td0, a library for viewing and editing .TD0 e-kit/sample pad backup files.
+SPD-SX Pro model implementation for td0, a parsing and editing library for the .TD0 e-kit/sample pad backup file format.
 
 Rather than using this crate directly, use the `td0` crate with
 the `model-spdsx-pro` feature compiled in. (as is the default.)
