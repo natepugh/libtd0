@@ -9,7 +9,7 @@ edition = "2024"
 
 authors = ["Nathan Pugh <natepugh@gmail.com>"]
 description = """
-Base types and functionality for td0, a library that supports reading and editing the .TD0 e-kit/sample pad backup file format.
+Base types and functionality for td0, a library for viewing and editing .TD0 e-kit/sample pad backup files.
 
 Use the `td0` crate rather than using this crate directly.
 """

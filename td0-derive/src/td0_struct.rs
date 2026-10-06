@@ -678,25 +678,25 @@ fn build_decimal_setter_expr(
 
     let rhand: Expr = match native_type {
         NativeType::U8 => parse_quote!(
-            u8::try_from(td0_core::IntEncodedDecimal::from(*val))
+            u8::try_from(td0_core::IntEncodedDecimal::from(val))
                 .map_err(|_| td0_core::result::TD0Error::OutOfRangeDecimal(
                     #out_of_range_dec
                 ))?
         ),
         NativeType::U16 => parse_quote!(
-            U16::try_from(td0_core::IntEncodedDecimal::from(*val))
+            U16::try_from(td0_core::IntEncodedDecimal::from(val))
                 .map_err(|_| td0_core::result::TD0Error::OutOfRangeDecimal(
                     #out_of_range_dec
                 ))?
         ),
         NativeType::I8 => parse_quote!(
-            i8::try_from(td0_core::IntEncodedDecimal::from(*val))
+            i8::try_from(td0_core::IntEncodedDecimal::from(val))
                 .map_err(|_| td0_core::result::TD0Error::OutOfRangeDecimal(
                     #out_of_range_dec
                 ))?
         ),
         NativeType::I16 => parse_quote!(
-            I16::try_from(td0_core::IntEncodedDecimal::from(*val))
+            I16::try_from(td0_core::IntEncodedDecimal::from(val))
                 .map_err(|_| td0_core::result::TD0Error::OutOfRangeDecimal(
                     #out_of_range_dec
                 ))?
@@ -705,7 +705,7 @@ fn build_decimal_setter_expr(
     };
 
     parse_quote!(
-        if td0_core::in_range_inclusive(td0_core::IntEncodedDecimal::from(*val).val(), Some(#min), Some(#max)) {
+        if td0_core::in_range_inclusive(td0_core::IntEncodedDecimal::from(val).val(), Some(#min), Some(#max)) {
             self.#ident = #rhand;
         } else {
             return Err(td0_core::result::TD0Error::OutOfRangeDecimal(#out_of_range_dec))
@@ -722,7 +722,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
             let pad_byte = attr.pad_byte.unwrap_or(0u8);
             parse_quote!(
                 (#ident_str, td0_core::TD0Value::Text(val)) => {
-                    td0_core::copy_ascii_str_to_u8_slice(val, &mut self.#ident, #pad_byte)
+                    td0_core::copy_ascii_str_to_u8_slice(&val, &mut self.#ident, #pad_byte)
                 }
             )
         }
@@ -752,7 +752,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
         TD0FieldType::Volume(_) => {
             parse_quote!(
                 (#ident_str, td0_core::TD0Value::Decimal(val)) => {
-                    let tmp = td0_core::Volume::try_from(*val)?;
+                    let tmp = td0_core::Volume::try_from(val)?;
                     self.#ident = tmp.try_into().map_err(|_|
                         td0_core::result::TD0Error::OutOfRangeDecimal(
                             td0_core::result::OutOfRangeErrorTD0Decimal::new(td0_core::VOLUME_MIN, td0_core::VOLUME_MAX)
@@ -790,7 +790,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
 
             parse_quote!(
                 (#ident_str, td0_core::TD0Value::I16(val)) => {
-                    if td0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
+                    if td0_core::in_range_inclusive(val, #min_expr, #max_expr) {
                         self.#ident = val.clone().into();
                         Ok(())
                     }
@@ -825,7 +825,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
 
             parse_quote!(
                 (#ident_str, td0_core::TD0Value::U16(val)) => {
-                    if td0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
+                    if td0_core::in_range_inclusive(val, #min_expr, #max_expr) {
                         self.#ident = val.clone().into();
                         Ok(())
                     }
@@ -860,7 +860,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
 
             parse_quote!(
                 (#ident_str, td0_core::TD0Value::U32(val)) => {
-                    if td0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
+                    if td0_core::in_range_inclusive(val, #min_expr, #max_expr) {
                         self.#ident = val.clone().into();
                         Ok(())
                     }
@@ -895,7 +895,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
 
             parse_quote!(
                 (#ident_str, td0_core::TD0Value::U8(val)) => {
-                    if td0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
+                    if td0_core::in_range_inclusive(val, #min_expr, #max_expr) {
                         self.#ident = val.clone().into();
                         Ok(())
                     }
@@ -930,7 +930,7 @@ fn build_setter_expr(td0field: &TD0Field) -> Arm {
 
             parse_quote!(
                 (#ident_str, td0_core::TD0Value::I8(val)) => {
-                    if td0_core::in_range_inclusive(*val, #min_expr, #max_expr) {
+                    if td0_core::in_range_inclusive(val, #min_expr, #max_expr) {
                         self.#ident = val.clone().into();
                         Ok(())
                     }
@@ -953,41 +953,41 @@ fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
         NativeType::I16 => {
             parse_quote!(
                 (#ident_str, td0_core::TD0ValueRaw::I16(val)) => {
-                    self.#ident = I16::from(val.clone());
+                    self.#ident = I16::from(val);
                     Ok(())
                 }
             )
         }
         NativeType::I8 => parse_quote!(
             (#ident_str, td0_core::TD0ValueRaw::I8(val)) => {
-                self.#ident = val.clone();
+                self.#ident = val;
                 Ok(())
             }
         ),
         NativeType::U8 => parse_quote!(
             (#ident_str, td0_core::TD0ValueRaw::U8(val)) => {
-                self.#ident = val.clone();
+                self.#ident = val;
                 Ok(())
             }
         ),
         NativeType::U16 => {
             parse_quote!(
                 (#ident_str, td0_core::TD0ValueRaw::U16(val)) => {
-                    self.#ident = U16::from(val.clone());
+                    self.#ident = U16::from(val);
                     Ok(())
                 }
             )
         }
         NativeType::U32 => parse_quote!(
             (#ident_str, td0_core::TD0ValueRaw::U32(val)) => {
-                self.#ident = U32::from(val.clone());
+                self.#ident = U32::from(val);
                 Ok(())
             }
         ),
         NativeType::Slice(_) => {
             parse_quote!(
                 (#ident_str, td0_core::TD0ValueRaw::Slice(val)) => {
-                    td0_core::copy_slice_to_native(val, &mut self.#ident)?;
+                    td0_core::copy_slice_to_native(&*val, &mut self.#ident)?;
                     Ok(())
                 }
             )
@@ -1046,7 +1046,7 @@ fn build_chunkitem_set_field_value(td0fields: &[TD0Field]) -> ImplItemFn {
         fn set_field_value(
             &mut self,
             field: &str,
-            value: &td0_core::TD0Value,
+            value: td0_core::TD0Value,
         ) -> td0_core::result::TD0Result<()> {
             match (field, value) {}
         }
@@ -1072,12 +1072,21 @@ fn build_chunkitem_set_field_value(td0fields: &[TD0Field]) -> ImplItemFn {
 }
 
 fn build_setter_data_type_error(td0field: &TD0Field) -> Arm {
-    let field_ident: Ident = td0field.ident.clone();
+    let field_str: String = td0field.ident.to_string();
     let error_msg = format!(
         "invalid data type setting field '{}'. Expected {}",
-        td0field.ident, td0field.field_type_name
+        field_str, field_type_user_name(td0field)
     );
-    parse_quote!((#field_ident, _) => Err(td0_core::result::TD0Error::DataType(#error_msg.to_string())),)
+    parse_quote!((#field_str, _) => Err(td0_core::result::TD0Error::DataType(#error_msg.to_string())),)
+}
+
+fn build_setter_data_type_error_raw(td0field: &TD0Field) -> Arm {
+    let field_str: String = td0field.ident.to_string();
+    let error_msg = format!(
+        "invalid data type setting field '{}'. Expected {}",
+        field_str, field_type_user_name_raw(td0field)
+    );
+    parse_quote!((#field_str, _) => Err(td0_core::result::TD0Error::DataType(#error_msg.to_string())),)
 }
 
 fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
@@ -1085,7 +1094,7 @@ fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
         fn set_field_value_raw(
             &mut self,
             field: &str,
-            value: &td0_core::TD0ValueRaw,
+            value: td0_core::TD0ValueRaw,
         ) -> td0_core::result::TD0Result<()> {
             match (field, value) {}
         }
@@ -1095,7 +1104,7 @@ fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     set_fields_clauses.extend(
         td0fields
             .iter()
-            .map(build_setter_data_type_error)
+            .map(build_setter_data_type_error_raw)
             .collect::<Vec<Arm>>(),
     );
     set_fields_clauses.push(parse_quote!(
@@ -1108,7 +1117,7 @@ fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
     fn_skel
 }
 
-fn field_type_func_result(field: &TD0Field) -> &'static str {
+fn field_type_user_name(field: &TD0Field) -> &'static str {
     match field.field_type {
         TD0FieldType::EnumStr(_) | TD0FieldType::Text(_) => "Text",
         TD0FieldType::I16(_) => "I16",
@@ -1121,12 +1130,23 @@ fn field_type_func_result(field: &TD0Field) -> &'static str {
     }
 }
 
+fn field_type_user_name_raw(field: &TD0Field) -> &'static str {
+    match field.native_type {
+        NativeType::I16 => "I16",
+        NativeType::I8 => "I8",
+        NativeType::Slice(_) => "Slice",
+        NativeType::U8 => "U8",
+        NativeType::U16 => "U16",
+        NativeType::U32 => "U32",
+    }
+}
+
 fn build_chunkitem_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
     let arms: Vec<Arm> = td0fields
         .iter()
         .map(|field| {
             let field_name_str = field.ident.to_string();
-            let field_type_str = field_type_func_result(field);
+            let field_type_str = field_type_user_name(field);
             parse_quote!( #field_name_str => Some(#field_type_str) )
         })
         .collect();

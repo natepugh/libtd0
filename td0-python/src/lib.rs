@@ -375,7 +375,7 @@ mod pytd0 {
                 }
             };
             self._impl
-                .set_field_value(field, &val)
+                .set_field_value(field, val)
                 .map_err(|err| PyErr::new::<PyValueError, _>(format!("{err}")))
         }
 
@@ -408,7 +408,7 @@ mod pytd0 {
                 }
             };
             self._impl
-                .set_field_value_raw(field, &val)
+                .set_field_value_raw(field, val)
                 .map_err(|err| PyErr::new::<PyValueError, _>(format!("{err}")))
         }
     }

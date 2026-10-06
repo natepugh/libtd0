@@ -208,7 +208,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///     .ok_or(TD0Error::unknown_chunk_error("KITa"))?;
     /// let set_result = default_kit.set_field_value(
     ///     "name",
-    ///     &TD0Value::new_text_value("Kilt, er, kit")
+    ///     TD0Value::new_text_value("Kilt, er, kit")
     /// );
     /// assert!(set_result.is_ok());
     ///
@@ -228,7 +228,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// // (Identical test setup as "Setting a Text field section." omitted here.)
     /// let set_result = default_kit.set_field_value(
     ///     "click_pan",
-    ///     &TD0Value::I8(-12)
+    ///     TD0Value::I8(-12)
     /// );
     /// assert!(set_result.is_ok());
     ///
@@ -251,14 +251,14 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// let my_tempo : f32 = 125.5_f32;
     /// let set_result = default_kit.set_field_value(
     ///     "tempo",
-    ///     &TD0Value::Decimal(my_tempo)
+    ///     TD0Value::Decimal(my_tempo)
     /// );
     /// assert!(set_result.is_ok());
     ///
     /// # Ok::<(), TD0Error>(())
     /// ```
     ///
-    fn set_field_value(&mut self, field: &str, value: &TD0Value) -> TD0Result<()>;
+    fn set_field_value(&mut self, field: &str, value: TD0Value) -> TD0Result<()>;
 
     /// Set the raw value of `field` to [TD0ValueRaw] `raw_value`.
     ///
@@ -298,13 +298,13 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// // to 16 characters- the "name" field is 16 bytes in size.
     /// let set_result = default_kit.set_field_value_raw(
     ///     "name",
-    ///     &TD0ValueRaw::Slice(Box::new(*b"I Like Danger   "))
+    ///     TD0ValueRaw::Slice(Box::new(*b"I Like Danger   "))
     /// );
     /// assert!(set_result.is_ok());
     ///
     /// # Ok::<(), TD0Error>(())
     /// ```
-    fn set_field_value_raw(&mut self, field: &str, raw_value: &TD0ValueRaw) -> TD0Result<()>;
+    fn set_field_value_raw(&mut self, field: &str, raw_value: TD0ValueRaw) -> TD0Result<()>;
 }
 
 /// Interface to the data in a .TD0 file.
@@ -400,7 +400,7 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     /// let mut test_item : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("TGLa").ok_or(
     ///     TD0Error::unknown_chunk_error("TGLa")
     /// )?;
-    /// test_item.set_field_value("name", &TD0Value::new_text_value("This is a test"))?;
+    /// test_item.set_field_value("name", TD0Value::new_text_value("This is a test"))?;
     ///
     /// // Test helper to retrieve the TGLa name field from a TGLa item as a String.
     /// fn tgl_name_as_string(fileobj: &dyn TD0File, item_index: usize) -> TD0Result<String> {
@@ -456,7 +456,7 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     /// }
     ///
     /// // Set the name field of TGLa item 0.
-    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", &TD0Value::new_text_value("My New Tag"))?;
+    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", TD0Value::new_text_value("My New Tag"))?;
     ///
     /// // Verify that TGLa item 2 isn't already the new value:
     /// assert_ne!(tgl_name_as_string(&*td0file, 2)?, "My New Tag".to_string());
@@ -501,9 +501,9 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     /// }
     ///
     /// // Set the name field of TGLa item 0.
-    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", &TD0Value::new_text_value("Was item 0"))?;
-    /// td0file.chunk_item_mut("TGLa", 1)?.set_field_value("name", &TD0Value::new_text_value("Not swapped"))?;
-    /// td0file.chunk_item_mut("TGLa", 2)?.set_field_value("name", &TD0Value::new_text_value("Was item 2"))?;
+    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", TD0Value::new_text_value("Was item 0"))?;
+    /// td0file.chunk_item_mut("TGLa", 1)?.set_field_value("name", TD0Value::new_text_value("Not swapped"))?;
+    /// td0file.chunk_item_mut("TGLa", 2)?.set_field_value("name", TD0Value::new_text_value("Was item 2"))?;
     ///
     /// // Perform the swap and verify the expected results.
     /// td0file.chunk_items_swap("TGLa", 0, 2)?;
@@ -553,9 +553,9 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     /// }
     ///
     /// // Set the name field of TGLa item 0.
-    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", &TD0Value::new_text_value("Was item 0"))?;
-    /// td0file.chunk_item_mut("TGLa", 1)?.set_field_value("name", &TD0Value::new_text_value("Was item 1"))?;
-    /// td0file.chunk_item_mut("TGLa", 2)?.set_field_value("name", &TD0Value::new_text_value("Was item 2"))?;
+    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", TD0Value::new_text_value("Was item 0"))?;
+    /// td0file.chunk_item_mut("TGLa", 1)?.set_field_value("name", TD0Value::new_text_value("Was item 1"))?;
+    /// td0file.chunk_item_mut("TGLa", 2)?.set_field_value("name", TD0Value::new_text_value("Was item 2"))?;
     ///
     /// // Perform the swap and verify the expected results.
     /// td0file.chunk_items_reorder("TGLa", &[1, 2, 0])?;
@@ -593,7 +593,7 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
     ///
     /// // Modify a value, and attempt to call try_to_bytes.
-    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", &TD0Value::new_text_value("Changed value!"))?;
+    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", TD0Value::new_text_value("Changed value!"))?;
     /// let bytes_result = td0file.try_to_bytes();
     /// // Expected failure, finalize() hasn't been called!
     /// assert!(matches!(bytes_result, Err(TD0Error::ValidationFailed(_))));
@@ -736,7 +736,7 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     /// // Add the shortest chunk possible for this file type, TGLa, then set its one item's name.
     /// td0file.add_chunk("TGLa", 1)?;
     /// let mut tgl_item = td0file.chunk_item_mut("TGLa", 0)?;
-    /// tgl_item.set_field_value("name", &TD0Value::new_text_value("Taggy tag tag"))?;
+    /// tgl_item.set_field_value("name", TD0Value::new_text_value("Taggy tag tag"))?;
     ///
     /// /// The expected output is implementation-specific.
     /// let mut expected : Vec<u8> = vec![
@@ -1062,7 +1062,7 @@ pub fn checksum_bytes_to_string(val: &[u8]) -> String {
         .collect::<String>()
 }
 
-pub fn copy_ascii_str_to_u8_slice(src: &String, dest: &mut [u8], pad_byte: u8) -> TD0Result<()> {
+pub fn copy_ascii_str_to_u8_slice(src: &str, dest: &mut [u8], pad_byte: u8) -> TD0Result<()> {
     if src.len() > dest.len() {
         return Err(result::TD0Error::out_of_range_error_from_usize(
             0,
@@ -1336,7 +1336,7 @@ mod tests {
         );
 
         assert_eq!(
-            copy_ascii_str_to_u8_slice(&"I'm 17 chars long".to_string(), &mut dest, 0u8),
+            copy_ascii_str_to_u8_slice("I'm 17 chars long", &mut dest, 0u8),
             Err(result::TD0Error::OutOfRange(result::OutOfRangeError::new(
                 0, 16
             ))),
@@ -1344,7 +1344,7 @@ mod tests {
         );
 
         debug_assert_matches!(
-            copy_ascii_str_to_u8_slice(&"I'm not äscii".to_string(), &mut dest, 0u8),
+            copy_ascii_str_to_u8_slice("I'm not äscii", &mut dest, 0u8),
             Err(result::TD0Error::InvalidInput(..)),
             "Error if non-ascii chars are in source.."
         );

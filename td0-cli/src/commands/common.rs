@@ -225,7 +225,7 @@ pub fn command_set_chunk_item_values(
             return Err(TD0Error::InvalidField(field.clone()));
         };
 
-        chunk_item.set_field_value(field, &parsed_value)?;
+        chunk_item.set_field_value(field, parsed_value)?;
         let Some(after) = chunk_item.field_value(field) else {
             return Err(TD0Error::InvalidField(field.clone()));
         };

@@ -254,7 +254,7 @@ mod tests {
         );
 
         let mut new_tag = td0file.chunk_item_default("TGLa").unwrap();
-        let _ = new_tag.set_field_value("name", &TD0Value::Text("This is a test !".to_string()));
+        let _ = new_tag.set_field_value("name", TD0Value::new_text_value("This is a test !"));
         assert_eq!(
             new_tag.field_value("name"),
             Some(TD0Value::Text("This is a test !".to_string()))

@@ -8,7 +8,7 @@ version = "0.1.0"
 edition = "2024"
 
 authors = ["Nathan Pugh <natepugh@gmail.com>"]
-description = "Library that supports reading and editing the .TD0 e-kit/sample pad backup file format."
+description = "A library for viewing and editing .TD0 e-kit/sample pad backup files."
 license = "GPL-3.0-or-later"
 repository = "https://github.com/natepugh/libtd0"
 keywords = ["td0", "sampler", "sample pad", "drum kit"]

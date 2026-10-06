@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! # Library for viewing and editing Roland .TD0 backup files.
+//! # td0, a library for viewing and editing the .TD0 e-kit/sample pad backup file format.
 //!
 //! ## Compatible models and firmware revisions
 //!

@@ -1,19 +1,20 @@
-#![cfg(test)]
-
 // SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#![cfg(test)]
+#![allow(clippy::panic_in_result_fn, reason = "More concise tests.")]
+
 use std::assert_matches;
 
 use td0_core::{
-    TD0ChunkItem, VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DISPLAY, VOLUME_MINUS_INF_FLOAT,
-    VOLUME_MINUS_INF_I16, Volume,
+    TD0ChunkItem, TD0Value, TD0ValueRaw, VOLUME_MAX, VOLUME_MIN, VOLUME_MINUS_INF_DISPLAY,
+    VOLUME_MINUS_INF_FLOAT, VOLUME_MINUS_INF_I16, Volume,
 };
 use zerocopy::{I16, LittleEndian, U16, U32};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes};
 
-use td0_core::result::TD0Error;
+use td0_core::result::{TD0Error, TD0Result};
 use td0_derive::TD0ChunkItemDerive;
 use td0_derive::repeat_fields;
 
@@ -311,7 +312,7 @@ fn test_setters() {
     // enumstr_field: #[td0_field(field_type = "EnumStr", ...)]
     ts.set_field_value(
         "enumstr_field",
-        &td0_core::TD0Value::Text("Test_3_EnumStr".to_string()),
+        td0_core::TD0Value::Text("Test_3_EnumStr".to_string()),
     )
     .expect("Can't set `enumstr_field`");
     assert_eq!(
@@ -328,7 +329,7 @@ fn test_setters() {
     assert_matches!(
         ts.set_field_value(
             "enumstr_field",
-            &td0_core::TD0Value::Text("INVALID".to_string())
+            td0_core::TD0Value::Text("INVALID".to_string())
         ),
         Err(TD0Error::InvalidInput(..)),
         "`enumstr_field` Setter should error on invalid value."
@@ -341,23 +342,23 @@ fn test_setters() {
 
     // i16_bounded #[td0_field(field_type = "I16", min = -2048, max = 50)]
     assert_matches!(
-        ts.set_field_value("i16_bounded", &td0_core::TD0Value::I16(-2048)),
+        ts.set_field_value("i16_bounded", td0_core::TD0Value::I16(-2048)),
         Ok { .. },
         "`i16_bounded` Bounded field setter should accept min value."
     );
     assert_matches!(
-        ts.set_field_value("i16_bounded", &td0_core::TD0Value::I16(50)),
+        ts.set_field_value("i16_bounded", td0_core::TD0Value::I16(50)),
         Ok { .. },
         "`i16_bounded` Bounded field setter should accept max value."
     );
     let val_before = ts.field_value("i16_bounded");
     assert_matches!(
-        ts.set_field_value("i16_bounded", &td0_core::TD0Value::I16(-2049)),
+        ts.set_field_value("i16_bounded", td0_core::TD0Value::I16(-2049)),
         Err(TD0Error::OutOfRange(..)),
         "`i16_bounded` Bounded field setter should Error if less than min."
     );
     assert_matches!(
-        ts.set_field_value("i16_bounded", &td0_core::TD0Value::I16(51)),
+        ts.set_field_value("i16_bounded", td0_core::TD0Value::I16(51)),
         Err(TD0Error::OutOfRange(..)),
         "`i16_bounded` Bounded field setter should Error if greater than max."
     );
@@ -369,12 +370,12 @@ fn test_setters() {
 
     // i8_bounded_min_only: #[td0_field(field_type = "I8", min = -45)]
     assert_matches!(
-        ts.set_field_value("i8_bounded_min_only", &td0_core::TD0Value::I8(-45)),
+        ts.set_field_value("i8_bounded_min_only", td0_core::TD0Value::I8(-45)),
         Ok { .. },
         "`i8_bounded_min_only` Bounded_min_only field setter should accept min value."
     );
     assert_matches!(
-        ts.set_field_value("i8_bounded_min_only", &td0_core::TD0Value::I8(-46)),
+        ts.set_field_value("i8_bounded_min_only", td0_core::TD0Value::I8(-46)),
         Err(TD0Error::OutOfRange(..)),
         "`i8_bounded_min_only` Bounded_min_only field setter should Error if less than min."
     );
@@ -387,26 +388,26 @@ fn test_setters() {
 
     // i8_bounded_max_only: #[td0_field(field_type = "I8", max = -45)]
     assert_matches!(
-        ts.set_field_value("i8_bounded_max_only", &td0_core::TD0Value::I8(-45)),
+        ts.set_field_value("i8_bounded_max_only", td0_core::TD0Value::I8(-45)),
         Ok { .. },
         "`i8_bounded_max_only` Bounded_max_only field setter should accept max value."
     );
     assert_matches!(
-        ts.set_field_value("i8_bounded_max_only", &td0_core::TD0Value::I8(-44)),
+        ts.set_field_value("i8_bounded_max_only", td0_core::TD0Value::I8(-44)),
         Err(TD0Error::OutOfRange(..)),
         "`i8_bounded_max_only` Bounded_max_only field setter should Error if greater than max."
     );
 
     // slice: [u8; 3]: #[td0_field(field_type = "Slice")]
     assert_matches!(
-        ts.set_field_value("slice", &td0_core::TD0Value::Slice(Box::new([1u8; 3]))),
+        ts.set_field_value("slice", td0_core::TD0Value::Slice(Box::new([1u8; 3]))),
         Err(TD0Error::ReadOnlyField(..)),
         "Slice shouldn't be settable with set_field_value()."
     );
 
     // td0_decimal_bounded: #[td0_field(field_type = "TD0Decimal", min = 20.0, max = 260.0)]
     assert_matches!(
-        ts.set_field_value("td0_decimal_bounded", &td0_core::TD0Value::Decimal(20.0)),
+        ts.set_field_value("td0_decimal_bounded", td0_core::TD0Value::Decimal(20.0)),
         Ok { .. },
         "`td0_decimal_bounded` Bounded field setter should accept min value."
     );
@@ -416,7 +417,7 @@ fn test_setters() {
         "`td0_decimal_bounded` Bounded field setter should set value."
     );
     assert_matches!(
-        ts.set_field_value("td0_decimal_bounded", &td0_core::TD0Value::Decimal(260.0)),
+        ts.set_field_value("td0_decimal_bounded", td0_core::TD0Value::Decimal(260.0)),
         Ok { .. },
         "`td0_decimal_bounded` Bounded field setter should accept max value."
     );
@@ -427,12 +428,12 @@ fn test_setters() {
     );
     let val_before = ts.field_value("td0_decimal_bounded");
     assert_matches!(
-        ts.set_field_value("td0_decimal_bounded", &td0_core::TD0Value::Decimal(19.9999)),
+        ts.set_field_value("td0_decimal_bounded", td0_core::TD0Value::Decimal(19.9999)),
         Err(TD0Error::OutOfRangeDecimal(..)),
         "`td0_decimal_bounded` Bounded field setter should Error if less than min."
     );
     assert_matches!(
-        ts.set_field_value("td0_decimal_bounded", &td0_core::TD0Value::Decimal(260.1)),
+        ts.set_field_value("td0_decimal_bounded", td0_core::TD0Value::Decimal(260.1)),
         Err(TD0Error::OutOfRangeDecimal(..)),
         "`td0_decimal_bounded` Bounded field setter should Error if greater than max."
     );
@@ -444,7 +445,7 @@ fn test_setters() {
 
     // td0_decimal_u8: #[td0_field(field_type = "TD0Decimal", min = 0.1, max = 8.0)]
     assert_matches!(
-        ts.set_field_value("td0_decimal_u8", &td0_core::TD0Value::Decimal(0.1)),
+        ts.set_field_value("td0_decimal_u8", td0_core::TD0Value::Decimal(0.1)),
         Ok { .. },
         "`td0_decimal_u8` Bounded field setter should accept min value."
     );
@@ -454,7 +455,7 @@ fn test_setters() {
         "`td0_decimal_u8` Bounded field setter should set value."
     );
     assert_matches!(
-        ts.set_field_value("td0_decimal_u8", &td0_core::TD0Value::Decimal(8.0)),
+        ts.set_field_value("td0_decimal_u8", td0_core::TD0Value::Decimal(8.0)),
         Ok { .. },
         "`td0_decimal_u8` Bounded field setter should accept max value."
     );
@@ -465,12 +466,12 @@ fn test_setters() {
     );
     let val_before = ts.field_value("td0_decimal_u8");
     assert_matches!(
-        ts.set_field_value("td0_decimal_u8", &td0_core::TD0Value::Decimal(0.08)),
+        ts.set_field_value("td0_decimal_u8", td0_core::TD0Value::Decimal(0.08)),
         Err(TD0Error::OutOfRangeDecimal(..)),
         "`td0_decimal_u8` Bounded field setter should Error if less than min."
     );
     assert_matches!(
-        ts.set_field_value("td0_decimal_u8", &td0_core::TD0Value::Decimal(8.01)),
+        ts.set_field_value("td0_decimal_u8", td0_core::TD0Value::Decimal(8.01)),
         Err(TD0Error::OutOfRangeDecimal(..)),
         "`td0_decimal_u8` Bounded field setter should Error if greater than max."
     );
@@ -484,7 +485,7 @@ fn test_setters() {
     assert_matches!(
         ts.set_field_value(
             "space_padded_text",
-            &td0_core::TD0Value::Text("Testing: 1..2..3".to_string())
+            td0_core::TD0Value::Text("Testing: 1..2..3".to_string())
         ),
         Ok { .. },
         "`space_padded_text` Setter should accept maximum length string."
@@ -497,7 +498,7 @@ fn test_setters() {
     assert_matches!(
         ts.set_field_value(
             "space_padded_text",
-            &td0_core::TD0Value::Text("One char too long".to_string())
+            td0_core::TD0Value::Text("One char too long".to_string())
         ),
         Err(TD0Error::OutOfRange(..)),
         "`space_padded_text` Setter should Error if string too long."
@@ -510,7 +511,7 @@ fn test_setters() {
     assert_matches!(
         ts.set_field_value(
             "space_padded_text",
-            &td0_core::TD0Value::Text("Short test".to_string())
+            td0_core::TD0Value::Text("Short test".to_string())
         ),
         Ok { .. },
         "`space_padded_text` Setter should accept less than maximum length string."
@@ -528,10 +529,7 @@ fn test_setters() {
         "`space_padded_text` Setter should pad a short string."
     );
     assert_matches!(
-        ts.set_field_value(
-            "space_padded_text",
-            &td0_core::TD0Value::Text(String::new())
-        ),
+        ts.set_field_value("space_padded_text", td0_core::TD0Value::Text(String::new())),
         Ok { .. },
         "`space_padded_text` Setter should set value on an empty string."
     );
@@ -552,7 +550,7 @@ fn test_setters() {
     assert_matches!(
         ts.set_field_value(
             "zero_padded_text",
-            &td0_core::TD0Value::Text("Short test".to_string())
+            td0_core::TD0Value::Text("Short test".to_string())
         ),
         Ok { .. },
         "`space_padded_text` Setter should pad a short string."
@@ -573,12 +571,12 @@ fn test_setters() {
 
     // u16_bounded: #[td0_field(field_type = "U16", min = 257, max = 65500)]
     assert_matches!(
-        ts.set_field_value("u16_bounded", &td0_core::TD0Value::U16(257)),
+        ts.set_field_value("u16_bounded", td0_core::TD0Value::U16(257)),
         Ok { .. },
         "`u16_bounded` Bounded field setter should accept min value."
     );
     assert_matches!(
-        ts.set_field_value("u16_bounded", &td0_core::TD0Value::U16(65500)),
+        ts.set_field_value("u16_bounded", td0_core::TD0Value::U16(65500)),
         Ok { .. },
         "`u16_bounded` Bounded field setter should accept max value."
     );
@@ -589,12 +587,12 @@ fn test_setters() {
     );
     let val_before = ts.field_value("u16_bounded");
     assert_matches!(
-        ts.set_field_value("u16_bounded", &td0_core::TD0Value::U16(256)),
+        ts.set_field_value("u16_bounded", td0_core::TD0Value::U16(256)),
         Err(TD0Error::OutOfRange(..)),
         "`u16_bounded` Bounded field setter should Error if less than min."
     );
     assert_matches!(
-        ts.set_field_value("u16_bounded", &td0_core::TD0Value::U16(65501)),
+        ts.set_field_value("u16_bounded", td0_core::TD0Value::U16(65501)),
         Err(TD0Error::OutOfRange(..)),
         "`u16_bounded` Bounded field setter should Error if greater than max."
     );
@@ -606,12 +604,12 @@ fn test_setters() {
 
     // u32_bounded: #[td0_field(field_type = "U16", min = 65537, max = 655_377)]
     assert_matches!(
-        ts.set_field_value("u32_bounded", &td0_core::TD0Value::U32(65537)),
+        ts.set_field_value("u32_bounded", td0_core::TD0Value::U32(65537)),
         Ok { .. },
         "`u32_bounded` Bounded field setter should accept min value."
     );
     assert_matches!(
-        ts.set_field_value("u32_bounded", &td0_core::TD0Value::U32(655_377)),
+        ts.set_field_value("u32_bounded", td0_core::TD0Value::U32(655_377)),
         Ok { .. },
         "`u32_bounded` Bounded field setter should accept max value."
     );
@@ -622,12 +620,12 @@ fn test_setters() {
     );
     let val_before = ts.field_value("u32_bounded");
     assert_matches!(
-        ts.set_field_value("u32_bounded", &td0_core::TD0Value::U32(65536)),
+        ts.set_field_value("u32_bounded", td0_core::TD0Value::U32(65536)),
         Err(TD0Error::OutOfRange(..)),
         "`u32_bounded` Bounded field setter should Error if less than min."
     );
     assert_matches!(
-        ts.set_field_value("u32_bounded", &td0_core::TD0Value::U32(655_378)),
+        ts.set_field_value("u32_bounded", td0_core::TD0Value::U32(655_378)),
         Err(TD0Error::OutOfRange(..)),
         "`u32_bounded` Bounded field setter should Error if greater than max."
     );
@@ -639,12 +637,12 @@ fn test_setters() {
 
     //u8_unbounded: #[td0_field(field_type = "U8")]
     assert_matches!(
-        ts.set_field_value("u8_unbounded", &td0_core::TD0Value::U8(u8::MIN)),
+        ts.set_field_value("u8_unbounded", td0_core::TD0Value::U8(u8::MIN)),
         Ok { .. },
         "`u8_unbounded` Bounded field setter should accept min value."
     );
     assert_matches!(
-        ts.set_field_value("u8_unbounded", &td0_core::TD0Value::U8(u8::MAX)),
+        ts.set_field_value("u8_unbounded", td0_core::TD0Value::U8(u8::MAX)),
         Ok { .. },
         "`u8_unbounded` Bounded field setter should accept max value."
     );
@@ -656,12 +654,12 @@ fn test_setters() {
 
     // u8_bounded_min_only: #[td0_field(field_type = "U8", min = 27)]
     assert_matches!(
-        ts.set_field_value("u8_bounded_min_only", &td0_core::TD0Value::U8(27)),
+        ts.set_field_value("u8_bounded_min_only", td0_core::TD0Value::U8(27)),
         Ok { .. },
         "`u8_bounded_min_only` Bounded_min_only field setter should accept min value."
     );
     assert_matches!(
-        ts.set_field_value("u8_bounded_min_only", &td0_core::TD0Value::U8(26)),
+        ts.set_field_value("u8_bounded_min_only", td0_core::TD0Value::U8(26)),
         Err(TD0Error::OutOfRange(..)),
         "`u8_bounded_min_only` Bounded_min_only field setter should Error if less than min."
     );
@@ -672,31 +670,31 @@ fn test_setters() {
         "`u8_bounded_min_only` Setter should not change value on Error."
     );
     assert_matches!(
-        ts.set_field_value("u8_bounded_min_only", &td0_core::TD0Value::U8(u8::MAX)),
+        ts.set_field_value("u8_bounded_min_only", td0_core::TD0Value::U8(u8::MAX)),
         Ok { .. },
         "`u8_bounded_min_only` Bounded_min_only field setter should accept u8 max value."
     );
 
     // u8_bounded_max_only: u8 #[td0_field(field_type = "U8", max = 142)]
     assert_matches!(
-        ts.set_field_value("u8_bounded_max_only", &td0_core::TD0Value::U8(142)),
+        ts.set_field_value("u8_bounded_max_only", td0_core::TD0Value::U8(142)),
         Ok { .. },
         "`u8_bounded_max_only` Bounded_max_only field setter should accept max value."
     );
     assert_matches!(
-        ts.set_field_value("u8_bounded_max_only", &td0_core::TD0Value::U8(143)),
+        ts.set_field_value("u8_bounded_max_only", td0_core::TD0Value::U8(143)),
         Err(TD0Error::OutOfRange(..)),
         "`u8_bounded_max_only` Bounded_max_only field setter should Error if greater than max."
     );
     assert_matches!(
-        ts.set_field_value("u8_bounded_max_only", &td0_core::TD0Value::U8(u8::MIN)),
+        ts.set_field_value("u8_bounded_max_only", td0_core::TD0Value::U8(u8::MIN)),
         Ok { .. },
         "`u8_bounded_max_only` Bounded_max_only field setter should accept u8 min value."
     );
 
     // volume_field: #[td0_field(field_type = "Volume")]
     assert_matches!(
-        ts.set_field_value("volume_field", &td0_core::TD0Value::Decimal(VOLUME_MIN)),
+        ts.set_field_value("volume_field", td0_core::TD0Value::Decimal(VOLUME_MIN)),
         Ok { .. },
         "`volume_field` Bounded field setter should accept min value."
     );
@@ -707,7 +705,7 @@ fn test_setters() {
     );
 
     assert_matches!(
-        ts.set_field_value("volume_field", &td0_core::TD0Value::Decimal(VOLUME_MAX)),
+        ts.set_field_value("volume_field", td0_core::TD0Value::Decimal(VOLUME_MAX)),
         Ok { .. },
         "`volume_field` Bounded field setter should accept max value."
     );
@@ -721,7 +719,7 @@ fn test_setters() {
     assert_matches!(
         ts.set_field_value(
             "volume_field",
-            &td0_core::TD0Value::Decimal(VOLUME_MIN - 0.01)
+            td0_core::TD0Value::Decimal(VOLUME_MIN - 0.01)
         ),
         Err(TD0Error::OutOfRangeDecimal(..)),
         "`volume_field` Bounded field setter should Error if less than min."
@@ -729,7 +727,7 @@ fn test_setters() {
     assert_matches!(
         ts.set_field_value(
             "volume_field",
-            &td0_core::TD0Value::Decimal(VOLUME_MAX + 0.01)
+            td0_core::TD0Value::Decimal(VOLUME_MAX + 0.01)
         ),
         Err(TD0Error::OutOfRangeDecimal(..)),
         "`volume_field` Bounded field setter should Error if greater than max."
@@ -742,7 +740,7 @@ fn test_setters() {
     assert_matches!(
         ts.set_field_value(
             "volume_field",
-            &td0_core::TD0Value::Decimal(
+            td0_core::TD0Value::Decimal(
                 Volume::try_from(VOLUME_MINUS_INF_I16)
                     .expect(TEST_BROKEN)
                     .into()
@@ -765,7 +763,7 @@ fn test_setters() {
         "`volume_field` to_string() should handle VOLUME_MINUS_INF."
     );
     assert_matches!(
-        ts.set_field_value("volume_field", &td0_core::TD0Value::Decimal(-12.5)),
+        ts.set_field_value("volume_field", td0_core::TD0Value::Decimal(-12.5)),
         Ok { .. },
         "`volume_field` Setter should accept in range value."
     );
@@ -782,17 +780,17 @@ fn test_setters() {
 
     // repeat_field_1_val, _2_val, _3_val #[td0_field(field_type = "U8")]
     assert_matches!(
-        ts.set_field_value("repeat_field_1_val", &td0_core::TD0Value::U8(23)),
+        ts.set_field_value("repeat_field_1_val", td0_core::TD0Value::U8(23)),
         Ok { .. },
         "`repeat_field_1_val` Setter works on repeat field."
     );
     assert_matches!(
-        ts.set_field_value("repeat_field_2_val", &td0_core::TD0Value::U8(24)),
+        ts.set_field_value("repeat_field_2_val", td0_core::TD0Value::U8(24)),
         Ok { .. },
         "`repeat_field_2_val` Setter works on repeat field."
     );
     assert_matches!(
-        ts.set_field_value("repeat_field_3_val", &td0_core::TD0Value::U8(25)),
+        ts.set_field_value("repeat_field_3_val", td0_core::TD0Value::U8(25)),
         Ok { .. },
         "`repeat_field_3_val` Setter works on repeat field."
     );
@@ -814,12 +812,12 @@ fn test_setters() {
 
     // item_1_val_1, item_2_val_1 #[repeat_section(count=2, prefix_format = "item_{}")]
     assert_matches!(
-        ts.set_field_value("item_1_val_1", &td0_core::TD0Value::U8(23)),
+        ts.set_field_value("item_1_val_1", td0_core::TD0Value::U8(23)),
         Ok { .. },
         "`item_1_val_1` Setter works on repeat section field."
     );
     assert_matches!(
-        ts.set_field_value("item_2_val_1", &td0_core::TD0Value::U8(24)),
+        ts.set_field_value("item_2_val_1", td0_core::TD0Value::U8(24)),
         Ok { .. },
         "`item_2_val_1` Setter works on repeat section field."
     );
@@ -832,5 +830,178 @@ fn test_setters() {
         ts.field_value("item_2_val_1"),
         Some(td0_core::TD0Value::U8(24)),
         "`item_2_val_1` Getter works on repeat section field and set/getters are independent."
+    );
+}
+
+#[test]
+fn test_text_getter_into_setter() {
+    let mut source = TestStruct::default();
+    let mut dest = TestStruct::default();
+
+    let val = TD0Value::new_text_value("Test 3 Text");
+    source
+        .set_field_value("space_padded_text", val.clone())
+        .expect("can set Text field");
+    dest.set_field_value(
+        "space_padded_text",
+        source
+            .field_value("space_padded_text")
+            .expect("must be able to retrieve value."),
+    )
+    .expect("setter from getter works.");
+    assert_eq!(
+        dest.field_value("space_padded_text"),
+        Some(val),
+        "Setting `space_padded_text` from a getter should work."
+    );
+}
+
+#[test]
+fn test_u8_getter_into_setter_raw() {
+    let mut source = TestStruct::default();
+    let mut dest = TestStruct::default();
+
+    let val_raw: TD0ValueRaw = TD0ValueRaw::U8(95);
+    source
+        .set_field_value_raw("u8_unbounded", val_raw.clone())
+        .unwrap();
+    dest.set_field_value_raw(
+        "u8_unbounded",
+        source.field_value_raw("u8_unbounded").unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        dest.field_value_raw("u8_unbounded"),
+        Some(val_raw),
+        "Setting raw `u8_unbounded` from a raw getter should work."
+    );
+}
+
+#[test]
+fn test_u16_getter_into_setter_raw() {
+    let mut source = TestStruct::default();
+    let mut dest = TestStruct::default();
+
+    let val_raw: TD0ValueRaw = TD0ValueRaw::U16(95);
+    source
+        .set_field_value_raw("u16_unbounded", val_raw.clone())
+        .unwrap();
+    dest.set_field_value_raw(
+        "u16_unbounded",
+        source.field_value_raw("u16_unbounded").unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        dest.field_value_raw("u16_unbounded"),
+        Some(val_raw),
+        "Setting raw `u16_unbounded` from a raw getter should work."
+    );
+}
+
+#[test]
+fn test_volume_getter_into_setter() {
+    let mut source = TestStruct::default();
+    let mut dest = TestStruct::default();
+
+    let val: TD0Value = TD0Value::Decimal(-4.5);
+    source.set_field_value("volume_field", val.clone()).unwrap();
+    dest.set_field_value("volume_field", source.field_value("volume_field").unwrap())
+        .unwrap();
+    assert_eq!(
+        dest.field_value("volume_field"),
+        Some(val),
+        "Setting raw `volume_field` from a raw getter should work."
+    );
+}
+
+#[test]
+fn test_text_getter_into_setter_raw() {
+    let mut source = TestStruct::default();
+    let mut dest = TestStruct::default();
+
+    let val_raw: TD0ValueRaw = TD0ValueRaw::Slice(Box::new(*b"This is a test. "));
+    source
+        .set_field_value_raw("space_padded_text", val_raw.clone())
+        .unwrap();
+    dest.set_field_value_raw(
+        "space_padded_text",
+        source.field_value_raw("space_padded_text").unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        dest.field_value_raw("space_padded_text"),
+        Some(val_raw),
+        "Setting raw `space_padded_text` from a raw getter should work."
+    );
+}
+
+#[test]
+fn test_enumstr_getter_into_setter() {
+    let mut source = TestStruct::default();
+    let mut dest = TestStruct::default();
+
+    let val = TD0Value::new_text_value("Test_3_EnumStr");
+    source
+        .set_field_value("enumstr_field", val.clone())
+        .expect("can set EnumStr field");
+    dest.set_field_value(
+        "enumstr_field",
+        source
+            .field_value("enumstr_field")
+            .expect("must be able to retrieve value."),
+    )
+    .expect("setter from getter works.");
+    assert_eq!(
+        dest.field_value("enumstr_field"),
+        Some(val),
+        "Setting `enumstr_field` from a getter should work."
+    );
+}
+
+#[test]
+fn test_enumstr_getter_into_setter_raw() {
+    let mut source = TestStruct::default();
+    let mut dest = TestStruct::default();
+
+    let val_raw: TD0ValueRaw = TD0ValueRaw::U8(0);
+    source
+        .set_field_value_raw("enumstr_field", val_raw.clone())
+        .unwrap();
+    dest.set_field_value_raw(
+        "enumstr_field",
+        source.field_value_raw("enumstr_field").unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        dest.field_value_raw("enumstr_field"),
+        Some(val_raw),
+        "Setting raw `enumstr_field` from a raw getter should work."
+    );
+}
+
+#[test]
+fn test_setter_datatype_errors() {
+    let mut ts = TestStruct::default();
+
+    // EnumStr field:
+    let result: TD0Result<()> = ts.set_field_value("space_padded_text", TD0Value::U8(23));
+    assert_matches!(result, Err(TD0Error::DataType(_)));
+    let err_text = result.err().unwrap().to_string();
+    assert!(
+        err_text.contains("Expected Text"),
+        "Got wrong message: \"{err_text}\""
+    );
+}
+
+#[test]
+fn test_setter_raw_datatype_errors() {
+    let mut ts = TestStruct::default();
+
+    let result: TD0Result<()> = ts.set_field_value_raw("space_padded_text", TD0ValueRaw::U8(23));
+    assert_matches!(result, Err(TD0Error::DataType(_)));
+    let err_text = result.err().unwrap().to_string();
+    assert!(
+        err_text.contains("Expected Slice"),
+        "Got wrong message: \"{err_text}\""
     );
 }
