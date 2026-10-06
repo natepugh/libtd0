@@ -231,8 +231,8 @@ impl TryFrom<&str> for TD0DeviceModel {
 
     fn try_from(val: &str) -> Result<Self, Self::Error> {
         match val {
-            "SPDSXPro" => Ok(Self::SPDSXPro),
-            "Unknown" => Ok(Self::Unknown),
+            "SSXP" => Ok(Self::SPDSXPro),
+            "UNKN" => Ok(Self::Unknown),
             _ => Err(TD0Error::InvalidInput(
                 "input string is not a valid TD0DeviceModel.".to_string(),
             )),

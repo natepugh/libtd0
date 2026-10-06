@@ -264,7 +264,7 @@ where
     let start = r1.start.max(r2.start);
     let end = r1.end.min(r2.end);
 
-    if start > end { None } else { Some(start..end) }
+    if start >= end { None } else { Some(start..end) }
 }
 
 pub fn checksum_bytes_to_string(val: &[u8]) -> String {

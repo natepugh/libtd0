@@ -327,4 +327,11 @@ mod tests {
         assert_eq!(manifest.size_actual(), 128);
         assert_eq!(manifest.size_calculated(), 128);
     }
+
+    #[test]
+    fn test_validate_load() {
+        let td0file = SSXPTD0File::try_from_bytes(&get_test_data(PathBuf::from("new_v1_10.TD0")))
+            .expect("or test is broken");
+        assert!(td0file.validate_load().is_ok());
+    }
 }

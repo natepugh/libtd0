@@ -698,7 +698,12 @@ impl SSXPTD0File {
             // than relying on this file's cached chunk objects.
             //
             // Parsing it is enough.
-            let _ = chunk_header_ref_from_buf(&self.buf, tag)?;
+            let _ = chunk_header_ref_from_buf(&self.buf, tag).map_err(|_| {
+                TD0Error::ValidationFailed(format!(
+                    "Chunk header position in manifest is incorrect for `{}`",
+                    tag.tag()
+                ))
+            })?;
         }
 
         Ok(())
@@ -736,7 +741,12 @@ impl SSXPTD0File {
 
     fn validate_chunk_headers_chunks_exist(&self) -> TD0Result<()> {
         for tag in self.meta.tags.values() {
-            let chunk_header = chunk_header_ref_from_buf(&self.buf, tag)?;
+            let chunk_header = chunk_header_ref_from_buf(&self.buf, tag).map_err(|_| {
+                TD0Error::ValidationFailed(format!(
+                    "chunk header doesn't exist for tag `{}`",
+                    tag.tag()
+                ))
+            })?;
 
             // Calculate the pos of the first element of the next part of the file.
             // (either a chunk or the checksum.)
@@ -755,11 +765,11 @@ impl SSXPTD0File {
 
     fn validate_checksum(&self) -> TD0Result<()> {
         if self.calc_checksum()
-            != self
-                .read_checksum()
-                .expect("file has enough bytes for a checksum.")
+            != self.read_checksum().ok_or(TD0Error::ValidationFailed(
+                "file is too small for a checksum.".to_string(),
+            ))?
         {
-            Err(TD0Error::FileParse("checksum mismatch".to_string()))
+            Err(TD0Error::ValidationFailed("checksum mismatch".to_string()))
         } else {
             Ok(())
         }
@@ -767,7 +777,7 @@ impl SSXPTD0File {
 
     fn validate_is_not_dirty(&self) -> TD0Result<()> {
         if self.dirty {
-            Err(TD0Error::FileParse(
+            Err(TD0Error::ValidationFailed(
                 "file must be finalized before saving. Call TD0File::finalize() first.".to_string(),
             ))
         } else {
