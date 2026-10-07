@@ -15,7 +15,7 @@ Use the `td0` crate rather than using this crate directly.
 """
 license = "GPL-3.0-or-later"
 repository = "https://github.com/natepugh/libtd0"
-keywords = ["td0", "sampler", "sample pad", "drum kit"]
+keywords = ["td0", "sample_pad"]
 categories = ["parsing", "parser-implementations"]
 
 [dependencies]

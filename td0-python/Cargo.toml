@@ -11,7 +11,7 @@ authors = ["Nathan Pugh <natepugh@gmail.com>"]
 description = "Python3 bindings for td0, a parsing and editing library for the .TD0 e-kit/sample pad backup file format."
 license = "GPL-3.0-or-later"
 repository = "https://github.com/natepugh/libtd0"
-keywords = ["td0", "sampler", "sample pad", "drum kit", "Python"]
+keywords = ["td0", "sample_pad", "python"]
 categories = ["parsing", "parser-implementations"]
 
 [lib]

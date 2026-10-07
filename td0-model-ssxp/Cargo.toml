@@ -16,7 +16,7 @@ the `model-spdsx-pro` feature compiled in. (as is the default.)
 """
 license = "GPL-3.0-or-later"
 repository = "https://github.com/natepugh/libtd0"
-keywords = ["td0", "Roland", "sample pad", "SPD-SX Pro"]
+keywords = ["td0", "sample_pad", "spd-sx-pro"]
 categories = ["parsing", "parser-implementations"]
 
 [dependencies]
