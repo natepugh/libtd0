@@ -1,0 +1,28 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build non-python
+      run: cargo build --workspace --exclude=td0-python
+    - name: Run tests
+      run: cargo test --verbose
+    - name: build-pytd0
+      # You may pin to the exact commit or the version.
+      # uses: PyO3/maturin-action@6c20e5e8673d2470a20e14adf067b68db6fee644
+      uses: PyO3/maturin-action@v1.43.0
+      with:
+        args: --generate-stubs
+        rust-toolchain: stable
+        rustup-components: rustc,cargo,rust-std
+        working-directory: ./td0-python/
+        
