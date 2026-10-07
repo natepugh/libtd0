@@ -23,6 +23,5 @@ jobs:
       with:
         args: --generate-stubs
         rust-toolchain: stable
-        rustup-components: rustc,cargo,rust-std
         working-directory: ./td0-python/
         
