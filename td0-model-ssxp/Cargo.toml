@@ -20,8 +20,9 @@ keywords = ["td0", "Roland", "sample pad", "SPD-SX Pro"]
 categories = ["parsing", "parser-implementations"]
 
 [dependencies]
-td0-core = { path = "../td0-core" }
-td0-derive = { path = "../td0-derive" }
+td0-core = { path = "../td0-core", version = "0.1.0" }
+td0-derive = { path = "../td0-derive", version = "0.1.0" }
+
 md-5 = "0.11.0"
 zerocopy = "0.8.60"
 zerocopy-derive = "0.8.60"

@@ -21,8 +21,8 @@ crate-type = ["cdylib"]
 doctest = false
 
 [dependencies]
-td0-core = { path = "../td0-core" }
-td0 = { path = "../td0" }
+td0-core = { path = "../td0-core", version = "0.1.0" }
+td0 = { path = "../td0", version = "0.1.0" }
 
 pyo3 = { version = "0.29.3", features = ["abi3", "abi3t", "experimental-inspect", "rust_decimal"] }
 rust_decimal = "1.43.0"

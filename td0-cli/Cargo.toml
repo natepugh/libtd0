@@ -21,8 +21,8 @@ path = "src/main.rs"
 
 [dependencies]
 # td0 dependencies
-td0 = { path = "../td0" }
-td0-core = { path = "../td0-core", features=["serde"] }
+td0 = { path = "../td0", version = "0.1.0" }
+td0-core = { path = "../td0-core", version = "0.1.0", features=["serde"] }
 
 # External dependencies
 clap = { version = "4.6.7", features = ["derive"] }

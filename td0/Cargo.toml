@@ -25,9 +25,9 @@ model-spdsx-pro = [
 
 [dependencies]
 # Internal crates
-td0-core = { path = "../td0-core" }
-td0-derive = { path = "../td0-derive" }
-td0-model-ssxp = { path = "../td0-model-ssxp", optional = true }
+td0-core = { path = "../td0-core", version = "0.1.0" }
+td0-derive = { path = "../td0-derive", version = "0.1.0" }
+td0-model-ssxp = { path = "../td0-model-ssxp", optional = true, version = "0.1.0" }
 
 # External dependencies
 serde = { version = "1.0.229", features = ["derive"], optional = true }
@@ -35,6 +35,5 @@ serde_json = { version = "1.0.151", optional = true }
 zerocopy = "0.8.60"
 zerocopy-derive = "0.8.60"
 
-### TODO: Uncomment these clippy configs once major features are added.
 [lints]
 workspace = true
