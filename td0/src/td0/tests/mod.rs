@@ -984,7 +984,7 @@ fn test_setter_datatype_errors() {
     assert_matches!(result, Err(TD0Error::DataType(_)));
     let err_text = result.err().unwrap().to_string();
     assert!(
-        err_text.contains("Expected Text"),
+        err_text.contains("Expected `Text`"),
         "Got wrong message: \"{err_text}\""
     );
 }
@@ -997,7 +997,7 @@ fn test_setter_raw_datatype_errors() {
     assert_matches!(result, Err(TD0Error::DataType(_)));
     let err_text = result.err().unwrap().to_string();
     assert!(
-        err_text.contains("Expected Slice"),
+        err_text.contains("Expected `Slice`"),
         "Got wrong message: \"{err_text}\""
     );
 }

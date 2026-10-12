@@ -136,8 +136,16 @@ impl TryFrom<&AttrKeyValue> for String {
 }
 
 impl AttrKeyValue {
+    pub fn key(&self) -> &Ident {
+        &self.key
+    }
+
     pub fn val(&self) -> &Lit {
         &self.val
+    }
+
+    pub fn into_pair(self) -> (Ident, Lit) {
+        (self.key, self.val)
     }
 }
 
@@ -299,4 +307,28 @@ pub fn get_field_native_type(field: &Field) -> Option<NativeType> {
         }
         _ => None,
     }
+}
+
+pub fn const_name_from_ident(val: &Ident) -> String {
+    // NOTE: Assumes ASCII identifiers!
+    let mut output: String = String::new();
+    let val_string = val.to_string();
+    let mut val_chars = val_string.chars();
+    let mut last_char = val_chars.next().unwrap();
+
+    output.push(last_char.to_ascii_uppercase());
+    for char in val_chars {
+        // Add underscores before upper-case chars to convert from
+        // PascalCase or camelCase to CONST_CASE.
+        //
+        // If the previous char was also uppercase (e.g. TD0File,) omit the
+        // underscore. (TD0FILE, not T_D_0FILE). Digits and symbols are effectively
+        // uppercase for this function.
+        if !char.is_lowercase() && last_char.is_lowercase() {
+            output.push('_');
+        }
+        output.push(char.to_ascii_uppercase());
+        last_char = char;
+    }
+    output
 }

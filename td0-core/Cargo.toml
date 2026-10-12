@@ -27,6 +27,7 @@ zerocopy-derive = "0.8.60"
 #! ### Optional dependencies
 ## Enable this feature to enable serde serialization of [`TD0Manifest`] objects.
 serde = { version = "1.0.229", features = ["derive"], optional = true }
+td0-derive = { version = "0.1.0", path = "../td0-derive" }
 
 [dev-dependencies]
 td0 = { path = "../td0" }

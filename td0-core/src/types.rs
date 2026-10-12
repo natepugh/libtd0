@@ -7,11 +7,12 @@ use crate::result::TD0Result;
 #[cfg(feature = "serde")]
 use crate::helpers::serde_checksum_bytes_to_string;
 
-/// Data accessors for individual data chunk items. (e.g. a single Kit configuration or
-/// a single sample metadata tag.) Contains methods to describe available fields, read
-/// those fields' values and write those values.
+/// Data accessors for individual data chunk items. (e.g. a single Kit
+/// configuration or a single sample metadata tag.) Contains methods to
+/// describe available fields, and read or modify those fields' values.
 ///
-/// TD0ChunkItems aren't created directly, but rather retrieved from a [TD0File] instance.
+/// TD0ChunkItem instances aren't created directly, but rather retrieved from
+/// a [TD0File] instance.
 pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// Return a borrowed reference to this object's buffer.
     ///
@@ -254,7 +255,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// # Warning!
     /// The intended use of this method is as an escape hatch during development and debugging.
     /// It does not perform any of the data validation that
-    /// [set_field_value](TD0ChunkItem::set_field_value) does and is inhereently unsafe to
+    /// [set_field_value](TD0ChunkItem::set_field_value) does and is inherently unsafe to
     /// use for editing any backup file that may get loaded into an actual physical device.
     ///
     /// THE AUTHOR(S) OF THIS LIBRARY ASSUME NO RESPONSIBILITY FOR YOU BRICKING YOUR SAMPLE

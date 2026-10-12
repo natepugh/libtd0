@@ -3,1133 +3,281 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use core::convert::Into;
+use std::collections::{HashMap, HashSet};
+
 use num_traits::Bounded;
-use proc_macro2::{Literal, Span, TokenStream};
-use quote::{format_ident, quote};
-use std::ops::Mul;
-use syn::{Arm, Expr, LitFloat, Stmt, parse_quote};
-use syn::{Attribute, Field, Ident, ImplItemFn, ItemStruct, parse2};
-
-use crate::common::NativeType;
-
-use super::common::{
-    AttrKeyValueList, get_field_native_type, get_named_attr, parse_kv_list, push_arm_to_fn_match,
-    validate_attr_list_required_attrs, validate_attr_list_valid_attrs,
+use proc_macro2::{Span, TokenStream};
+use quote::{ToTokens, format_ident, quote};
+use syn::spanned::Spanned as _;
+use syn::{
+    Arm, Attribute, Expr, Field, FieldValue, Fields, Ident, ImplGenerics, ImplItemFn, ItemStruct,
+    Lit, Path, TypeGenerics, WhereClause, parse_macro_input, parse_quote, parse2,
 };
 
+use super::common::{
+    AttrKeyValue, AttrKeyValueList, NativeType, const_name_from_ident, get_field_native_type,
+    parse_kv_list, push_arm_to_fn_match,
+};
+
+const DECIMAL_REQUIRED: [&str; 2] = ["min", "max"];
+const DECIMAL_VALID: [&str; 2] = ["min", "max"];
+const ENUMSTR_REQUIRED: [&str; 1] = ["collection"];
+const ENUMSTR_VALID: [&str; 1] = ["collection"];
+const NUMBER_REQUIRED: [&str; 0] = [];
+const NUMBER_VALID: [&str; 2] = ["min", "max"];
+const SLICE_REQUIRED: [&str; 0] = [];
+const SLICE_VALID: [&str; 0] = [];
+const TEXT_REQUIRED: [&str; 0] = [];
+const TEXT_VALID: [&str; 1] = ["pad_byte"];
+const VOLUME_REQUIRED: [&str; 0] = [];
+const VOLUME_VALID: [&str; 0] = [];
+
+type AttrHashMap = HashMap<String, AttrKeyValue>;
+
+// A field type that a user can declare in a field attribute of a TD0Struct.
+#[derive(Debug)]
+enum FieldType {
+    EnumStr { collection: String },
+    I8 { min: Option<i8>, max: Option<i8> },
+    I16 { min: Option<i16>, max: Option<i16> },
+    Slice,
+    Text { pad_byte: Option<u8> },
+    TD0Decimal { min: f32, max: f32 },
+    U8 { min: Option<u8>, max: Option<u8> },
+    U16 { min: Option<u16>, max: Option<u16> },
+    U32 { min: Option<u32>, max: Option<u32> },
+    Volume,
+}
+
+/// Metadata about a syn::ItemStruct, extracted for use in helper functions.
+struct ItemStructMeta<'a> {
+    pub ident: &'a Ident,
+    pub impl_generics: ImplGenerics<'a>,
+    pub type_generics: TypeGenerics<'a>,
+    pub where_clause: Option<&'a WhereClause>,
+    pub core_lib_path: &'a Path,
+}
+
+impl<'a> ItemStructMeta<'a> {
+    fn new_from_struct(source: &'a ItemStruct, core_lib_path: &'a Path) -> Self {
+        let (impl_generics, type_generics, where_clause) = source.generics.split_for_impl();
+        Self {
+            ident: &source.ident,
+            impl_generics,
+            type_generics,
+            where_clause,
+            core_lib_path,
+        }
+    }
+}
+
+struct TD0Field {
+    pub ident: Ident,
+    pub ident_str: String,
+    pub field_type: FieldType,
+    pub native_type: NativeType,
+}
+
+/// The derive macro that creates TD0ChunkItem and TD0ChunkItemMut implementations.
 pub fn td0_struct_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = TokenStream::from(input);
+    //let input = TokenStream::from(input);
+    let input = parse_macro_input!(input);
     let source: ItemStruct = parse2(input).expect("Error parsing input struct!");
 
-    let mut output: TokenStream = td0_struct_gen_impl_default(&source);
-    output.extend(td0_struct_gen_td0_chunk_item_impl(&source));
-    output.extend(td0_struct_gen_from_u8_slice_impl(&source));
+    let core_lib_path: Path = match core_lib_path_from_struct(&source) {
+        Ok(Some(path)) => path,
+        Ok(None) => parse_quote!(td0_core),
+        Err(error) => {
+            return error.to_compile_error().into();
+        }
+    };
+
+    let source_clone = source.clone();
+    let source_meta: ItemStructMeta =
+        ItemStructMeta::new_from_struct(&source_clone, &core_lib_path);
+
+    let fields = match parse_struct_fields(source) {
+        Ok(parsed) => parsed,
+        Err(errors) => return errors.to_compile_error().into(),
+    };
+
+    let mut output: TokenStream = TokenStream::new();
+    match build_impl_td0_chunkitem(&fields, &source_meta) {
+        Ok(impl_stream) => output.extend(impl_stream),
+        Err(error) => return error.to_compile_error().into(),
+    }
+    output.extend(build_trait_chunkitem_set_value_helper(
+        &source_clone.ident,
+        &core_lib_path,
+    ));
+    output.extend(build_impl_td0_chunkitem_set_value_helper(&source_meta));
+    match build_impl_default(&fields, &source_meta) {
+        Ok(impl_stream) => output.extend(impl_stream),
+        Err(error) => return error.to_compile_error().into(),
+    }
+    //let output = TokenStream::new();
     output.into()
 }
 
-fn td0_field_validate_allowed_attrs(
-    kv_list: &AttrKeyValueList,
-    valid_names: &[&str],
-) -> syn::Result<()> {
-    let mut my_valid_names: Vec<&str> = Vec::from(valid_names);
-    my_valid_names.insert(0, "field_type");
-    validate_attr_list_valid_attrs(kv_list, &my_valid_names[..])
-}
-
-fn td0_field_validate_required_attrs(
-    kv_list: &AttrKeyValueList,
-    required_names: &[&str],
-    source_attr: &Attribute,
-) -> syn::Result<()> {
-    let mut my_required_names: Vec<&str> = Vec::from(required_names);
-    my_required_names.insert(0, "field_type");
-    validate_attr_list_required_attrs(kv_list, &my_required_names[..], source_attr)
-}
-
-fn td0_field_parse_and_validate_kv_list(
-    attr: &Attribute,
-    required_names: &[&str],
-    valid_names: &[&str],
-) -> syn::Result<AttrKeyValueList> {
-    let kv_list = parse_kv_list(attr)?;
-    td0_field_validate_required_attrs(&kv_list, required_names, attr)?;
-    td0_field_validate_allowed_attrs(&kv_list, valid_names)?;
-    Ok(kv_list)
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct TD0FieldTypeText {
-    pub pad_byte: Option<u8>,
-}
-
-impl TryFrom<&Attribute> for TD0FieldTypeText {
-    type Error = syn::Error;
-
-    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
-        static REQUIRED_NAMES: [&str; 0] = [];
-        static VALID_NAMES: [&str; 1] = ["pad_byte"];
-
-        let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
-        Ok(Self {
-            pad_byte: match kv_list.find_by_name("pad_byte") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct TD0FieldTypeNone;
-
-impl TryFrom<&Attribute> for TD0FieldTypeNone {
-    type Error = syn::Error;
-
-    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
-        static REQUIRED_NAMES: [&str; 0] = [];
-        static VALID_NAMES: [&str; 0] = [];
-
-        let _ = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
-        Ok(Self {})
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct TD0FieldTypeEnumStr {
-    collection: String,
-}
-
-impl TryFrom<&Attribute> for TD0FieldTypeEnumStr {
-    type Error = syn::Error;
-
-    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
-        static REQUIRED_NAMES: [&str; 1] = ["collection"];
-        static VALID_NAMES: [&str; 1] = ["collection"];
-
-        let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
-        Ok(Self {
-            collection: kv_list
-                .find_by_name("collection")
-                .expect("Guarded above.")
-                .try_into()?,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct TD0FieldTypeTD0Decimal {
-    min: f32,
-    max: f32,
-}
-
-impl TryFrom<&Attribute> for TD0FieldTypeTD0Decimal {
-    type Error = syn::Error;
-
-    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
-        static REQUIRED_NAMES: [&str; 2] = ["min", "max"];
-        static VALID_NAMES: [&str; 2] = ["min", "max"];
-
-        let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
-        let min: f32 = kv_list
-            .find_by_name("min")
-            .expect("Guarded above.")
-            .try_into()?;
-        let max: f32 = kv_list
-            .find_by_name("max")
-            .expect("Guarded above.")
-            .try_into()?;
-        Ok(Self { min, max })
-    }
-}
-
-impl TD0FieldTypeTD0Decimal {
-    pub fn clamp<T>(&self, val: T) -> Result<T, &'static str>
-    where
-        T: Ord + Bounded + TryFrom<i64>,
-        f32: From<T>,
-    {
-        // Scale min and max to the native value scale (x10).
-        let min: T = T::try_from(self.min.mul(10.0f32).round() as i64)
-            .map_err(|_| "value must be convertable to field type.")?;
-        let max: T = T::try_from(self.max.mul(10.0f32).round() as i64)
-            .map_err(|_| "value must be convertable to field type.")?;
-
-        Ok(num_traits::clamp(val, min, max))
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct TD0FieldTypeMaybeBoundedI8 {
-    min: Option<i8>,
-    max: Option<i8>,
-}
-
-impl TD0FieldTypeMaybeBoundedI8 {
-    fn clamp(&self, val: i8) -> i8 {
-        val.clamp(self.min.unwrap_or(i8::MIN), self.max.unwrap_or(i8::MAX))
-    }
-}
-
-impl TryFrom<&Attribute> for TD0FieldTypeMaybeBoundedI8 {
-    type Error = syn::Error;
-
-    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
-        static REQUIRED_NAMES: [&str; 0] = [];
-        static VALID_NAMES: [&str; 2] = ["min", "max"];
-
-        let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
-        Ok(Self {
-            min: match kv_list.find_by_name("min") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-            max: match kv_list.find_by_name("max") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct TD0FieldTypeMaybeBoundedU8 {
-    min: Option<u8>,
-    max: Option<u8>,
-}
-
-impl TD0FieldTypeMaybeBoundedU8 {
-    fn clamp(&self, val: u8) -> u8 {
-        val.clamp(self.min.unwrap_or(u8::MIN), self.max.unwrap_or(u8::MAX))
-    }
-}
-
-impl TryFrom<&Attribute> for TD0FieldTypeMaybeBoundedU8 {
-    type Error = syn::Error;
-
-    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
-        static REQUIRED_NAMES: [&str; 0] = [];
-        static VALID_NAMES: [&str; 2] = ["min", "max"];
-
-        let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
-        Ok(Self {
-            min: match kv_list.find_by_name("min") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-            max: match kv_list.find_by_name("max") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct TD0FieldTypeMaybeBoundedU16 {
-    min: Option<u16>,
-    max: Option<u16>,
-}
-
-impl TD0FieldTypeMaybeBoundedU16 {
-    fn clamp(&self, val: u16) -> u16 {
-        val.clamp(self.min.unwrap_or(u16::MIN), self.max.unwrap_or(u16::MAX))
-    }
-}
-
-impl TryFrom<&Attribute> for TD0FieldTypeMaybeBoundedU16 {
-    type Error = syn::Error;
-
-    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
-        static REQUIRED_NAMES: [&str; 0] = [];
-        static VALID_NAMES: [&str; 2] = ["min", "max"];
-
-        let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
-        Ok(Self {
-            min: match kv_list.find_by_name("min") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-            max: match kv_list.find_by_name("max") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct TD0FieldTypeMaybeBoundedU32 {
-    min: Option<u32>,
-    max: Option<u32>,
-}
-
-impl TD0FieldTypeMaybeBoundedU32 {
-    fn clamp(&self, val: u32) -> u32 {
-        val.clamp(self.min.unwrap_or(u32::MIN), self.max.unwrap_or(u32::MAX))
-    }
-}
-
-impl TryFrom<&Attribute> for TD0FieldTypeMaybeBoundedU32 {
-    type Error = syn::Error;
-
-    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
-        static REQUIRED_NAMES: [&str; 0] = [];
-        static VALID_NAMES: [&str; 2] = ["min", "max"];
-
-        let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
-        Ok(Self {
-            min: match kv_list.find_by_name("min") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-            max: match kv_list.find_by_name("max") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct TD0FieldTypeMaybeBoundedI16 {
-    min: Option<i16>,
-    max: Option<i16>,
-}
-
-impl TD0FieldTypeMaybeBoundedI16 {
-    fn clamp(&self, val: i16) -> i16 {
-        val.clamp(self.min.unwrap_or(i16::MIN), self.max.unwrap_or(i16::MAX))
-    }
-}
-
-impl TryFrom<&Attribute> for TD0FieldTypeMaybeBoundedI16 {
-    type Error = syn::Error;
-
-    fn try_from(attr: &Attribute) -> Result<Self, <Self as TryFrom<&Attribute>>::Error> {
-        static REQUIRED_NAMES: [&str; 0] = [];
-        static VALID_NAMES: [&str; 2] = ["min", "max"];
-
-        let kv_list = td0_field_parse_and_validate_kv_list(attr, &REQUIRED_NAMES, &VALID_NAMES)?;
-        Ok(Self {
-            min: match kv_list.find_by_name("min") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-            max: match kv_list.find_by_name("max") {
-                Some(pair) => Some(pair.try_into()?),
-                None => None,
-            },
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-enum TD0FieldType {
-    EnumStr(TD0FieldTypeEnumStr),
-    I16(TD0FieldTypeMaybeBoundedI16),
-    I8(TD0FieldTypeMaybeBoundedI8),
-    Slice(TD0FieldTypeNone),
-    TD0Decimal(TD0FieldTypeTD0Decimal),
-    Text(TD0FieldTypeText),
-    U16(TD0FieldTypeMaybeBoundedU16),
-    U32(TD0FieldTypeMaybeBoundedU32),
-    U8(TD0FieldTypeMaybeBoundedU8),
-    Volume(TD0FieldTypeNone),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct TD0Field {
-    ident: Ident,
-    field_type: TD0FieldType,
-    field_type_name: String,
-    native_type: NativeType,
-}
-
-impl TryFrom<&Field> for TD0Field {
-    type Error = syn::Error;
-
-    fn try_from(field: &Field) -> Result<Self, <Self as TryFrom<&Field>>::Error> {
-        let attr = get_named_attr("td0_field", field)
-            .ok_or(syn::Error::new_spanned(field, "Field is not a td0_field"))?
-            .clone();
-        let kv_list = parse_kv_list(&attr)?;
-        td0_field_validate_required_attrs(&kv_list, &["field_type"], &attr)?;
-
-        let ident = field
-            .ident
-            .clone()
-            .ok_or(syn::Error::new_spanned(field, "Field can't be anonymous"))?;
-
-        let field_type = kv_list.find_by_name("field_type").expect("Verified above.");
-        let field_type_name: String = field_type.try_into()?;
-
-        let parsed_field_attr: TD0FieldType = match field_type_name.as_str() {
-            "EnumStr" => TD0FieldType::EnumStr(TD0FieldTypeEnumStr::try_from(&attr)?),
-            "I16" => TD0FieldType::I16(TD0FieldTypeMaybeBoundedI16::try_from(&attr)?),
-            "I8" => TD0FieldType::I8(TD0FieldTypeMaybeBoundedI8::try_from(&attr)?),
-            "Slice" => TD0FieldType::Slice(TD0FieldTypeNone {}),
-            "Text" => TD0FieldType::Text(TD0FieldTypeText::try_from(&attr)?),
-            "TD0Decimal" => TD0FieldType::TD0Decimal(TD0FieldTypeTD0Decimal::try_from(&attr)?),
-            "U16" => TD0FieldType::U16(TD0FieldTypeMaybeBoundedU16::try_from(&attr)?),
-            "U32" => TD0FieldType::U32(TD0FieldTypeMaybeBoundedU32::try_from(&attr)?),
-            "U8" => TD0FieldType::U8(TD0FieldTypeMaybeBoundedU8::try_from(&attr)?),
-            "Volume" => TD0FieldType::Volume(TD0FieldTypeNone {}),
-            _ => {
-                return Err(syn::Error::new_spanned(
-                    field_type.val(),
-                    format!("Unknown field_type: `{field_type_name}`"),
-                ));
+fn build_fn_chunkitem_field_options(fields: &[TD0Field]) -> ImplItemFn {
+    let field_match_arms: Vec<Arm> = fields
+        .iter()
+        .filter_map(|field| match &field.field_type {
+            FieldType::EnumStr { collection } => {
+                let collection_ident: Ident = format_ident!("{collection}");
+                let field: &String = &field.ident_str;
+                Some(parse_quote!(#field => Some(&#collection_ident)))
             }
-        };
-
-        let Some(native_type) = get_field_native_type(field) else {
-            return Err(syn::Error::new_spanned(
-                field,
-                "Unimplemented native field type.",
-            ));
-        };
-
-        Ok(Self {
-            ident,
-            field_type: parsed_field_attr,
-            field_type_name,
-            native_type,
+            _ => None,
         })
-    }
-}
+        .collect();
 
-fn default_tokenstream_for_field_type(field: &Field) -> TokenStream {
-    let mut output: TokenStream = TokenStream::new();
-    let Some(native_type) = get_field_native_type(field) else {
-        return syn::Error::new_spanned(field, "Unimplemented native field type.")
-            .into_compile_error();
-    };
-
-    output.extend(match native_type {
-        NativeType::I16 => {
-            let i16_default: i16 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.field_type {
-                    TD0FieldType::I16(field_type) => field_type.clamp(0),
-                    _ => 0,
-                },
-                Err(_) => 0,
-            };
-            quote!(I16::from(#i16_default))
-        }
-        NativeType::I8 => {
-            let i8_default: i8 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.field_type {
-                    TD0FieldType::I8(field_type) => field_type.clamp(0),
-                    _ => 0,
-                },
-                Err(_) => 0,
-            };
-            quote!(#i8_default)
-        }
-        NativeType::U8 => {
-            let u8_default: u8 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.field_type {
-                    TD0FieldType::U8(field_type) => field_type.clamp(0),
-                    _ => 0,
-                },
-                Err(_) => 0,
-            };
-            quote!(#u8_default)
-        }
-        NativeType::U16 => {
-            let u16_default: u16 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.field_type {
-                    TD0FieldType::TD0Decimal(field_type) => match field_type.clamp(0u16) {
-                        Ok(val) => val,
-                        Err(err) => {
-                            return syn::Error::new_spanned(field, err).into_compile_error();
-                        }
-                    },
-                    TD0FieldType::U16(field_type) => field_type.clamp(0),
-                    _ => 0,
-                },
-                Err(_) => 0,
-            };
-            quote!(U16::from(#u16_default))
-        }
-        NativeType::U32 => {
-            let u32_default: u32 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.field_type {
-                    TD0FieldType::U32(field_type) => field_type.clamp(0),
-                    _ => 0,
-                },
-                Err(_) => 0,
-            };
-            quote!(U32::from(#u32_default))
-        }
-        NativeType::Slice(slice) => {
-            let size = slice.size;
-            let slice_default: u8 = match TD0Field::try_from(field) {
-                Ok(td0field) => match td0field.field_type {
-                    TD0FieldType::Text(attr) => attr.pad_byte.unwrap_or(0),
-                    _ => 0,
-                },
-                Err(_) => 0,
-            };
-            quote!([#slice_default; #size])
-        }
-    });
-
-    output
-}
-
-fn td0_struct_gen_impl_default(source: &ItemStruct) -> TokenStream {
-    let ident = &source.ident;
-    let mut field_defs: Vec<TokenStream> = Vec::new();
-    for field in &source.fields {
-        let field_ident = field.ident.clone().expect("Fields must be named.");
-        let default_val = default_tokenstream_for_field_type(field);
-        field_defs.push(quote! {#field_ident: #default_val});
-    }
-
-    quote! {
-        #[automatically_derived]
-        impl core::default::Default for #ident {
-            fn default() -> Self {
-                Self {
-                    #( #field_defs ),*
+    if field_match_arms.is_empty() {
+        parse_quote!(
+            fn field_options(&self, field: &str) -> Option<&'static [&'static str]> {
+                None
+            }
+        )
+    } else {
+        parse_quote!(
+            fn field_options(&self, field: &str) ->  Option<&'static [&'static str]> {
+                match field {
+                    #( #field_match_arms, )*
+                    _ => None
                 }
             }
-        }
+        )
     }
 }
 
-fn const_name_from_ident(val: &Ident) -> String {
-    // NOTE: Assumes ASCII identifiers!
-    let mut output: String = String::new();
-    let val_string = val.to_string();
-    let mut val_chars = val_string.chars();
-    let mut last_char = val_chars.next().unwrap();
-
-    output.push(last_char.to_ascii_uppercase());
-    for char in val_chars {
-        // Add underscores before upper-case chars to convert from
-        // PascalCase or camelCase to CONST_CASE.
-        //
-        // If the previous char was also uppercase (e.g. TD0File,) omit the
-        // underscore. (TD0FILE, not T_D_0FILE). Digits and symbols are effectively
-        // uppercase for this function.
-        if !char.is_lowercase() && last_char.is_lowercase() {
-            output.push('_');
-        }
-        output.push(char.to_ascii_uppercase());
-        last_char = char;
-    }
-    output
-}
-
-fn td0_struct_gen_from_u8_slice_impl(source: &ItemStruct) -> TokenStream {
-    let source_ident = &source.ident;
-    quote! {
-        #[automatically_derived]
-        impl core::convert::TryFrom<&[u8]> for #source_ident  {
-            type Error = td0_core::TD0Error;
-
-            fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-                use zerocopy::FromBytes;
-                Self::read_from_bytes(bytes).map_err(|_| Self::Error::ChunkItemParse)
-            }
-        }
-    }
-}
-
-fn td0_struct_gen_td0_chunk_item_impl(source: &ItemStruct) -> TokenStream {
-    let mut field_tokenstreams: Vec<String> = Vec::new();
-    let source_ident = &source.ident;
-    let mut td0fields: Vec<TD0Field> = Vec::new();
-
-    for field in source.fields.iter() {
-        let field_ident = match &field.ident {
-            Some(val) => val,
-            None => {
-                return syn::Error::new_spanned(field, "Anonymous fields are not supported.")
-                    .into_compile_error();
-            }
-        };
-
-        field_tokenstreams.push(field_ident.to_string());
-        // TODO:  Make this more efficient:
-        //        TD0Field.try_from(field) calls get_named_attr, which we're
-        //        already call here and discarding the result.
-        match get_named_attr("td0_field", field) {
-            Some(_attr) => match TD0Field::try_from(field) {
-                Ok(td0field) => td0fields.push(td0field),
-                Err(err) => return err.into_compile_error(),
-            },
-            None => {
-                // TODO: Can return a compile error here for struct fields that don't have
-                //       the td0_field attr set, if wanted.
-            }
-        }
-    }
-
-    let num_fields: Literal = Literal::usize_unsuffixed(field_tokenstreams.len());
-    let const_field_array_name = format_ident!("{}_FIELDS", const_name_from_ident(source_ident));
-
-    let mut output: TokenStream = quote! {
-        pub const #const_field_array_name: [&str; #num_fields] = [
-            #( #field_tokenstreams ),*
-        ];
+fn build_bounded_setter_expr<T>(
+    min: Option<T>,
+    max: Option<T>,
+    field_ident: &Ident,
+    core_lib_path: &Path,
+) -> Expr
+where
+    T: Bounded + ToTokens + Copy,
+{
+    let min_expr: Expr = match min {
+        Some(min_val) => parse_quote!(Some(#min_val)),
+        None => parse_quote!(None),
     };
 
-    let fn_field_options: ImplItemFn = build_chunkitem_field_options(&td0fields);
-    let fn_field_value: ImplItemFn = build_chunkitem_field_value(&td0fields);
-    let fn_set_field_value: ImplItemFn = build_chunkitem_set_field_value(&td0fields);
-    let fn_field_value_raw: ImplItemFn = build_chunkitem_field_value_raw(&td0fields);
-    let fn_set_field_value_raw: ImplItemFn = build_chunkitem_set_field_value_raw(&td0fields);
-    let fn_field_type: ImplItemFn = build_chunkitem_field_type(&td0fields);
+    let max_expr: Expr = match max {
+        Some(max_val) => parse_quote!(Some(#max_val)),
+        None => parse_quote!(None),
+    };
 
-    // Create an impl with get_fields().
-    output.extend(quote!(
-        #[automatically_derived]
-        impl td0_core::TD0ChunkItem for #source_ident {
-            fn list_fields(&self) -> &'static [&'static str] { &#const_field_array_name }
-            #fn_field_options
-            #fn_field_value
-            #fn_set_field_value
-            #fn_field_value_raw
-            #fn_set_field_value_raw
-            #fn_field_type
-            fn as_bytes(&self) -> &[u8] {
-                zerocopy::IntoBytes::as_bytes(self)
-            }
-        }
-    ));
+    let min_val: Expr = match min {
+        Some(val) => parse_quote!(#val),
+        None => parse_quote!(0),
+    };
 
-    output
-}
-
-fn build_getter_expr(td0field: &TD0Field) -> Expr {
-    let ident = &td0field.ident;
-    match &td0field.field_type {
-        TD0FieldType::Slice(_) => parse_quote!(
-            Some(td0_core::TD0Value::Slice(Box::new(self.#ident.clone())))
-        ),
-        TD0FieldType::Text(attr) => {
-            let pad_val: u8 = attr.pad_byte.unwrap_or(0);
-            parse_quote!(Some(td0_core::TD0Value::text_from_u8_array(&self.#ident, &#pad_val)))
-        }
-        TD0FieldType::I16(_) => {
-            parse_quote!(Some(td0_core::TD0Value::I16(self.#ident.get())))
-        }
-        TD0FieldType::U16(_) => {
-            parse_quote!(Some(td0_core::TD0Value::U16(self.#ident.get())))
-        }
-        TD0FieldType::U32(_) => {
-            parse_quote!(Some(td0_core::TD0Value::U32(self.#ident.get())))
-        }
-        TD0FieldType::U8(_) => parse_quote!(Some(td0_core::TD0Value::U8(self.#ident))),
-        TD0FieldType::I8(_) => parse_quote!(Some(td0_core::TD0Value::I8(self.#ident))),
-        TD0FieldType::TD0Decimal(_) => {
-            parse_quote!(Some(
-                td0_core::TD0Value::Decimal(f32::from(
-                    td0_core::IntEncodedDecimal::from(self.#ident)
-                ))
-            ))
-        }
-        TD0FieldType::Volume(_) => parse_quote!(
-            match td0_core::Volume::try_from(self.#ident.get()) {
-                Ok(vol) => Some(td0_core::TD0Value::Decimal(vol.into())),
-                Err(_) => None
-            }
-        ),
-        TD0FieldType::EnumStr(attr) => {
-            let collection_ident = format_ident!("{}", &attr.collection);
-            parse_quote!(Some(td0_core::TD0Value::Text(String::from(
-                *#collection_ident
-                    .get(self.#ident as usize)
-                    .unwrap_or_else(|| &"INVALID")
-            ))))
-        }
-    }
-}
-
-fn build_getter_expr_raw(td0field: &TD0Field) -> Expr {
-    let ident = &td0field.ident;
-    match td0field.native_type {
-        NativeType::I16 => parse_quote!(Some(td0_core::TD0ValueRaw::I16(self.#ident.get()))),
-        NativeType::I8 => parse_quote!(Some(td0_core::TD0ValueRaw::I8(self.#ident))),
-        NativeType::Slice(_) => {
-            parse_quote!(Some(td0_core::TD0ValueRaw::Slice(Box::new(self.#ident.clone()))))
-        }
-        NativeType::U16 => parse_quote!(Some(td0_core::TD0ValueRaw::U16(self.#ident.get()))),
-        NativeType::U32 => parse_quote!(Some(td0_core::TD0ValueRaw::U32(self.#ident.get()))),
-        NativeType::U8 => parse_quote!(Some(td0_core::TD0ValueRaw::U8(self.#ident))),
-    }
-}
-
-fn build_decimal_setter_expr(
-    attr: &TD0FieldTypeTD0Decimal,
-    native_type: &NativeType,
-    ident: &Ident,
-) -> Stmt {
-    let attr_min: LitFloat = LitFloat::new(attr.min.to_string().as_str(), Span::call_site());
-    let attr_max: LitFloat = LitFloat::new(attr.max.to_string().as_str(), Span::call_site());
-    let min: Expr = parse_quote!(#attr_min as f32);
-    let max: Expr = parse_quote!(#attr_max as f32);
-    let out_of_range_dec: Expr = parse_quote!(
-        td0_core::TD0Error::out_of_range_error_decimal(#min, #max)
-    );
-
-    let rhand: Expr = match native_type {
-        NativeType::U8 => parse_quote!(
-            u8::try_from(td0_core::IntEncodedDecimal::from(val))
-                .map_err(|_| #out_of_range_dec)?
-        ),
-        NativeType::U16 => parse_quote!(
-            U16::try_from(td0_core::IntEncodedDecimal::from(val))
-                .map_err(|_| #out_of_range_dec)?
-        ),
-        NativeType::I8 => parse_quote!(
-            i8::try_from(td0_core::IntEncodedDecimal::from(val))
-                .map_err(|_| #out_of_range_dec)?
-        ),
-        NativeType::I16 => parse_quote!(
-            I16::try_from(td0_core::IntEncodedDecimal::from(val))
-                .map_err(|_| #out_of_range_dec)?
-        ),
-        _ => parse_quote!(val.clone()),
+    let max_val: Expr = match max {
+        Some(val) => parse_quote!(#val),
+        None => parse_quote!(i16::MAX),
     };
 
     parse_quote!(
-        if td0_core::in_range_inclusive(td0_core::IntEncodedDecimal::from(val).val(), Some(#min), Some(#max)) {
-            self.#ident = #rhand;
-        } else {
-            return Err(#out_of_range_dec)
+        if #core_lib_path::in_range_inclusive(val, #min_expr, #max_expr) {
+            self.#field_ident = val.clone().into();
+            Ok(())
+        }
+        else {
+            Err(#core_lib_path::TD0Error::out_of_range_error(#min_val, #max_val))
         }
     )
 }
 
-fn build_setter_expr(td0field: &TD0Field) -> Arm {
-    let ident = &td0field.ident;
-    let ident_str = ident.to_string();
+fn build_clamp_vals<T>(min: &Option<T>, max: &Option<T>) -> (Expr, Expr)
+where
+    T: Ord + Bounded + quote::ToTokens,
+{
+    (
+        match min {
+            Some(val) => parse_quote!(Some(#val)),
+            None => parse_quote!(None),
+        },
+        match max {
+            Some(val) => parse_quote!(Some(#val)),
+            None => parse_quote!(None),
+        },
+    )
+}
 
-    match &td0field.field_type {
-        TD0FieldType::Text(attr) => {
-            let pad_byte = attr.pad_byte.unwrap_or(0u8);
-            parse_quote!(
-                (#ident_str, td0_core::TD0Value::Text(val)) => {
-                    td0_core::copy_ascii_str_to_u8_slice(&val, &mut self.#ident, #pad_byte)
-                }
+fn build_default_fieldvalue_for_field(
+    field: &TD0Field,
+    core_lib_path: &Path,
+) -> syn::Result<FieldValue> {
+    let ident = &field.ident;
+    match (&field.field_type, &field.native_type) {
+        (FieldType::I8 { min, max }, NativeType::I8) => {
+            let (min_expr, max_expr) = build_clamp_vals(min, max);
+            Ok(parse_quote!(#ident: #core_lib_path::clamp_optional(0i8, #min_expr, #max_expr)))
+        }
+        (FieldType::I16 { min, max }, NativeType::I16) => {
+            let (min_expr, max_expr) = build_clamp_vals(min, max);
+            Ok(
+                parse_quote!(#ident: I16::from(#core_lib_path::clamp_optional(0i16, #min_expr, #max_expr))),
             )
         }
-        TD0FieldType::EnumStr(attr) => {
-            let collection = format_ident!("{}", &attr.collection);
-            let err_msg = format!("invalid value for field '{}'.", ident_str);
-
-            parse_quote!(
-                (#ident_str, td0_core::TD0Value::Text(val)) => {
-                    let pos : &usize = &#collection.iter().position(|item| *item == val.as_str())
-                        .ok_or_else(|| td0_core::TD0Error::InvalidInput(#err_msg.to_string()))?;
-                    self.#ident = u8::try_from(*pos).expect("Collection index must be in range.");
-                    Ok(())
-                }
+        (FieldType::Volume, NativeType::I16) => Ok(parse_quote!(#ident: I16::from(0))),
+        (FieldType::Text { pad_byte }, NativeType::Slice(slice)) => {
+            let pad_byte = pad_byte.unwrap_or(0);
+            let size = slice.size;
+            Ok(parse_quote!(#ident: [#pad_byte; #size]))
+        }
+        (FieldType::Slice, NativeType::Slice(slice)) => {
+            let size = slice.size;
+            Ok(parse_quote!(#ident: [0u8; #size]))
+        }
+        (FieldType::EnumStr { .. }, NativeType::U8) => Ok(parse_quote!(#ident: 0)),
+        (FieldType::U8 { min, max }, NativeType::U8) => {
+            let (min_expr, max_expr) = build_clamp_vals(min, max);
+            Ok(parse_quote!(#ident: #core_lib_path::clamp_optional(0u8, #min_expr, #max_expr)))
+        }
+        (FieldType::U16 { min, max }, NativeType::U16) => {
+            let (min_expr, max_expr) = build_clamp_vals(min, max);
+            Ok(
+                parse_quote!(#ident: U16::from(#core_lib_path::clamp_optional(0u16, #min_expr, #max_expr))),
             )
         }
-        TD0FieldType::TD0Decimal(attr) => {
-            let inner: Stmt = build_decimal_setter_expr(attr, &td0field.native_type, ident);
-
-            parse_quote!(
-                (#ident_str, td0_core::TD0Value::Decimal(val)) => {
-                    #inner
-                    Ok(())
-                }
+        (FieldType::U32 { min, max }, NativeType::U32) => {
+            let (min_expr, max_expr) = build_clamp_vals(min, max);
+            Ok(
+                parse_quote!(#ident: U32::from(#core_lib_path::clamp_optional(0u32, #min_expr, #max_expr))),
             )
         }
-        TD0FieldType::Volume(_) => {
-            parse_quote!(
-                (#ident_str, td0_core::TD0Value::Decimal(val)) => {
-                    let tmp = td0_core::Volume::try_from(val)?;
-                    self.#ident = tmp.try_into().map_err(|_|
-                        td0_core::TD0Error::out_of_range_error_decimal(td0_core::Volume::MIN, td0_core::Volume::MAX)
-                    )?;
-                    Ok(())
-                }
+        (FieldType::TD0Decimal { min, max }, NativeType::U16) => {
+            let default = 0f32.clamp(*min, *max);
+            Ok(
+                parse_quote!(#ident: U16::try_from(#core_lib_path::IntEncodedDecimal::from(#default)).unwrap_or(U16::from(0))),
             )
         }
-        TD0FieldType::Slice(_) => parse_quote!(
-            (#ident_str, ..) => {
-                Err(td0_core::TD0Error::ReadOnlyField(#ident_str.to_string()))
-            }
-        ),
-        TD0FieldType::I16(attr) => {
-            let min_expr: Expr = match attr.min {
-                Some(min_val) => parse_quote!(Some(#min_val)),
-                None => parse_quote!(None),
-            };
-
-            let max_expr: Expr = match attr.max {
-                Some(max_val) => parse_quote!(Some(#max_val)),
-                None => parse_quote!(None),
-            };
-
-            let min_val: Expr = match attr.min {
-                Some(val) => parse_quote!(#val),
-                None => parse_quote!(0),
-            };
-
-            let max_val: Expr = match attr.max {
-                Some(val) => parse_quote!(#val),
-                None => parse_quote!(i16::MAX),
-            };
-
-            parse_quote!(
-                (#ident_str, td0_core::TD0Value::I16(val)) => {
-                    if td0_core::in_range_inclusive(val, #min_expr, #max_expr) {
-                        self.#ident = val.clone().into();
-                        Ok(())
-                    }
-                    else {
-                        Err(td0_core::TD0Error::out_of_range_error(#min_val, #max_val))
-                    }
-                }
+        (FieldType::TD0Decimal { min, max }, NativeType::U8) => {
+            let default = 0f32.clamp(*min, *max);
+            Ok(
+                parse_quote!(#ident: u8::try_from(#core_lib_path::IntEncodedDecimal::from(#default)).unwrap_or(0u8)),
             )
         }
-        TD0FieldType::U16(attr) => {
-            let min_expr: Expr = match attr.min {
-                Some(min_val) => parse_quote!(Some(#min_val)),
-                None => parse_quote!(None),
-            };
-
-            let max_expr: Expr = match attr.max {
-                Some(max_val) => parse_quote!(Some(#max_val)),
-                None => parse_quote!(None),
-            };
-
-            let min_val: Expr = match attr.min {
-                Some(val) => parse_quote!(#val),
-                None => parse_quote!(0),
-            };
-
-            let max_val: Expr = match attr.max {
-                Some(val) => parse_quote!(#val),
-                None => parse_quote!(i16::MAX),
-            };
-
-            parse_quote!(
-                (#ident_str, td0_core::TD0Value::U16(val)) => {
-                    if td0_core::in_range_inclusive(val, #min_expr, #max_expr) {
-                        self.#ident = val.clone().into();
-                        Ok(())
-                    }
-                    else {
-                        Err(td0_core::TD0Error::out_of_range_error(#min_val, #max_val))
-                    }
-                }
-            )
-        }
-        TD0FieldType::U32(attr) => {
-            let min_expr: Expr = match attr.min {
-                Some(min_val) => parse_quote!(Some(#min_val)),
-                None => parse_quote!(None),
-            };
-
-            let max_expr: Expr = match attr.max {
-                Some(max_val) => parse_quote!(Some(#max_val)),
-                None => parse_quote!(None),
-            };
-
-            let min_val: Expr = match attr.min {
-                Some(val) => parse_quote!(#val),
-                None => parse_quote!(0),
-            };
-
-            let max_val: Expr = match attr.max {
-                Some(val) => parse_quote!(#val),
-                None => parse_quote!(i16::MAX),
-            };
-
-            parse_quote!(
-                (#ident_str, td0_core::TD0Value::U32(val)) => {
-                    if td0_core::in_range_inclusive(val, #min_expr, #max_expr) {
-                        self.#ident = val.clone().into();
-                        Ok(())
-                    }
-                    else {
-                        Err(td0_core::TD0Error::out_of_range_error(#min_val, #max_val))
-                    }
-                }
-            )
-        }
-        TD0FieldType::U8(attr) => {
-            let min_expr: Expr = match attr.min {
-                Some(min_val) => parse_quote!(Some(#min_val)),
-                None => parse_quote!(None),
-            };
-
-            let max_expr: Expr = match attr.max {
-                Some(max_val) => parse_quote!(Some(#max_val)),
-                None => parse_quote!(None),
-            };
-
-            let min_val: Expr = match attr.min {
-                Some(val) => parse_quote!(#val),
-                None => parse_quote!(0),
-            };
-
-            let max_val: Expr = match attr.max {
-                Some(val) => parse_quote!(#val),
-                None => parse_quote!(i16::MAX),
-            };
-
-            parse_quote!(
-                (#ident_str, td0_core::TD0Value::U8(val)) => {
-                    if td0_core::in_range_inclusive(val, #min_expr, #max_expr) {
-                        self.#ident = val.clone().into();
-                        Ok(())
-                    }
-                    else {
-                        Err(td0_core::TD0Error::out_of_range_error(#min_val, #max_val))
-                    }
-                }
-            )
-        }
-        TD0FieldType::I8(attr) => {
-            let min_expr: Expr = match attr.min {
-                Some(min_val) => parse_quote!(Some(#min_val)),
-                None => parse_quote!(None),
-            };
-
-            let max_expr: Expr = match attr.max {
-                Some(max_val) => parse_quote!(Some(#max_val)),
-                None => parse_quote!(None),
-            };
-
-            let min_val: Expr = match attr.min {
-                Some(val) => parse_quote!(#val),
-                None => parse_quote!(0),
-            };
-
-            let max_val: Expr = match attr.max {
-                Some(val) => parse_quote!(#val),
-                None => parse_quote!(i16::MAX),
-            };
-
-            parse_quote!(
-                (#ident_str, td0_core::TD0Value::I8(val)) => {
-                    if td0_core::in_range_inclusive(val, #min_expr, #max_expr) {
-                        self.#ident = val.clone().into();
-                        Ok(())
-                    }
-                    else {
-                        Err(td0_core::TD0Error::out_of_range_error(#min_val, #max_val))
-                    }
-                }
-            )
-        }
+        _ => Err(syn::Error::new_spanned(
+            &field.ident,
+            format!(
+                "unexpected field type: `{:?}` with native type `{:?}`",
+                field.field_type, field.native_type
+            ),
+        )),
     }
 }
 
-fn build_setter_expr_raw(td0field: &TD0Field) -> Arm {
-    let ident = &td0field.ident;
-    let ident_str = ident.to_string();
-
-    match td0field.native_type {
-        NativeType::I16 => {
-            parse_quote!(
-                (#ident_str, td0_core::TD0ValueRaw::I16(val)) => {
-                    self.#ident = I16::from(val);
-                    Ok(())
-                }
-            )
-        }
-        NativeType::I8 => parse_quote!(
-            (#ident_str, td0_core::TD0ValueRaw::I8(val)) => {
-                self.#ident = val;
-                Ok(())
-            }
-        ),
-        NativeType::U8 => parse_quote!(
-            (#ident_str, td0_core::TD0ValueRaw::U8(val)) => {
-                self.#ident = val;
-                Ok(())
-            }
-        ),
-        NativeType::U16 => {
-            parse_quote!(
-                (#ident_str, td0_core::TD0ValueRaw::U16(val)) => {
-                    self.#ident = U16::from(val);
-                    Ok(())
-                }
-            )
-        }
-        NativeType::U32 => parse_quote!(
-            (#ident_str, td0_core::TD0ValueRaw::U32(val)) => {
-                self.#ident = U32::from(val);
-                Ok(())
-            }
-        ),
-        NativeType::Slice(_) => {
-            parse_quote!(
-                (#ident_str, td0_core::TD0ValueRaw::Slice(val)) => {
-                    td0_core::copy_slice_to_native(&*val, &mut self.#ident)?;
-                    Ok(())
-                }
-            )
-        }
-    }
-}
-
-fn build_chunkitem_field_value(td0fields: &[TD0Field]) -> ImplItemFn {
-    let mut fn_skel: ImplItemFn = parse_quote!(
-        fn field_value(&self, field: &str) -> Option<td0_core::TD0Value> {
-            match field {}
-        }
-    );
-
-    let mut get_fields_clauses: Vec<Arm> = td0fields
-        .iter()
-        .map(|td0field| {
-            let fld_name = td0field.ident.to_string();
-            let expr = build_getter_expr(td0field);
-            parse_quote!(#fld_name => #expr)
-        })
-        .collect();
-    get_fields_clauses.push(parse_quote!(_ => None));
-
-    for arm in get_fields_clauses.iter() {
-        push_arm_to_fn_match(&mut fn_skel, arm);
-    }
-    fn_skel
-}
-
-fn build_chunkitem_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
-    let mut fn_skel: ImplItemFn = parse_quote!(
-        fn field_value_raw(&self, field: &str) -> Option<td0_core::TD0ValueRaw> {
-            match field {}
-        }
-    );
-
-    let mut get_fields_clauses: Vec<Arm> = td0fields
-        .iter()
-        .map(|td0field| {
-            let fld_name = td0field.ident.to_string();
-            let expr = build_getter_expr_raw(td0field);
-            parse_quote!(#fld_name => #expr)
-        })
-        .collect();
-    get_fields_clauses.push(parse_quote!(_ => None));
-
-    for arm in get_fields_clauses.iter() {
-        push_arm_to_fn_match(&mut fn_skel, arm);
-    }
-    fn_skel
-}
-
-fn build_chunkitem_set_field_value(td0fields: &[TD0Field]) -> ImplItemFn {
-    let mut fn_skel: ImplItemFn = parse_quote!(
-        fn set_field_value(
-            &mut self,
-            field: &str,
-            value: td0_core::TD0Value,
-        ) -> td0_core::TD0Result<()> {
-            match (field, value) {}
-        }
-    );
-
-    // Create a series of match arms, representing each valid (field, TD0ValueType) combo.
-    let mut set_fields_clauses: Vec<Arm> = td0fields.iter().map(build_setter_expr).collect();
-    // Create DataType errors for all fields.
-    set_fields_clauses.extend(
-        td0fields
-            .iter()
-            .map(build_setter_data_type_error)
-            .collect::<Vec<Arm>>(),
-    );
-    set_fields_clauses.push(parse_quote!(
-        _ => Err(td0_core::TD0Error::InvalidField(field.to_string()))
-    ));
-
-    for arm in set_fields_clauses.iter() {
-        push_arm_to_fn_match(&mut fn_skel, arm);
-    }
-    fn_skel
-}
-
-fn build_setter_data_type_error(td0field: &TD0Field) -> Arm {
-    let field_str: String = td0field.ident.to_string();
-    let error_msg = format!(
-        "invalid data type setting field '{}'. Expected {}",
-        field_str,
-        field_type_user_name(td0field)
-    );
-    parse_quote!((#field_str, _) => Err(td0_core::TD0Error::DataType(#error_msg.to_string())),)
-}
-
-fn build_setter_data_type_error_raw(td0field: &TD0Field) -> Arm {
-    let field_str: String = td0field.ident.to_string();
-    let error_msg = format!(
-        "invalid data type setting field '{}'. Expected {}",
-        field_str,
-        field_type_user_name_raw(td0field)
-    );
-    parse_quote!((#field_str, _) => Err(td0_core::TD0Error::DataType(#error_msg.to_string())),)
-}
-
-fn build_chunkitem_set_field_value_raw(td0fields: &[TD0Field]) -> ImplItemFn {
-    let mut fn_skel: ImplItemFn = parse_quote!(
-        fn set_field_value_raw(
-            &mut self,
-            field: &str,
-            value: td0_core::TD0ValueRaw,
-        ) -> td0_core::TD0Result<()> {
-            match (field, value) {}
-        }
-    );
-
-    let mut set_fields_clauses: Vec<Arm> = td0fields.iter().map(build_setter_expr_raw).collect();
-    set_fields_clauses.extend(
-        td0fields
-            .iter()
-            .map(build_setter_data_type_error_raw)
-            .collect::<Vec<Arm>>(),
-    );
-    set_fields_clauses.push(parse_quote!(
-        _ => Err(td0_core::TD0Error::InvalidField(field.to_string()))
-    ));
-
-    for arm in set_fields_clauses.iter() {
-        push_arm_to_fn_match(&mut fn_skel, arm);
-    }
-    fn_skel
-}
-
-fn field_type_user_name(field: &TD0Field) -> &'static str {
-    match field.field_type {
-        TD0FieldType::EnumStr(_) | TD0FieldType::Text(_) => "Text",
-        TD0FieldType::I16(_) => "I16",
-        TD0FieldType::I8(_) => "I8",
-        TD0FieldType::Slice(_) => "Slice",
-        TD0FieldType::TD0Decimal(_) | TD0FieldType::Volume(_) => "Decimal",
-        TD0FieldType::U32(_) => "U16",
-        TD0FieldType::U16(_) => "U16",
-        TD0FieldType::U8(_) => "U8",
-    }
-}
-
-fn field_type_user_name_raw(field: &TD0Field) -> &'static str {
-    match field.native_type {
-        NativeType::I16 => "I16",
-        NativeType::I8 => "I8",
-        NativeType::Slice(_) => "Slice",
-        NativeType::U8 => "U8",
-        NativeType::U16 => "U16",
-        NativeType::U32 => "U32",
-    }
-}
-
-fn build_chunkitem_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
-    let arms: Vec<Arm> = td0fields
+fn build_fn_chunkitem_field_type(fields: &[TD0Field]) -> ImplItemFn {
+    let arms: Vec<Arm> = fields
         .iter()
         .map(|field| {
-            let field_name_str = field.ident.to_string();
-            let field_type_str = field_type_user_name(field);
-            parse_quote!( #field_name_str => Some(#field_type_str) )
+            let field_name = &field.ident_str;
+            let field_type = field_type_pretty_name(field);
+            parse_quote!( #field_name => Some(#field_type) )
         })
         .collect();
 
@@ -1143,56 +291,884 @@ fn build_chunkitem_field_type(td0fields: &[TD0Field]) -> ImplItemFn {
     )
 }
 
-fn build_chunkitem_field_options(td0fields: &[TD0Field]) -> ImplItemFn {
-    let mut arms: Vec<Arm> = Vec::new();
-    for field in td0fields.iter() {
-        if let TD0FieldType::EnumStr(fld) = &field.field_type {
-            let field_name_str = field.ident.to_string();
-            let collection_name = format_ident!("{}", &fld.collection);
-            arms.push(parse_quote!( #field_name_str => Some(&#collection_name) ))
-        };
-    }
+fn build_fn_chunkitem_field_value(fields: &[TD0Field], core_lib_path: &Path) -> ImplItemFn {
+    let get_fields_clauses: Vec<Arm> = fields
+        .iter()
+        .map(|field| {
+            let fld_name = field.ident.to_string();
+            let expr = build_getter_expr(field, core_lib_path);
+            parse_quote!(#fld_name => #expr)
+        })
+        .collect();
 
     parse_quote!(
-        fn field_options(&self, field: &str) -> Option<&'static [&'static str]> {
+        fn field_value(&self, field: &str) -> Option<#core_lib_path::TD0Value> {
             match field {
-                #( #arms, )*
+                #( #get_fields_clauses, )*
                 _ => None
             }
         }
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+fn build_fn_chunkitem_field_value_raw(fields: &[TD0Field], core_lib_path: &Path) -> ImplItemFn {
+    let get_fields_clauses: Vec<Arm> = fields
+        .iter()
+        .map(|field| {
+            let fld_name = field.ident.to_string();
+            let expr = build_getter_expr_raw(field, core_lib_path);
+            parse_quote!(#fld_name => #expr)
+        })
+        .collect();
 
-    #[test]
-    fn test_td0_f32_clamp() {
-        let field = TD0FieldTypeTD0Decimal {
-            min: -60.0f32,
-            max: 6.0f32,
-        };
-        assert_eq!(
-            field.clamp(-600i16),
-            Ok(-600i16),
-            "Doesn't clamp at min value."
-        );
-        assert_eq!(
-            field.clamp(-601i16),
-            Ok(-600i16),
-            "Does clamp at < min value."
-        );
-        assert_eq!(field.clamp(60i16), Ok(60i16), "Doesn't clamp at max value.");
-        assert_eq!(field.clamp(61i16), Ok(60i16), "Does clamp at > max value.");
+    parse_quote!(
+        fn field_value_raw(&self, field: &str) -> Option<#core_lib_path::TD0ValueRaw> {
+            match field {
+                #( #get_fields_clauses, )*
+                _ => None
+            }
+        }
+    )
+}
 
-        let field = TD0FieldTypeTD0Decimal {
-            min: 2.3f32,
-            max: 12.0f32,
-        };
-        assert_eq!(field.clamp(23i8), Ok(23i8), "Doesn't clamp at min value.");
-        assert_eq!(field.clamp(22i8), Ok(23i8), "Does clamp at < min value.");
-        assert_eq!(field.clamp(120i8), Ok(120i8), "Doesn't clamp at max value.");
-        assert_eq!(field.clamp(121i8), Ok(120i8), "Does clamp at > max value.");
+fn build_fn_chunkitem_set_field_value(
+    fields: &[TD0Field],
+    core_lib_path: &Path,
+) -> syn::Result<ImplItemFn> {
+    // Create a series of match arms, representing each valid (field, TD0ValueType) combo.
+    let mut set_fields_clauses: Vec<Arm> = Vec::new();
+    let mut field_errors: Option<syn::Error> = None;
+
+    for field in fields.iter() {
+        match build_setter_expr(field, core_lib_path) {
+            Ok(arm) => set_fields_clauses.push(arm),
+            Err(field_error) => match field_errors {
+                Some(ref mut existing) => existing.combine(field_error),
+                None => field_errors = Some(field_error),
+            },
+        }
+    }
+
+    if let Some(errors) = field_errors {
+        return Err(errors);
+    }
+
+    // Create DataType errors for all fields. ("field1" | "field2", _) ... for all fields.
+    set_fields_clauses.extend(build_setter_data_type_errors(
+        fields,
+        core_lib_path,
+        field_type_pretty_name,
+    ));
+    // Any remaining requested fields are invalid.
+    set_fields_clauses.push(parse_quote!(
+        _ => Err(#core_lib_path::TD0Error::InvalidField(field.to_string()))
+    ));
+
+    let mut fn_skel: ImplItemFn = parse_quote!(
+        fn set_field_value(
+            &mut self,
+            field: &str,
+            value: #core_lib_path::TD0Value,
+        ) -> #core_lib_path::TD0Result<()> {
+            match (field, value) { }
+        }
+    );
+
+    // NOTE TO FUTURE READERS: You might think to yourself, "I'll remove this loop and use
+    // syn's quote interpolation instead."  Save yourself the headaches- don't do it. The
+    // macro errors produced will be the least helpful errors you've ever enountered, too.
+    for arm in set_fields_clauses {
+        push_arm_to_fn_match(&mut fn_skel, &arm);
+    }
+
+    Ok(fn_skel)
+}
+
+fn build_fn_chunkitem_set_field_value_raw(
+    fields: &[TD0Field],
+    core_lib_path: &Path,
+) -> syn::Result<ImplItemFn> {
+    let mut set_fields_clauses: Vec<Arm> = Vec::new();
+    let mut field_errors: Option<syn::Error> = None;
+
+    for field in fields.iter() {
+        match build_setter_expr_raw(field, core_lib_path) {
+            Ok(arm) => set_fields_clauses.push(arm),
+            Err(field_error) => match field_errors {
+                Some(ref mut existing) => existing.combine(field_error),
+                None => field_errors = Some(field_error),
+            },
+        }
+    }
+
+    if let Some(errors) = field_errors {
+        return Err(errors);
+    }
+
+    // Create DataType errors for all fields. ("field1" | "field2", _) ... for all fields.
+    set_fields_clauses.extend(build_setter_data_type_errors(
+        fields,
+        core_lib_path,
+        field_type_pretty_name_raw,
+    ));
+    // Any remaining requested fields are invalid.
+    set_fields_clauses.push(parse_quote!(
+        _ => Err(#core_lib_path::TD0Error::InvalidField(field.to_string()))
+    ));
+
+    let mut fn_skel: ImplItemFn = parse_quote!(
+        fn set_field_value_raw(
+            &mut self,
+            field: &str,
+            value: #core_lib_path::TD0ValueRaw,
+        ) -> #core_lib_path::TD0Result<()> {
+            match (field, value) { }
+        }
+    );
+
+    // NOTE TO FUTURE READERS: You might think to yourself, "I'll remove this loop and use
+    // syn's quote interpolation instead."  Save yourself the headaches- don't do it. The
+    // macro errors produced will be the least helpful errors you've ever enountered, too.
+    for arm in set_fields_clauses {
+        push_arm_to_fn_match(&mut fn_skel, &arm);
+    }
+
+    Ok(fn_skel)
+}
+
+fn build_getter_expr(field: &TD0Field, core_lib_path: &Path) -> Expr {
+    let ident = &field.ident;
+    match &field.field_type {
+        FieldType::Slice => parse_quote!(
+            Some(#core_lib_path::TD0Value::Slice(Box::new(self.#ident.clone())))
+        ),
+        FieldType::Text { pad_byte } => {
+            let pad_val: u8 = pad_byte.unwrap_or(0);
+            parse_quote!(Some(#core_lib_path::TD0Value::text_from_u8_array(&self.#ident, &#pad_val)))
+        }
+        FieldType::I16 { .. } => {
+            parse_quote!(Some(#core_lib_path::TD0Value::I16(self.#ident.get())))
+        }
+        FieldType::U16 { .. } => {
+            parse_quote!(Some(#core_lib_path::TD0Value::U16(self.#ident.get())))
+        }
+        FieldType::U32 { .. } => {
+            parse_quote!(Some(#core_lib_path::TD0Value::U32(self.#ident.get())))
+        }
+        FieldType::U8 { .. } => parse_quote!(Some(#core_lib_path::TD0Value::U8(self.#ident))),
+        FieldType::I8 { .. } => parse_quote!(Some(#core_lib_path::TD0Value::I8(self.#ident))),
+        FieldType::TD0Decimal { .. } => {
+            parse_quote!(Some(
+                #core_lib_path::TD0Value::Decimal(f32::from(
+                    #core_lib_path::IntEncodedDecimal::from(self.#ident)
+                ))
+            ))
+        }
+        FieldType::Volume => parse_quote!(
+            match #core_lib_path::Volume::try_from(self.#ident.get()) {
+                Ok(vol) => Some(#core_lib_path::TD0Value::Decimal(vol.into())),
+                Err{..} => None
+            }
+        ),
+        FieldType::EnumStr { collection } => {
+            let collection_ident = format_ident!("{collection}");
+            parse_quote!({
+                Some(#core_lib_path::TD0Value::Text(String::from(
+                    *#collection_ident.get(usize::from(self.#ident)).unwrap_or(&"INVALID")
+                )))
+            })
+        }
+    }
+}
+
+fn build_getter_expr_raw(field: &TD0Field, core_lib_path: &Path) -> Expr {
+    let ident = &field.ident;
+    match field.native_type {
+        NativeType::I16 => parse_quote!(Some(#core_lib_path::TD0ValueRaw::I16(self.#ident.get()))),
+        NativeType::I8 => parse_quote!(Some(#core_lib_path::TD0ValueRaw::I8(self.#ident))),
+        NativeType::Slice(_) => {
+            parse_quote!(Some(#core_lib_path::TD0ValueRaw::Slice(Box::new(self.#ident.clone()))))
+        }
+        NativeType::U16 => parse_quote!(Some(#core_lib_path::TD0ValueRaw::U16(self.#ident.get()))),
+        NativeType::U32 => parse_quote!(Some(#core_lib_path::TD0ValueRaw::U32(self.#ident.get()))),
+        NativeType::U8 => parse_quote!(Some(#core_lib_path::TD0ValueRaw::U8(self.#ident))),
+    }
+}
+
+fn build_impl_default(
+    fields: &[TD0Field],
+    source_meta: &ItemStructMeta,
+) -> syn::Result<proc_macro2::TokenStream> {
+    let (ident, core_lib_path) = (source_meta.ident, source_meta.core_lib_path);
+    let (impl_generics, type_generics, where_clause) = (
+        &source_meta.impl_generics,
+        &source_meta.type_generics,
+        source_meta.where_clause,
+    );
+
+    let mut field_value_pairs: Vec<FieldValue> = Vec::new();
+    let mut field_value_errors: Option<syn::Error> = None;
+
+    for field in fields.iter() {
+        match build_default_fieldvalue_for_field(field, core_lib_path) {
+            Ok(field_value) => field_value_pairs.push(field_value),
+            Err(err) => match field_value_errors {
+                Some(ref mut existing) => existing.combine(err),
+                None => field_value_errors = Some(err),
+            },
+        }
+    }
+
+    if let Some(errors) = field_value_errors {
+        return Err(errors);
+    }
+
+    Ok(quote!(
+        #[automatically_derived]
+        impl #impl_generics core::default::Default for #ident #type_generics #where_clause {
+            fn default() -> Self {
+                Self {
+                    #( #field_value_pairs ),*
+                }
+            }
+        }
+    ))
+}
+
+fn build_impl_td0_chunkitem(
+    fields: &[TD0Field],
+    source_meta: &ItemStructMeta,
+) -> syn::Result<proc_macro2::TokenStream> {
+    let (ident, core_lib_path) = (source_meta.ident, source_meta.core_lib_path);
+    let (impl_generics, type_generics, where_clause) = (
+        &source_meta.impl_generics,
+        &source_meta.type_generics,
+        source_meta.where_clause,
+    );
+    let fn_field_options: ImplItemFn = build_fn_chunkitem_field_options(fields);
+    let fn_field_type: ImplItemFn = build_fn_chunkitem_field_type(fields);
+    let fn_field_value: ImplItemFn =
+        build_fn_chunkitem_field_value(fields, source_meta.core_lib_path);
+    let fn_field_value_raw: ImplItemFn =
+        build_fn_chunkitem_field_value_raw(fields, source_meta.core_lib_path);
+
+    let fn_set_field_value: ImplItemFn =
+        build_fn_chunkitem_set_field_value(fields, source_meta.core_lib_path)?;
+    let fn_set_field_value_raw =
+        build_fn_chunkitem_set_field_value_raw(fields, source_meta.core_lib_path)?;
+
+    let field_names: Vec<&String> = fields.iter().map(|field| &field.ident_str).collect();
+    let num_fields: usize = field_names.len();
+    let field_names_array = format_ident!("{}_FIELDS", const_name_from_ident(ident));
+
+    Ok(quote! {
+        const #field_names_array : [&str; #num_fields] = [ #( #field_names, )* ];
+
+        #[automatically_derived]
+        impl #impl_generics #core_lib_path::TD0ChunkItem for #ident #type_generics #where_clause {
+            fn as_bytes(&self) -> &[u8] {
+                zerocopy::IntoBytes::as_bytes(self)
+            }
+            #fn_field_options
+            #fn_field_type
+            #fn_field_value
+            #fn_field_value_raw
+            #fn_set_field_value
+            #fn_set_field_value_raw
+            fn list_fields(&self) -> &'static [&'static str] { &#field_names_array }
+        }
+    })
+}
+
+fn build_impl_td0_chunkitem_set_value_helper(source_meta: &ItemStructMeta) -> TokenStream {
+    let (ident, core_lib_path) = (source_meta.ident, source_meta.core_lib_path);
+    let (impl_generics, type_generics, where_clause) = (
+        &source_meta.impl_generics,
+        &source_meta.type_generics,
+        source_meta.where_clause,
+    );
+    let trait_name = format_ident!("TD0ChunkItemMutDeriveHelper{ident}");
+
+    parse_quote!(
+        #[automatically_derived]
+        impl #impl_generics #trait_name for #ident #type_generics #where_clause {
+            fn set_volume_field_i16<T>(field: &mut zerocopy::I16<T>, val: f32) -> #core_lib_path::TD0Result<()>
+                where T: zerocopy::ByteOrder
+            {
+                let tmp = #core_lib_path::Volume::try_from(val)?;
+                *field = tmp.try_into().map_err(|_|
+                    #core_lib_path::TD0Error::out_of_range_error_decimal(#core_lib_path::Volume::MIN, #core_lib_path::Volume::MAX)
+                )?;
+                Ok(())
+            }
+
+            fn set_enumstr_field(field: &mut u8, val: &str, field_name: &str, collection: &[&str]) -> #core_lib_path::TD0Result<()> {
+                let mut index = collection.iter().position(|item| *item == val)
+                    .ok_or_else(|| #core_lib_path::TD0Error::InvalidInput(format!("ah that sucks")))?;
+                *field = u8::try_from(index).expect("EnumStr indexes are all valid u8 values.");
+                Ok(())
+            }
+
+            fn set_decimal_field_u16<T>(field: &mut zerocopy::U16<T>, val: f32, min: f32, max: f32) -> #core_lib_path::TD0Result<()>
+                where T: zerocopy::ByteOrder
+            {
+                if #core_lib_path::in_range_inclusive(val, Some(min), Some(max)) {
+                    *field = zerocopy::U16::try_from(#core_lib_path::IntEncodedDecimal::from(val))
+                        .map_err(|_| #core_lib_path::TD0Error::out_of_range_error_decimal(min, max))?;
+                    Ok(())
+                } else {
+                    Err(#core_lib_path::TD0Error::out_of_range_error_decimal(min, max))
+                }
+            }
+
+            fn set_decimal_field_u8(field: &mut u8, val: f32, min: f32, max: f32) -> #core_lib_path::TD0Result<()> {
+                if #core_lib_path::in_range_inclusive(val, Some(min), Some(max)) {
+                    *field = u8::try_from(#core_lib_path::IntEncodedDecimal::from(val))
+                        .map_err(|_| #core_lib_path::TD0Error::out_of_range_error_decimal(min, max))?;
+                    Ok(())
+                } else {
+                    Err(#core_lib_path::TD0Error::out_of_range_error_decimal(min, max))
+                }
+            }
+
+        }
+    )
+}
+
+fn build_invalid_field_combo_compile_error(field: &TD0Field) -> syn::Error {
+    syn::Error::new_spanned(
+        &field.ident,
+        format!(
+            "invalid field type '{:?}' for native type '{:?}'",
+            field.field_type, field.native_type
+        ),
+    )
+}
+
+fn build_setter_data_type_errors(
+    fields: &[TD0Field],
+    core_lib_path: &Path,
+    pretty_field_name_fn: fn(&TD0Field) -> &str,
+) -> Vec<Arm> {
+    // Build match arms to create "invalid data type" errors for all fields at once.
+    // The match arms are consolidated, e.g. ("field1" | "field2", _)  => {Err(..)}.
+    let mut field_names_by_pretty_name: HashMap<&str, Vec<&str>> = HashMap::new();
+    for field in fields.iter() {
+        field_names_by_pretty_name
+            .entry(pretty_field_name_fn(field))
+            .or_default()
+            .push(&field.ident_str);
+    }
+
+    let mut arms: Vec<Arm> = Vec::new();
+    for (&expected_type, field_names) in field_names_by_pretty_name.iter() {
+        // let fields_str = field_names.join(" | ");
+        let err_str =
+            format!("invalid data type setting field '{{field}}'. Expected `{expected_type}`");
+        // NOTE: This particular syntax joins field_names (which will parse as "quoted_strings") with
+        //       the pipe operator: #(#field_names)|*
+        //       See: https://docs.rs/quote/1.0.47/quote/macro.quote.html#interpolation
+        arms.push(
+            parse_quote!((#(#field_names)|*, _) => Err(#core_lib_path::TD0Error::DataType(format!(#err_str))))
+        );
+    }
+    arms
+}
+
+fn build_setter_expr(field: &TD0Field, core_lib_path: &Path) -> syn::Result<Arm> {
+    let ident = &field.ident;
+    let ident_str = &field.ident_str;
+
+    match (&field.field_type, &field.native_type) {
+        (FieldType::TD0Decimal { min, max }, NativeType::U8) => Ok(parse_quote!(
+            (#ident_str, #core_lib_path::TD0Value::Decimal(val)) => Self::set_decimal_field_u8(&mut self.#ident, val, #min, #max)
+        )),
+        (FieldType::TD0Decimal { min, max }, NativeType::U16) => Ok(parse_quote!(
+            (#ident_str, #core_lib_path::TD0Value::Decimal(val)) => Self::set_decimal_field_u16(&mut self.#ident, val, #min, #max)
+        )),
+        (FieldType::U32 { min, max }, NativeType::U32) => {
+            let expr: Expr = if min.is_none() && max.is_none() {
+                parse_quote!({ self.#ident = val.into(); Ok(()) })
+            } else {
+                build_bounded_setter_expr(*min, *max, ident, core_lib_path)
+            };
+
+            Ok(parse_quote!(
+                (#ident_str, #core_lib_path::TD0Value::U32(val)) => #expr,
+            ))
+        }
+        (FieldType::U16 { min, max }, NativeType::U16) => {
+            let expr: Expr = if min.is_none() && max.is_none() {
+                parse_quote!({ self.#ident = val.into(); Ok(()) })
+            } else {
+                build_bounded_setter_expr(*min, *max, ident, core_lib_path)
+            };
+
+            Ok(parse_quote!(
+                (#ident_str, #core_lib_path::TD0Value::U16(val)) => #expr,
+            ))
+        }
+        (FieldType::U8 { min, max }, NativeType::U8) => {
+            let expr: Expr = if min.is_none() && max.is_none() {
+                parse_quote!({ self.#ident = val.into(); Ok(()) })
+            } else {
+                build_bounded_setter_expr(*min, *max, ident, core_lib_path)
+            };
+
+            Ok(parse_quote!( (#ident_str, #core_lib_path::TD0Value::U8(val)) => #expr,))
+        }
+        (FieldType::I8 { min, max }, NativeType::I8) => {
+            let expr: Expr = if min.is_none() && max.is_none() {
+                parse_quote!({ self.#ident = val.into(); Ok(()) })
+            } else {
+                build_bounded_setter_expr(*min, *max, ident, core_lib_path)
+            };
+
+            Ok(parse_quote!( (#ident_str, #core_lib_path::TD0Value::I8(val)) => #expr,))
+        }
+        (FieldType::I16 { min, max }, NativeType::I16) => {
+            let expr: Expr = if min.is_none() && max.is_none() {
+                parse_quote!({ self.#ident = val.into(); Ok(()) })
+            } else {
+                build_bounded_setter_expr(*min, *max, ident, core_lib_path)
+            };
+
+            Ok(parse_quote!(
+                (#ident_str, #core_lib_path::TD0Value::I16(val)) => #expr,
+            ))
+        }
+        (FieldType::EnumStr { collection }, NativeType::U8) => {
+            let collection_ident: Ident = format_ident!("{collection}");
+            Ok(parse_quote!(
+                (#ident_str, #core_lib_path::TD0Value::Text(val)) => {
+                    Self::set_enumstr_field(&mut self.#ident, &val, #ident_str, &#collection_ident)
+                }
+            ))
+        }
+        (FieldType::Slice, NativeType::Slice(_)) => Ok(parse_quote!(
+            (#ident_str, #core_lib_path::TD0Value::Slice(_)) => Err(#core_lib_path::TD0Error::ReadOnlyField(#ident_str.to_string())),
+        )),
+        (FieldType::Text { pad_byte }, NativeType::Slice(_)) => {
+            let text_pad_byte = pad_byte.unwrap_or(0u8);
+            Ok(parse_quote!(
+                (#ident_str, #core_lib_path::TD0Value::Text(val)) => {
+                    #core_lib_path::copy_ascii_str_to_u8_slice(val.as_str(), &mut self.#ident, #text_pad_byte)?;
+                    Ok(())
+                }
+            ))
+        }
+        (FieldType::Volume, NativeType::I16) => Ok(parse_quote!(
+            (#ident_str, #core_lib_path::TD0Value::Decimal(val)) => Self::set_volume_field_i16(&mut self.#ident, val)
+        )),
+        _ => Err(build_invalid_field_combo_compile_error(field)),
+    }
+}
+
+fn build_setter_expr_raw(field: &TD0Field, core_lib_path: &Path) -> syn::Result<Arm> {
+    let ident = &field.ident;
+    let ident_str = &field.ident_str;
+
+    match &field.native_type {
+        NativeType::I8 => Ok(parse_quote!(
+            (#ident_str, #core_lib_path::TD0ValueRaw::I8(val)) => { self.#ident = val; Ok(())}
+        )),
+        NativeType::U8 => Ok(parse_quote!(
+            (#ident_str, #core_lib_path::TD0ValueRaw::U8(val)) => { self.#ident = val; Ok(())}
+        )),
+        NativeType::I16 => Ok(parse_quote!(
+            (#ident_str, #core_lib_path::TD0ValueRaw::I16(val)) => { self.#ident = I16::from(val); Ok(())}
+        )),
+        NativeType::U16 => Ok(parse_quote!(
+            (#ident_str, #core_lib_path::TD0ValueRaw::U16(val)) => { self.#ident = U16::from(val); Ok(())}
+        )),
+        NativeType::U32 => Ok(parse_quote!(
+            (#ident_str, #core_lib_path::TD0ValueRaw::U32(val)) => { self.#ident = U32::from(val); Ok(())}
+        )),
+        NativeType::Slice(_) => Ok(parse_quote!(
+            (#ident_str, #core_lib_path::TD0ValueRaw::Slice(val)) => {
+                #core_lib_path::copy_slice_to_native(&*val, &mut self.#ident)?;
+                Ok(())
+            }
+        )),
+    }
+}
+
+fn build_trait_chunkitem_set_value_helper(
+    source_ident: &Ident,
+    core_lib_path: &Path,
+) -> TokenStream {
+    let name = format_ident!("TD0ChunkItemMutDeriveHelper{}", source_ident);
+
+    parse_quote!(
+        trait #name {
+            fn set_volume_field_i16<T>(field: &mut zerocopy::I16<T>, val: f32) -> #core_lib_path::TD0Result<()>
+                where T: zerocopy::ByteOrder;
+
+            fn set_enumstr_field(field: &mut u8, val: &str, field_name: &str, collection: &[&str]) -> #core_lib_path::TD0Result<()>;
+
+            fn set_decimal_field_u8(field: &mut u8, val: f32, min: f32, max: f32) -> #core_lib_path::TD0Result<()>;
+
+            fn set_decimal_field_u16<T>(field: &mut zerocopy::U16<T>, val: f32, min: f32, max: f32) -> #core_lib_path::TD0Result<()>
+                where T: zerocopy::ByteOrder;
+        }
+    )
+}
+
+fn core_lib_path_from_struct(source: &ItemStruct) -> syn::Result<Option<Path>> {
+    let mut lib_path: Option<Path> = None;
+
+    // Loop through all attributes on the struct
+    for attr in &source.attrs {
+        if attr.path().is_ident("td0_struct") {
+            let kv_map = hashmap_from_kv_list(parse_kv_list(attr)?);
+            validate_field_type_keys(
+                &kv_map,
+                &["td0_core_crate"],
+                &["td0_core_crate"],
+                attr.span(),
+            )?;
+            if let Lit::Str(path_str) = kv_map.get("td0_core_crate").unwrap().val() {
+                match path_str.parse::<Path>() {
+                    Ok(pathobj) => lib_path = Some(pathobj),
+                    Err(_) => {
+                        return Err(syn::Error::new_spanned(
+                            attr,
+                            "invalid path (should look like crate::module",
+                        ));
+                    }
+                }
+            } else {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    "td0_core_crate = \"value\" must be a string.",
+                ));
+            }
+        }
+    }
+    Ok(lib_path)
+}
+
+fn field_type_from_attrs(kv_map: &AttrHashMap, attr_span: Span) -> syn::Result<FieldType> {
+    let Some(field_type_kv) = kv_map.get("field_type") else {
+        return Err(syn::Error::new(attr_span, "field_type is required."));
+    };
+    match field_type_kv
+        .val()
+        .to_token_stream()
+        .to_string()
+        .replace("\"", "")
+        .as_str()
+    {
+        "U8" => {
+            validate_field_type_keys(
+                kv_map,
+                NUMBER_REQUIRED.as_slice(),
+                NUMBER_VALID.as_slice(),
+                attr_span,
+            )?;
+            let min = match kv_map.get("min") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            let max = match kv_map.get("max") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            Ok(FieldType::U8 { min, max })
+        }
+        "U16" => {
+            validate_field_type_keys(
+                kv_map,
+                NUMBER_REQUIRED.as_slice(),
+                NUMBER_VALID.as_slice(),
+                attr_span,
+            )?;
+            let min = match kv_map.get("min") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            let max = match kv_map.get("max") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            Ok(FieldType::U16 { min, max })
+        }
+        "Slice" => {
+            validate_field_type_keys(
+                kv_map,
+                SLICE_REQUIRED.as_slice(),
+                SLICE_VALID.as_slice(),
+                attr_span,
+            )?;
+            Ok(FieldType::Slice)
+        }
+        "Text" => {
+            validate_field_type_keys(
+                kv_map,
+                TEXT_REQUIRED.as_slice(),
+                TEXT_VALID.as_slice(),
+                attr_span,
+            )?;
+            let pad_byte: Option<u8> = match kv_map.get("pad_byte") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            Ok(FieldType::Text { pad_byte })
+        }
+        "EnumStr" => {
+            validate_field_type_keys(
+                kv_map,
+                ENUMSTR_REQUIRED.as_slice(),
+                ENUMSTR_VALID.as_slice(),
+                attr_span,
+            )?;
+            Ok(FieldType::EnumStr {
+                collection: kv_map.get("collection").expect("validated").try_into()?,
+            })
+        }
+        "I8" => {
+            validate_field_type_keys(
+                kv_map,
+                NUMBER_REQUIRED.as_slice(),
+                NUMBER_VALID.as_slice(),
+                attr_span,
+            )?;
+            let min = match kv_map.get("min") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            let max = match kv_map.get("max") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            Ok(FieldType::I8 { min, max })
+        }
+        "I16" => {
+            validate_field_type_keys(
+                kv_map,
+                NUMBER_REQUIRED.as_slice(),
+                NUMBER_VALID.as_slice(),
+                attr_span,
+            )?;
+            let min = match kv_map.get("min") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            let max = match kv_map.get("max") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            Ok(FieldType::I16 { min, max })
+        }
+        "U32" => {
+            validate_field_type_keys(
+                kv_map,
+                NUMBER_REQUIRED.as_slice(),
+                NUMBER_VALID.as_slice(),
+                attr_span,
+            )?;
+            let min = match kv_map.get("min") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            let max = match kv_map.get("max") {
+                Some(kv_val) => Some(kv_val.try_into()?),
+                None => None,
+            };
+            Ok(FieldType::U32 { min, max })
+        }
+        "Volume" => {
+            validate_field_type_keys(
+                kv_map,
+                VOLUME_REQUIRED.as_slice(),
+                VOLUME_VALID.as_slice(),
+                attr_span,
+            )?;
+            Ok(FieldType::Volume)
+        }
+        "TD0Decimal" => {
+            validate_field_type_keys(
+                kv_map,
+                DECIMAL_REQUIRED.as_slice(),
+                DECIMAL_VALID.as_slice(),
+                attr_span,
+            )?;
+            let min: f32 = kv_map.get("min").expect("validated").try_into()?;
+            let max: f32 = kv_map.get("max").expect("validated").try_into()?;
+            Ok(FieldType::TD0Decimal { min, max })
+        }
+        unknown => Err(syn::Error::new_spanned(
+            field_type_kv.key(),
+            format!("unknown field_type '{unknown}'"),
+        )),
+    }
+}
+
+fn field_type_pretty_name(field: &TD0Field) -> &'static str {
+    match &field.field_type {
+        FieldType::EnumStr { .. } | FieldType::Text { .. } => "Text",
+        FieldType::I16 { .. } => "I16",
+        FieldType::I8 { .. } => "I8",
+        FieldType::Slice => "Slice",
+        FieldType::TD0Decimal { .. } | FieldType::Volume => "Decimal",
+        FieldType::U32 { .. } => "U16",
+        FieldType::U16 { .. } => "U16",
+        FieldType::U8 { .. } => "U8",
+    }
+}
+
+fn field_type_pretty_name_raw(field: &TD0Field) -> &'static str {
+    match field.native_type {
+        NativeType::I16 => "I16",
+        NativeType::I8 => "I8",
+        NativeType::Slice(_) => "Slice",
+        NativeType::U8 => "U8",
+        NativeType::U16 => "U16",
+        NativeType::U32 => "U32",
+    }
+}
+
+fn get_td0_field_attrs(field: &mut Field) -> syn::Result<(Attribute, AttrHashMap)> {
+    let mut field_attrs_kv: Option<AttrKeyValueList> = None;
+    let mut parse_error: Option<syn::Error> = None;
+    let mut td0_field_attr: Option<Attribute> = None;
+
+    field.attrs.retain(|attr| {
+        if attr.path().is_ident("td0_field") {
+            // Guard against duplicate td0_field attrs:
+            if td0_field_attr.is_some() {
+                parse_error = Some(syn::Error::new_spanned(
+                    attr,
+                    "duplicate td0_field attribute.",
+                ));
+            } else {
+                td0_field_attr = Some(attr.clone());
+                field_attrs_kv = match parse_kv_list(attr) {
+                    Ok(attr_list) => Some(attr_list),
+                    Err(err) => {
+                        parse_error = Some(err);
+                        None
+                    }
+                };
+            }
+            false
+        } else {
+            true
+        }
+    });
+
+    if let Some(error) = parse_error {
+        return Err(error);
+    };
+
+    if td0_field_attr.is_none() || field_attrs_kv.is_none() {
+        return Err(syn::Error::new_spanned(
+            field,
+            "unable to find or parse td0_field attribute.",
+        ));
+    }
+    Ok((
+        td0_field_attr.unwrap(),
+        hashmap_from_kv_list(field_attrs_kv.unwrap()),
+    ))
+}
+
+fn hashmap_from_kv_list(kv_list: AttrKeyValueList) -> AttrHashMap {
+    HashMap::from_iter(
+        kv_list
+            .pairs
+            .into_iter()
+            .map(|kv_item| (kv_item.key().to_string(), kv_item)),
+    )
+}
+
+fn parse_struct_fields(source: ItemStruct) -> syn::Result<Vec<TD0Field>> {
+    let mut fields: Vec<TD0Field> = Vec::new();
+    let mut field_errors: Option<syn::Error> = None;
+    if let Fields::Named(named) = source.fields {
+        for mut named_field in named.named {
+            match try_parse_field(&mut named_field) {
+                Ok(parsed_field) => fields.push(parsed_field),
+                Err(err) => match &mut field_errors {
+                    Some(existing) => existing.combine(err),
+                    None => field_errors = Some(err),
+                },
+            }
+        }
+    } else {
+        return Ok(fields);
+    }
+
+    match field_errors {
+        Some(errors) => Err(errors),
+        None => Ok(fields),
+    }
+}
+
+fn try_parse_field(field: &mut Field) -> syn::Result<TD0Field> {
+    let ident = match field.ident.clone() {
+        Some(val) => val,
+        None => {
+            return Err(syn::Error::new_spanned(
+                field,
+                "td0_field may only be used on named fields.",
+            ));
+        }
+    };
+    let (td0_field_attr, field_attrs_kv) = get_td0_field_attrs(field)?;
+    let field_type = field_type_from_attrs(&field_attrs_kv, td0_field_attr.span())?;
+    let Some(native_type) = get_field_native_type(field) else {
+        return Err(syn::Error::new_spanned(
+            field,
+            "td0_field: unsupported native field type",
+        ));
+    };
+    let ident_str = ident.to_string();
+    Ok(TD0Field {
+        ident,
+        ident_str,
+        field_type,
+        native_type,
+    })
+}
+
+fn validate_field_type_keys(
+    kv_map: &AttrHashMap,
+    required: &[&str],
+    valid: &[&str],
+    attr_span: Span,
+) -> syn::Result<()> {
+    let mut attrs_present: HashSet<&str> = HashSet::from_iter(kv_map.keys().map(String::as_str));
+    attrs_present.remove("field_type");
+
+    // Early out for no (additional) fields present and none required.
+    if attrs_present.is_empty() && required.is_empty() {
+        return Ok(());
+    }
+
+    let required_vals: HashSet<&str> = required.iter().copied().collect();
+    let valid_vals: HashSet<&str> = valid.iter().copied().collect();
+
+    let mut errors: Option<syn::Error> = None;
+    for &invalid in attrs_present.difference(&valid_vals) {
+        let err = syn::Error::new_spanned(kv_map.get(invalid).unwrap().key(), "invalid parameter");
+        match &mut errors {
+            Some(existing) => existing.combine(err),
+            None => errors = Some(err),
+        }
+    }
+
+    for &missing in required_vals.difference(&attrs_present) {
+        let err = syn::Error::new(attr_span, format!("missing parameter {missing}"));
+        match &mut errors {
+            Some(existing) => existing.combine(err),
+            None => errors = Some(err),
+        }
+    }
+
+    if let Some(error) = errors {
+        Err(error)
+    } else {
+        Ok(())
     }
 }
