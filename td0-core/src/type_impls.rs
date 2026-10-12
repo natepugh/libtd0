@@ -5,7 +5,7 @@
 #![doc(hidden)]
 
 use super::helpers::checksum_bytes_to_string;
-use super::result::{OutOfRangeErrorTD0Decimal, TD0Error};
+use super::result::{OutOfRangeErrorTD0Decimal, TD0Error, TD0Result};
 use super::types::{
     ChunkManifest, IntEncodedDecimal, TD0BackupType, TD0DeviceModel, TD0Manifest, TD0Value, Volume,
 };
@@ -40,7 +40,7 @@ impl core::fmt::Display for IntEncodedDecimal {
 
 impl core::str::FromStr for IntEncodedDecimal {
     type Err = TD0Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> TD0Result<Self> {
         let selfobj = Self(s.parse::<f32>().map_err(|_| {
             TD0Error::InvalidInput("input string not parsable as a Decimal.".to_string())
         })?);
@@ -191,7 +191,7 @@ impl core::fmt::Display for TD0DeviceModel {
 impl TryFrom<&str> for TD0DeviceModel {
     type Error = TD0Error;
 
-    fn try_from(val: &str) -> Result<Self, Self::Error> {
+    fn try_from(val: &str) -> TD0Result<Self> {
         match val {
             "SSXP" => Ok(Self::SPDSXPro),
             "UNKN" => Ok(Self::Unknown),
@@ -369,7 +369,7 @@ impl Volume {
     pub const MINUS_INF_FLOAT: f32 = f32::NEG_INFINITY;
     pub const MINUS_INF_I16: i16 = -601;
 
-    fn validate_impl_range(val: &f32) -> Result<(), TD0Error> {
+    fn validate_impl_range(val: &f32) -> TD0Result<()> {
         if (val.lt(&Self::MIN) || val.gt(&Self::MAX)) && val.ne(&Self::MINUS_INF_FLOAT) {
             Err(TD0Error::OutOfRangeDecimal(OutOfRangeErrorTD0Decimal::new(
                 Self::MIN,
@@ -380,14 +380,14 @@ impl Volume {
         }
     }
 
-    pub fn validate(&self) -> Result<(), TD0Error> {
+    pub fn validate(&self) -> TD0Result<()> {
         Self::validate_impl_range(&self.0)
     }
 }
 
 impl core::str::FromStr for Volume {
     type Err = TD0Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> TD0Result<Self> {
         if s.eq_ignore_ascii_case(Self::MINUS_INF_DISPLAY) {
             Ok(Self(Self::MINUS_INF_FLOAT))
         } else {
@@ -432,7 +432,7 @@ impl TryFrom<Volume> for i16 {
 
 impl TryFrom<f32> for Volume {
     type Error = TD0Error;
-    fn try_from(value: f32) -> Result<Self, Self::Error> {
+    fn try_from(value: f32) -> TD0Result<Self> {
         let selfobj = Self(value);
         selfobj.validate()?;
         Ok(selfobj)
@@ -441,7 +441,7 @@ impl TryFrom<f32> for Volume {
 
 impl TryFrom<i16> for Volume {
     type Error = TD0Error;
-    fn try_from(value: i16) -> Result<Self, Self::Error> {
+    fn try_from(value: i16) -> TD0Result<Self> {
         let f32_value = if value == Self::MINUS_INF_I16 {
             // Special handling for "-Infinity" value.
             Self::MINUS_INF_FLOAT

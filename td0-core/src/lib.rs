@@ -25,7 +25,7 @@ pub(crate) mod types;
 //
 pub use header::{OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0IdChunk, TD0ManifestTag, validate_id_tag};
 pub use helpers::{
-    calc_range_overlap, copy_ascii_str_to_u8_slice, copy_slice_to_native,
+    calc_range_overlap, clamp_optional, copy_ascii_str_to_u8_slice, copy_slice_to_native,
     copy_slice_to_native_padded, in_range_inclusive, try_u32_from_usize, usize_from_u32,
 };
 pub use result::{TD0Error, TD0Result};

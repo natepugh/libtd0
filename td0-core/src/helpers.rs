@@ -27,6 +27,13 @@ pub fn checksum_bytes_to_string(val: &[u8]) -> String {
         .collect::<String>()
 }
 
+pub fn clamp_optional<T>(val: T, min: Option<T>, max: Option<T>) -> T
+where
+    T: Bounded + Ord
+{
+    val.clamp(min.unwrap_or(T::min_value()), max.unwrap_or(T::max_value()))
+}
+
 pub fn copy_ascii_str_to_u8_slice(src: &str, dest: &mut [u8], pad_byte: u8) -> TD0Result<()> {
     if src.len() > dest.len() {
         return Err(TD0Error::out_of_range_error_from_usize(0, dest.len()));
