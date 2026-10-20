@@ -144,7 +144,7 @@ pub fn fmt_chunk_values_result(vals: &IndexedItemValues, format: OutputFormat) -
                     .join("  ");
                 lines.push(format!("{idx}: {item_string}"));
             }
-            Ok(lines.join(","))
+            Ok(lines.join("\n"))
         }
         OutputFormat::Json => {
             Ok(serde_json::to_string(&vals).map_err(|_| "unable to format JSON.")?)
