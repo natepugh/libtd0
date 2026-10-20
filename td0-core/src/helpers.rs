@@ -29,7 +29,7 @@ pub fn checksum_bytes_to_string(val: &[u8]) -> String {
 
 pub fn clamp_optional<T>(val: T, min: Option<T>, max: Option<T>) -> T
 where
-    T: Bounded + Ord
+    T: Bounded + Ord,
 {
     val.clamp(min.unwrap_or(T::min_value()), max.unwrap_or(T::max_value()))
 }

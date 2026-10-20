@@ -23,7 +23,8 @@ use ::core::fmt;
 use md5::Digest as _;
 use std::collections::{HashMap, HashSet};
 use td0_core::{
-    ChunkManifest, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File, TD0Manifest, try_u32_from_usize, usize_from_u32,
+    ChunkManifest, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File, TD0Manifest,
+    try_u32_from_usize, usize_from_u32,
 };
 use td0_core::{
     OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0Error, TD0IdChunk, TD0ManifestTag, TD0Result,
