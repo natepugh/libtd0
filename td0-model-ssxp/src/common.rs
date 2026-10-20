@@ -10,6 +10,7 @@ use crate::rev::v1_10::{
     valid_chunk_names as v1_10_valid_chunk_names,
 };
 
+use crate::rev::fuzzy_match_firmware;
 use crate::rev::v2_00::{
     chunk_item_from_bytes as v2_00_chunk_item_from_bytes,
     chunk_item_from_bytes_mut as v2_00_chunk_item_from_bytes_mut,
@@ -41,6 +42,53 @@ const BACKUP_TAG_SYSTEM: &str = "SSXPROBK";
 const DEFAULT_FIRMWARE: &str = "2.00";
 
 const SZ_MD5_DIGEST: usize = 16;
+
+const FACTORY_BACKUP_FIRMWARE: &str = "9.67";
+const FACTORY_BACKUP_BUILD: &str = "0067";
+const FACTORY_BACKUP_SERIAL: &str = "0142345";
+
+pub fn firmware_version(backup_header: &HDRaItem) -> TD0Result<String> {
+    let declared = backup_header.firmware();
+
+    if declared.as_str() == FACTORY_BACKUP_FIRMWARE {
+        if !(backup_header.build().as_str() == FACTORY_BACKUP_BUILD
+            && backup_header.device_serial() == FACTORY_BACKUP_SERIAL
+            && backup_header.tag() == BACKUP_TAG_SYSTEM)
+        {
+            Err(TD0Error::FileParse(
+                "unable to parse firmware version.".to_string(),
+            ))
+        } else {
+            // Extract actual firmware version from the 'name' field.
+            let val = backup_header.name();
+            let val = val
+                .trim()
+                .strip_prefix("Contents_V")
+                .ok_or(TD0Error::FileParse(
+                    "uanble to parse firmware version.".to_string(),
+                ))?;
+
+            for char in val.chars() {
+                if !char.is_ascii_digit() {
+                    return Err(TD0Error::FileParse(
+                        "unable to parse firmware version.".to_string(),
+                    ));
+                }
+            }
+            let mut val = val.to_string();
+            val.insert(1, '.');
+
+            Ok(val
+                .get(0..4)
+                .ok_or(TD0Error::FileParse(
+                    "unable to parse firmware version.".to_string(),
+                ))?
+                .to_string())
+        }
+    } else {
+        Ok(declared)
+    }
+}
 
 /// The header of a `TD0Chunk` in a `TD0File`.
 #[derive(Copy, Clone, Debug, Default, FromBytes, PartialEq, Immutable, IntoBytes, KnownLayout)]
@@ -208,6 +256,26 @@ impl HDRaItem {
             first_item_offset: U32::from(u32::try_from(size_of::<ChunkHeader>()).unwrap()),
             unknown_header_data: [0; 4],
         }
+    }
+
+    pub fn tag(&self) -> String {
+        self.field_value("tag").unwrap().to_string()
+    }
+
+    pub fn name(&self) -> String {
+        self.field_value("name").unwrap().to_string()
+    }
+
+    pub fn firmware(&self) -> String {
+        self.field_value("firmware").unwrap().to_string()
+    }
+
+    pub fn build(&self) -> String {
+        self.field_value("build").unwrap().to_string()
+    }
+
+    pub fn device_serial(&self) -> String {
+        self.field_value("device_serial").unwrap().to_string()
     }
 }
 
@@ -430,10 +498,67 @@ impl SSXPTD0FileMetadata {
     }
 }
 
+struct ChunkItemAccessorCallbacks {
+    pub chunk_item_ref_from_bytes_cb:
+        for<'a, 'b> fn(&'a str, &'b [u8]) -> TD0Result<&'b dyn TD0ChunkItem>,
+    pub chunk_item_mut_from_bytes_cb:
+        for<'a, 'b> fn(&'a str, &'b mut [u8]) -> TD0Result<&'b mut dyn TD0ChunkItem>,
+    #[expect(clippy::type_complexity, reason = "callback types are complex.")]
+    pub chunk_item_owned_from_bytes_cb: fn(&str, &[u8]) -> TD0Result<Box<dyn TD0ChunkItem>>,
+    pub default_chunk_item_cb: fn(&str) -> Option<Box<dyn TD0ChunkItem>>,
+    pub valid_names_cb: fn() -> &'static [&'static str],
+}
+
+fn determine_chunk_item_accessor_callbacks(
+    hdr_a_tag: &TD0ManifestTag,
+    buf: &[u8],
+) -> TD0Result<ChunkItemAccessorCallbacks> {
+    let mut backup_chunk_range = hdr_a_tag.chunk_range();
+    backup_chunk_range.start += size_of::<ChunkHeader>();
+
+    let backup_chunk = HDRaItem::ref_from_bytes(buf.get(backup_chunk_range).ok_or(
+        TD0Error::FileParse("unable to parse backup (HDRa) chunk.".to_string()),
+    )?)
+    .map_err(|_| TD0Error::FileParse("unable to parse backup (HDRa) chunk.".to_string()))?;
+
+    match fuzzy_match_firmware(firmware_version(backup_chunk)?.as_str()) {
+        "1.10" => {
+            // Chunk item callbacks:
+            Ok(ChunkItemAccessorCallbacks {
+                chunk_item_ref_from_bytes_cb: v1_10_chunk_item_from_bytes,
+                chunk_item_mut_from_bytes_cb: v1_10_chunk_item_from_bytes_mut,
+                chunk_item_owned_from_bytes_cb: v1_10_chunk_item_from_bytes_owned,
+                default_chunk_item_cb: v1_10_get_default_chunk_item,
+                valid_names_cb: v1_10_valid_chunk_names,
+            })
+        }
+        "2.00" => Ok(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: v2_00_chunk_item_from_bytes,
+            chunk_item_mut_from_bytes_cb: v2_00_chunk_item_from_bytes_mut,
+            chunk_item_owned_from_bytes_cb: v2_00_chunk_item_from_bytes_owned,
+            default_chunk_item_cb: v2_00_get_default_chunk_item,
+            valid_names_cb: v2_00_valid_chunk_names,
+        }),
+        _ => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
+            backup_chunk.firmware(),
+        )),
+    }
+}
+
 pub struct SSXPTD0File {
     buf: Vec<u8>,
     dirty: bool,
     meta: SSXPTD0FileMetadata,
+
+    // Chunk item callbacks:
+    chunk_item_ref_from_bytes_cb:
+        for<'a, 'b> fn(&'a str, &'b [u8]) -> TD0Result<&'b dyn TD0ChunkItem>,
+    chunk_item_mut_from_bytes_cb:
+        for<'a, 'b> fn(&'a str, &'b mut [u8]) -> TD0Result<&'b mut dyn TD0ChunkItem>,
+    #[expect(clippy::type_complexity, reason = "callback types are complex.")]
+    chunk_item_owned_from_bytes_cb: fn(&str, &[u8]) -> TD0Result<Box<dyn TD0ChunkItem>>,
+    default_chunk_item_cb: fn(&str) -> Option<Box<dyn TD0ChunkItem>>,
+    valid_names_cb: fn() -> &'static [&'static str],
 }
 
 fn get_chunk_header_bytes<'a>(buf: &'a [u8], manifest_tag: &TD0ManifestTag) -> TD0Result<&'a [u8]> {
@@ -576,12 +701,6 @@ impl SSXPTD0File {
         self.calc_header_size() + self.meta.chunk_data_size() + SZ_MD5_DIGEST
     }
 
-    pub fn firmware_version(&self) -> TD0Result<String> {
-        let backup_header = self.backup_header()?;
-
-        Ok(backup_header.field_value("firmware").unwrap().to_string())
-    }
-
     pub fn new_with(
         firmware_version: Option<&str>,
         backup_type: Option<TD0BackupType>,
@@ -605,7 +724,21 @@ impl SSXPTD0File {
             Some(TD0BackupType::Unknown) => BACKUP_TAG_KIT,
             None => BACKUP_TAG_KIT,
         };
+
+        // Set accessors as per newobj's firmware version. (the default creation at
+        // the top of this function sets default accessors.)
         backup_chunk.tag.copy_from_slice(backup_str.as_bytes());
+        let hdr_a_tag: &TD0ManifestTag = newobj
+            .meta
+            .manifest_tag("HDRa")
+            .expect("we created the tag.");
+        let accessors: ChunkItemAccessorCallbacks =
+            determine_chunk_item_accessor_callbacks(hdr_a_tag, &newobj.buf)?;
+        newobj.chunk_item_ref_from_bytes_cb = accessors.chunk_item_ref_from_bytes_cb;
+        newobj.chunk_item_mut_from_bytes_cb = accessors.chunk_item_mut_from_bytes_cb;
+        newobj.chunk_item_owned_from_bytes_cb = accessors.chunk_item_owned_from_bytes_cb;
+        newobj.default_chunk_item_cb = accessors.default_chunk_item_cb;
+        newobj.valid_names_cb = accessors.valid_names_cb;
         Ok(newobj)
     }
 
@@ -781,16 +914,8 @@ impl SSXPTD0File {
 
 impl TD0File for SSXPTD0File {
     fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> TD0Result<()> {
-        let default_item = match self.firmware_version()?.as_str() {
-            "1.10" => v1_10_get_default_chunk_item(chunk_name),
-            "2.00" => v2_00_get_default_chunk_item(chunk_name),
-            unexpected_version => {
-                return Err(TD0Error::UnsupportedDeviceFirmwareVersion(
-                    unexpected_version.to_string(),
-                ));
-            }
-        }
-        .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
+        let default_item = (self.default_chunk_item_cb)(chunk_name)
+            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
 
         let item_size = size_of_val(&*default_item);
 
@@ -1021,10 +1146,23 @@ impl TD0File for SSXPTD0File {
     fn try_from_bytes(bytes: &[u8]) -> TD0Result<Self> {
         let meta: SSXPTD0FileMetadata = SSXPTD0FileMetadata::new_from_buf(bytes)?;
 
+        // Get backup chunk in order determine which chunk item accessor callbacks to load.
+        let backup_tag = meta.manifest_tag("HDRa").ok_or(TD0Error::FileParse(
+            "missing backup header (HDRa) tag.".to_string(),
+        ))?;
+
+        let accessors: ChunkItemAccessorCallbacks =
+            determine_chunk_item_accessor_callbacks(backup_tag, bytes)?;
+
         Ok(Self {
             buf: bytes.to_vec(),
             dirty: false,
             meta,
+            chunk_item_ref_from_bytes_cb: accessors.chunk_item_ref_from_bytes_cb,
+            chunk_item_mut_from_bytes_cb: accessors.chunk_item_mut_from_bytes_cb,
+            chunk_item_owned_from_bytes_cb: accessors.chunk_item_owned_from_bytes_cb,
+            default_chunk_item_cb: accessors.default_chunk_item_cb,
+            valid_names_cb: accessors.valid_names_cb,
         })
     }
 
@@ -1057,13 +1195,7 @@ impl TD0File for SSXPTD0File {
             .and_then(|irange| self.buf.get(irange))
             .ok_or(TD0Error::ChunkItemParse)?;
 
-        match self.firmware_version()?.as_str() {
-            "1.10" => v1_10_chunk_item_from_bytes(chunk_name, bytes),
-            "2.00" => v2_00_chunk_item_from_bytes(chunk_name, bytes),
-            unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
-                unexpected_version.to_string(),
-            )),
-        }
+        (self.chunk_item_ref_from_bytes_cb)(chunk_name, bytes)
     }
 
     fn chunk_item_mut(
@@ -1075,24 +1207,17 @@ impl TD0File for SSXPTD0File {
             .meta
             .chunk(chunk_name)
             .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
-        let firmware_version = self.firmware_version()?.clone();
         let bytes = chunk
             .item_range(item_index)
             .and_then(|irange| self.buf.get_mut(irange))
             .ok_or(TD0Error::ChunkItemParse)?;
 
-        match firmware_version.as_str() {
-            "1.10" => {
+        match (self.chunk_item_mut_from_bytes_cb)(chunk_name, bytes) {
+            Ok(chunk_item) => {
                 self.dirty = true;
-                v1_10_chunk_item_from_bytes_mut(chunk_name, bytes)
+                Ok(chunk_item)
             }
-            "2.00" => {
-                self.dirty = true;
-                v2_00_chunk_item_from_bytes_mut(chunk_name, bytes)
-            }
-            unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
-                unexpected_version.to_string(),
-            )),
+            Err(err) => Err(err),
         }
     }
 
@@ -1107,25 +1232,11 @@ impl TD0File for SSXPTD0File {
             .and_then(|irange| self.buf.get(irange))
             .ok_or(TD0Error::ChunkItemParse)?;
 
-        match self.firmware_version()?.as_str() {
-            "1.10" => v1_10_chunk_item_from_bytes_owned(chunk_name, bytes),
-            "2.00" => v2_00_chunk_item_from_bytes_owned(chunk_name, bytes),
-            unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
-                unexpected_version.to_string(),
-            )),
-        }
+        (self.chunk_item_owned_from_bytes_cb)(chunk_name, bytes)
     }
 
     fn chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>> {
-        match self
-            .firmware_version()
-            .unwrap_or("unknown".to_string())
-            .as_str()
-        {
-            "1.10" => v1_10_get_default_chunk_item(chunk_name),
-            "2.00" => v2_00_get_default_chunk_item(chunk_name),
-            _ => None,
-        }
+        (self.default_chunk_item_cb)(chunk_name)
     }
 
     fn chunk_pos(&self, chunk_name: &str) -> Option<usize> {
@@ -1229,6 +1340,7 @@ impl TD0File for SSXPTD0File {
         header_tag
             .set_chunk_size(size_of::<ChunkHeader>() + size_of::<HDRaItem>())
             .unwrap();
+        let header_tag = header_tag.to_owned();
 
         // Set buf bytes from the default backup chunk header.
         let chunk_header = HDRaItem::default_header();
@@ -1253,10 +1365,18 @@ impl TD0File for SSXPTD0File {
         let meta: SSXPTD0FileMetadata =
             SSXPTD0FileMetadata::new_from_buf(&buf).expect("all data is bespoke.");
 
+        let accessors = determine_chunk_item_accessor_callbacks(&header_tag, &buf)
+            .expect("all data is bespoke.");
+
         Self {
             buf,
             dirty: false,
             meta,
+            chunk_item_ref_from_bytes_cb: accessors.chunk_item_ref_from_bytes_cb,
+            chunk_item_mut_from_bytes_cb: accessors.chunk_item_mut_from_bytes_cb,
+            chunk_item_owned_from_bytes_cb: accessors.chunk_item_owned_from_bytes_cb,
+            default_chunk_item_cb: accessors.default_chunk_item_cb,
+            valid_names_cb: accessors.valid_names_cb,
         }
     }
 
@@ -1264,14 +1384,8 @@ impl TD0File for SSXPTD0File {
         self.meta.tag_order.clone()
     }
 
-    fn valid_chunk_names(&self) -> TD0Result<&'static [&'static str]> {
-        match self.firmware_version()?.as_str() {
-            "1.10" => Ok(v1_10_valid_chunk_names()),
-            "2.00" => Ok(v2_00_valid_chunk_names()),
-            unexpected_version => Err(TD0Error::UnsupportedDeviceFirmwareVersion(
-                unexpected_version.to_string(),
-            )),
-        }
+    fn valid_chunk_names(&self) -> &'static [&'static str] {
+        (self.valid_names_cb)()
     }
 
     fn validate_load(&self) -> TD0Result<()> {
@@ -1311,6 +1425,8 @@ impl core::fmt::Debug for SSXPTD0File {
 
 #[cfg(test)]
 mod tests {
+    use td0_core::{TD0Value, TD0ValueRaw};
+
     use super::*;
 
     #[test]
@@ -1363,5 +1479,54 @@ mod tests {
         assert_eq!(chunk.item_range(1), Some(ITEM_0_POS + 20..ITEM_0_POS + 40));
         assert_eq!(chunk.item_range(4), Some(ITEM_0_POS + 80..ITEM_0_POS + 100));
         assert_eq!(chunk.item_range(5), None);
+    }
+
+    #[test]
+    fn test_parse_firmware_normal() {
+        let mut td0file = SSXPTD0File::new();
+        let backup_chunk = td0file.backup_header_mut().unwrap();
+        backup_chunk
+            .set_field_value("firmware", TD0Value::new_text_value("2.00"))
+            .unwrap();
+
+        assert_eq!(firmware_version(backup_chunk), Ok("2.00".to_string()));
+    }
+
+    #[test]
+    fn test_parse_firmware_factory_backup() {
+        let mut td0file = SSXPTD0File::new();
+        let backup_chunk = td0file.backup_header_mut().unwrap();
+        backup_chunk
+            .set_field_value("tag", TD0Value::new_text_value(BACKUP_TAG_SYSTEM))
+            .unwrap();
+        // "name" has extra space padding that would be trimmed by set_field_value, hence the
+        // set_field_value_raw call with a Slice.
+        backup_chunk
+            .set_field_value_raw(
+                "name",
+                TD0ValueRaw::Slice(Box::new(b"Contents_V1020  ".to_owned())),
+            )
+            .unwrap();
+        backup_chunk
+            .set_field_value(
+                "firmware",
+                TD0Value::new_text_value(FACTORY_BACKUP_FIRMWARE),
+            )
+            .unwrap();
+        backup_chunk
+            .set_field_value("build", TD0Value::new_text_value(FACTORY_BACKUP_BUILD))
+            .unwrap();
+        // FACTORY_BACKUP_SERIAL omits an extra space that the raw value from the file would have,
+        // necessitating creating the correct raw value and calling set_field_value_raw with it.
+        // (just calling set_value with a string containing the trailing space will trim that space.)
+        let serial_val = format!("{} ", FACTORY_BACKUP_SERIAL);
+        backup_chunk
+            .set_field_value_raw(
+                "device_serial",
+                TD0ValueRaw::Slice(serial_val.into_bytes().into_boxed_slice()),
+            )
+            .unwrap();
+
+        assert_eq!(firmware_version(backup_chunk), Ok("1.02".to_string()));
     }
 }

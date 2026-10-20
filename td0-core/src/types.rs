@@ -824,19 +824,19 @@ pub trait TD0File: Send + Sync + core::fmt::Debug {
     /// use td0::{new_td0_file, TD0File, TD0DeviceModel, TD0BackupType};
     ///
     /// let file_v1_10 = new_td0_file(TD0DeviceModel::SPDSXPro, "1.10")?;
-    /// assert_eq!(file_v1_10.valid_chunk_names()?, &[
+    /// assert_eq!(file_v1_10.valid_chunk_names(), &[
     ///     "HDRa", "KITa", "CURa", "STLa", "STPa", "TGLa", "TRGa", "WVPa",
     /// ]);
     ///
     /// let file_v2_00 = new_td0_file(TD0DeviceModel::SPDSXPro, "2.00")?;
-    /// assert_eq!(file_v2_00.valid_chunk_names()?, &[
+    /// assert_eq!(file_v2_00.valid_chunk_names(), &[
     ///     "HDRa", "KITa", "KITb", "CURa", "PVRa", "STLa", "STPa", "STPb", "TGLa", "TRGa", "WVPa",
     /// ]);
     ///
     /// # Ok::<(), TD0Error>(())
     /// ```
     ///
-    fn valid_chunk_names(&self) -> TD0Result<&'static [&'static str]>;
+    fn valid_chunk_names(&self) -> &'static [&'static str];
 
     /// Perform a post-parse validation of the file.
     ///
