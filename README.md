@@ -6,7 +6,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 # td0: A parsing and editing library for the .TD0 e-kit/sample pad backup file format.
 
-This library provides the ability to extract configuration (but not audio) data from .TD0 format backup files (used by 
+This library provides the ability to extract configuration (but not audio) data from .TD0 format backup files (used by
 some Roland Sample Pads and e-kits.) It can also edit some data in those files and rearrange
 items (such as Kits) within a backup file without the device being connected to the computer.
 
@@ -28,13 +28,13 @@ Should you choose to do so,
 - Create a whole system backup first, and save it somewhere where you won't accidentally edit it.
 - Download the Factory Reset firmware from Roland ahead of time, in case you need to reset your configuration.
 - After loading an experimental backup onto your device, be sure to test all features you want to use well ahead
-  of any kind of performance. The author(s) are NOT RESPONSBLE for any damage caused to your device, career, 
+  of any kind of performance. The author(s) are NOT RESPONSBLE for any damage caused to your device, career,
   or reputation.
 
 ## Installation
 
 ### Building from source
-This project can built with Rust "2024" edition or up. 
+This project can built with Rust "2024" edition or up.
 
 **Prerequisites**
 - Rust installed locally: https://rust-lang.org/learn/get-started/
@@ -52,7 +52,7 @@ If you want to build the Python bindings too:
 - Build:
     - `maturin build --generate-stubs`
 
-The compiled binaries are saved in the `libtd0/target/release` directory by default. 
+The compiled binaries are saved in the `libtd0/target/release` directory by default.
 
 ### Running
 After installing the binary:
@@ -71,7 +71,7 @@ After installing the binary:
     Device Model: SPDSXPro
     Device Firmware: 1.10
     Device Firmware Build: 0083
-    Device Serial: XXXXXXX 
+    Device Serial: XXXXXXX
     Actual Size: 3983408
     Calculated Size: 3983408
     Chunks:
@@ -116,7 +116,7 @@ After installing the binary:
 ### SPD-SX Pro
 Supported firmware versions: 1.10, 2.00
 
-Read/Write 
+Read/Write
 - Per Kit: 1800+ settings (not all have been discovered- ~400 settings remain unaccounted for.)
 - Setlist: Name + kit order
 - LED Colors: R, G, B values for all 16 color presets.
@@ -129,7 +129,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- FIX: Roland factory restore backup files not considered valid.
+- Fixed: Roland factory restore backup files not considered valid.
+- Changed: More efficient macros. The full build now takes ~1/3 of the previous time.
+- Fixed: td0file chunk-values command now prints each item's values on a new line.
 
 ## [0.1.0] - Initial release
 - `td0file` tool works in most cases.
