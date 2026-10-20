@@ -7,25 +7,100 @@ name: Rust
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*.*.*" ]
   pull_request:
     branches: [ "main" ]
 env:
   CARGO_TERM_COLOR: always
 jobs:
-  build:
+  test:
+    name: Lint + Test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Build non-python
-      run: cargo build --workspace --exclude=td0-python
-    - name: Run tests
-      run: cargo test --verbose
-    - name: build-pytd0
-      # You may pin to the exact commit or the version.
-      # uses: PyO3/maturin-action@6c20e5e8673d2470a20e14adf067b68db6fee644
-      uses: PyO3/maturin-action@v1.43.0
-      with:
-        args: --generate-stubs
-        rust-toolchain: stable
-        working-directory: ./td0-python/
-        
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+    
+      - name: Enable Smart Cargo Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Format Lint
+        run: cargo fmt --check
+
+      - name: Clippy Lint
+        run: cargo clippy -- -D warnings
+
+      - name: Run Tests
+        run: cargo test --verbose
+      
+  build-td0file-release:
+    name: Build for ${{ matrix.name }}
+    needs: test
+    strategy:
+      matrix:
+        include:
+          # Build libc-linked binary.
+          - os: ubuntu-latest
+            name: linux-gnu
+            artifact_name: td0file-x86_64-linux-gnu
+            binary_path: target/release/td0file
+            build_command: cargo build --workspace --exclude td0-python --release
+          # Build musl binary.
+          - os: ubuntu-latest
+            name: linux-musl
+            artifact_name: td0file-x86_64-linux-musl
+            binary_path: target/x86_64-unknown-linux-musl/release/td0file
+            # Target must be added via rustup, then specified during cargo build.
+            build_command: |
+              rustup target add x86_64-unknown-linux-musl
+              sudo apt-get update && sudo apt-get install -y musl-tools
+              cargo build --workspace --exclude td0-python --release --target x86_64-unknown-linux-musl
+          - os: macos-latest
+            name: macos
+            artifact_name: td0file-x86_64-macos
+            binary_path: target/release/td0file
+            build_command: cargo build --workspace --exclude td0-python --release
+          - os: windows-latest
+            name: windows
+            artifact_name: td0file-x86_64-windows
+            binary_path: target/release/td0file.exe
+            build_command: cargo build --workspace --exclude td0-python --release
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build binary
+        run: ${{ matrix.build_command }}
+
+      - name: Upload runner artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.binary_path }}
+          retention-days: 1
+
+  create-release:
+    name: Create Unified Release
+    needs: build-td0file-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create releases and upload assets
+    steps:
+      - name: Create artifacts/ dir.
+        run: mkdir artifacts/
+      - name: Retrieve built artifacts
+        uses: actions/download-artifact@v8
+        with:
+           path: artifacts
+           pattern: td0file*
+      - name: Create Github Release
+        uses: softprops/action-gh-release@v3
+        with:
+           working_directory: artifacts
+           files: td0file*
+           generate_release_notes: true
