@@ -4,7 +4,7 @@
 
 [package]
 name = "td0"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 authors = ["Nathan Pugh <natepugh@gmail.com>"]
@@ -25,9 +25,9 @@ model-spdsx-pro = [
 
 [dependencies]
 # Internal crates
-td0-core = { path = "../td0-core", version = "0.1.0" }
-td0-derive = { path = "../td0-derive", version = "0.1.0" }
-td0-model-ssxp = { path = "../td0-model-ssxp", optional = true, version = "0.1.0" }
+td0-core = { path = "../td0-core", version = "0.1.1" }
+td0-derive = { path = "../td0-derive", version = "0.1.1" }
+td0-model-ssxp = { path = "../td0-model-ssxp", optional = true, version = "0.1.1" }
 
 # External dependencies
 serde = { version = "1.0.229", features = ["derive"], optional = true }
