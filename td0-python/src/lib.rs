@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use pyo3::{PyErr, PyResult};
 
 #[pymodule]
-mod pytd0 {
+mod libtd0 {
     use super::*;
     use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
     use rust_decimal::prelude::FromPrimitive;
