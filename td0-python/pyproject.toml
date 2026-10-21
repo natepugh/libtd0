@@ -13,3 +13,4 @@ dynamic = ["version"]
 
 [tool.maturin]
 binding = "pyo3"
+features = ["pyo3/abi3-py311"]
