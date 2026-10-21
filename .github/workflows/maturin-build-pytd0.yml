@@ -3,7 +3,7 @@
 #
 #    maturin generate-ci --manifest-path td0-python/Cargo.toml -o .github/workflows/maturin-build-pytd0.yml github
 #
-name: CI
+name: Build pytd0 wheels
 
 on:
   push:
@@ -45,14 +45,14 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path td0-python/Cargo.toml
+          args: --release --out dist --generate-stubs --manifest-path td0-python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
       - name: Build free-threaded wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path td0-python/Cargo.toml -i python3.14t
+          args: --release --out dist --generate-stubs --manifest-path td0-python/Cargo.toml -i python3.14t
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
       - name: Upload wheels
@@ -83,14 +83,14 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path td0-python/Cargo.toml
+          args: --release --out dist --generate-stubs --manifest-path td0-python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2
       - name: Build free-threaded wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path td0-python/Cargo.toml -i python3.14t
+          args: --release --out dist --generate-stubs --manifest-path td0-python/Cargo.toml -i python3.14t
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2
       - name: Upload wheels
@@ -123,7 +123,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path td0-python/Cargo.toml
+          args: --release --out dist --generate-stubs --manifest-path td0-python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - uses: actions/setup-python@v6
         with:
@@ -133,7 +133,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path td0-python/Cargo.toml -i python3.14t
+          args: --release --out dist --generate-stubs --manifest-path td0-python/Cargo.toml -i python3.14t
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Upload wheels
         uses: actions/upload-artifact@v6
@@ -159,7 +159,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path td0-python/Cargo.toml
+          args: --release --out dist --generate-stubs --manifest-path td0-python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - uses: actions/setup-python@v6
         with:
@@ -168,7 +168,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path td0-python/Cargo.toml -i python3.14t
+          args: --release --out dist --generate-stubs --manifest-path td0-python/Cargo.toml -i python3.14t
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Upload wheels
         uses: actions/upload-artifact@v6
