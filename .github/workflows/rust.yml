@@ -98,9 +98,16 @@ jobs:
         with:
            path: artifacts
            pattern: td0file*
+      - name: Copy extracted artifacts
+        run: |
+          mkdir release
+          for target in td0file-x86_64-linux-gnu td0file-x86_64-linux-musl td0file-x86_64-macos  ; do
+            cp "artifacts/${target}/td0file" "release/td0file-${target}"
+          done
+          cp artifacts/td0file-x86_64-windows/td0file.exe release/td0file.exe
       - name: Create Github Release
         uses: softprops/action-gh-release@v3
         with:
-           working_directory: artifacts
+           working_directory: release
            files: td0file*
            generate_release_notes: true
