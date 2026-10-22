@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use clap::{Parser, Subcommand};
-use td0::{TD0Error, TD0File, parse_td0_file};
+use td0::{TD0Error, TD0File, TD0Result, parse_td0_file};
 
 use std::error::Error;
 use std::fs;
@@ -56,6 +56,12 @@ fn reindex_item_num_or_exit(val: usize) -> usize {
     val - 1
 }
 
+fn write_td0_file(td0file: &mut dyn TD0File, dest: &PathBuf) -> TD0Result<()> {
+    let output_bytes = td0file.try_to_bytes()?;
+
+    fs::write(dest, output_bytes).map_err(|err| TD0Error::ValidationFailed(err.to_string()))
+}
+
 fn parse_key_val<T, U>(s: &str) -> Result<(T, U), Box<dyn Error + Send + Sync + 'static>>
 where
     T: std::str::FromStr,
@@ -106,6 +112,15 @@ enum Commands {
         display_field: String,
         #[arg(value_delimiter = ',')]
         new_order: Vec<usize>,
+        #[arg(short, long)]
+        output_file: PathBuf,
+    },
+    ChunkItemsSwap {
+        chunk_name: String,
+        item_1: usize,
+        item_2: usize,
+        #[arg(short, long)]
+        output_file: PathBuf,
     },
     SetChunkItemValues {
         chunk_name: String,
@@ -113,6 +128,7 @@ enum Commands {
         item_num: usize,
         #[arg(short = 'v', long = "values", value_name = "key=value", value_parser = parse_key_val::<String, String>)]
         values: Vec<(String, String)>,
+        output_file: PathBuf,
     },
     ChunkValues {
         chunk_name: String,
@@ -291,6 +307,7 @@ fn main() {
             chunk_name,
             item_num,
             values,
+            output_file,
         } => {
             let mut td0file = parse_td0_file_or_exit(&cli.file);
             let inum_reindexed = reindex_item_num_or_exit(*item_num);
@@ -304,11 +321,22 @@ fn main() {
                 .unwrap_or_else(|err| exit_err(err, ERR_UNKNOWN));
 
             println!("{output}");
+
+            // Finalize before write, always.
+            td0file
+                .finalize()
+                .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
+            match write_td0_file(&mut *td0file, output_file) {
+                Ok(_) => (),
+                Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
+            }
+            println!("Modified data written to file: {}", output_file.display());
         }
         Commands::ChunkItemsReorder {
             chunk_name,
             display_field,
             new_order,
+            output_file,
         } => {
             let mut td0file = parse_td0_file_or_exit(&cli.file);
             let diffs =
@@ -321,6 +349,39 @@ fn main() {
                 .unwrap_or_else(|err| exit_err(err, ERR_UNKNOWN));
 
             println!("{output}");
+
+            td0file
+                .finalize()
+                .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
+            match write_td0_file(&mut *td0file, output_file) {
+                Ok(_) => (),
+                Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
+            }
+            println!("Modified data written to file: {}", output_file.display());
+        }
+        Commands::ChunkItemsSwap {
+            chunk_name,
+            item_1,
+            item_2,
+            output_file,
+        } => {
+            let mut td0file = parse_td0_file_or_exit(&cli.file);
+            let inum_1_reindexed = reindex_item_num_or_exit(*item_1);
+            let inum_2_reindexed = reindex_item_num_or_exit(*item_2);
+
+            match td0file.chunk_items_swap(chunk_name, inum_1_reindexed, inum_2_reindexed) {
+                Ok(_) => (),
+                Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
+            }
+
+            td0file
+                .finalize()
+                .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
+            match write_td0_file(&mut *td0file, output_file) {
+                Ok(_) => (),
+                Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
+            }
+            println!("Modified data written to file: {}", output_file.display());
         }
     }
 }
