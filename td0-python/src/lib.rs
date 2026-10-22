@@ -280,10 +280,10 @@ mod libtd0 {
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             match s {
                 // These match the enum libtd0-derive::TD0FieldType .
-                "EnumStr" | "Text" => Ok(Self::String),
+                "Text" => Ok(Self::String),
                 "I8" | "I16" => Ok(Self::Int),
                 "Slice" => Ok(Self::Bytes),
-                "TD0Decimal" | "Volume" => Ok(Self::Decimal),
+                "Decimal" => Ok(Self::Decimal),
                 "U8" | "U16" | "U32" => Ok(Self::Int),
                 _ => Err(PyErr::new::<PyValueError, _>(format!(
                     "invalid value type: '{s}'"
@@ -348,13 +348,13 @@ mod libtd0 {
 
         fn set_field_value<'py>(&mut self, field: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
             let val: Impl_TD0Value = match self._impl.field_type(field) {
-                Some("EnumStr") | Some("Text") => Impl_TD0Value::Text(value.extract::<String>()?),
+                Some("Text") => Impl_TD0Value::Text(value.extract::<String>()?),
                 Some("I8") => Impl_TD0Value::I8(value.extract::<i8>()?),
                 Some("I16") => Impl_TD0Value::I16(value.extract::<i16>()?),
                 Some("Slice") => {
                     Impl_TD0Value::Slice(value.extract::<Vec<u8>>()?.into_boxed_slice())
                 }
-                Some("TD0Decimal") | Some("Volume") => {
+                Some("Decimal") => {
                     let dec_value = value.extract::<rust_decimal::Decimal>()?;
                     Impl_TD0Value::Decimal(f32::try_from(dec_value).map_err(|err| {
                         PyErr::new::<PyValueError, _>(format!("Out of range: {err}"))
@@ -385,14 +385,12 @@ mod libtd0 {
             value: Bound<'py, PyAny>,
         ) -> PyResult<()> {
             let val: Impl_TD0ValueRaw = match self._impl.field_type(field) {
-                Some("EnumStr") | Some("Slice") | Some("Text") => {
+                Some("Slice") | Some("Text") => {
                     Impl_TD0ValueRaw::Slice(value.extract::<Vec<u8>>()?.into_boxed_slice())
                 }
                 Some("I8") => Impl_TD0ValueRaw::I8(value.extract::<i8>()?),
                 Some("I16") => Impl_TD0ValueRaw::I16(value.extract::<i16>()?),
-                Some("TD0Decimal") | Some("Volume") => {
-                    Impl_TD0ValueRaw::I16(value.extract::<i16>()?)
-                }
+                Some("Decimal") => Impl_TD0ValueRaw::I16(value.extract::<i16>()?),
                 Some("U8") => Impl_TD0ValueRaw::U8(value.extract::<u8>()?),
                 Some("U16") => Impl_TD0ValueRaw::U16(value.extract::<u16>()?),
                 Some("U32") => Impl_TD0ValueRaw::U32(value.extract::<u32>()?),
