@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
 SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
-# td0: A parsing and editing library for the .TD0 e-kit/sample pad backup file format.
+# td0: A parsing and editing library for the .TD0 e-kit/sample pad backup file format
 
 This library provides the ability to extract configuration (but not audio) data from .TD0 format backup files (used by
 some Roland Sample Pads and e-kits.) It can also edit some data in those files and rearrange
@@ -25,6 +25,7 @@ a device could unexpected behavior up to and including hard-locking (unrecoverab
 currently **NOT** recommended by the author(s) of this library.
 
 Should you choose to do so,
+
 - Create a whole system backup first, and save it somewhere where you won't accidentally edit it.
 - Download the Factory Reset firmware from Roland ahead of time, in case you need to reset your configuration.
 - After loading an experimental backup onto your device, be sure to test all features you want to use well ahead
@@ -33,37 +34,30 @@ Should you choose to do so,
 
 ## Installation
 
-### Building from source
-This project can built with Rust "2024" edition or up.
+### Download the latest release of the td0file utility
 
-**Prerequisites**
-- Rust installed locally: https://rust-lang.org/learn/get-started/
+Binary downloads available for Windows, MacOS, and Linux.
 
-**Build Steps**
-- Either clone the source code or download a .zip file from Github and extract into a directory.
-    - e.g. `git clone https://github.com/natepugh/libtd0.git`
-- Navigate to that directory and use cargo to build:
-    - `cargo build --bins --release`
+[Get the Latest Release](releases/latest)
 
-If you want to build the Python bindings too:
-- Install [Maturin](https://github.com/pyo3/maturin)
-- Navigate to the `libtd0/td0-python` directory
-- Activate your virtualenv or use uv to invoke maturin
-- Build:
-    - `maturin build --generate-stubs`
+[View All Releases](releases)
 
-The compiled binaries are saved in the `libtd0/target/release` directory by default.
+If you're unsure which Linux version to pick, start with the -linux-musl binary which should be compatible
+with a wider range of Linux installs than the -linux-gnu version.
 
 ### Running
+
 After installing the binary:
 
 - View its usage by running the `--help` command:
-    - `td0file --help`
+  - `td0file --help`
 - Display the file manifest information:
+
     ```bash
     td0file -f BCKUP-ALL.TD0
     ```
-    ```
+
+    ```text
     Backup Name: BACKUP-APP
     Backup Type: System
     Checksum from File   : a57bd129d71a9fc33ee1e438391eb5a4
@@ -88,18 +82,21 @@ After installing the binary:
     JSON output is also supported for most operations:
 
     ```bash
-    tdofile -f BCKUP-ALL.TD0 --output-format=json
+    td0file -f BCKUP-ALL.TD0 --output-format=json
     ```
-    ```
+
+    ```text
     {"backup_name":"BACKUP-APP","backup_type":"System", ...etc.}
     ```
+
 - Dump specific fields as .csv (for import into a spreadsheet):
     Dump the "name" and "tempo" fields for all kits.
 
     ```bash
     td0file -f BCKUP-ALL.TD0 chunk-values KITa --fields=name,tempo --output-format=csv
     ```
-    ```
+
+    ```text
     index,name,tempo
     1,Dance,120.0
     2,Lofi HipHop,85.0
@@ -113,17 +110,45 @@ After installing the binary:
     ```
 
 ## Support by model
+
 ### SPD-SX Pro
+
 Supported firmware versions: 1.10, 2.00
 
 Read/Write
+
 - Per Kit: 1800+ settings (not all have been discovered- ~400 settings remain unaccounted for.)
 - Setlist: Name + kit order
 - LED Colors: R, G, B values for all 16 color presets.
 - Tag names
 - Wave: start/end/loop points, wav name, wav filename.
 
-# Changelog
+## Building from source
+
+This project can built with Rust "2024" edition or up.
+
+### Prerequisites
+
+- Rust installed locally: <https://rust-lang.org/learn/get-started/>
+
+### Build Steps
+
+- Either clone the source code or download a .zip file from Github and extract into a directory.
+  - e.g. `git clone https://github.com/natepugh/libtd0.git`
+- Navigate to that directory and use cargo to build:
+  - `cargo build --bins --release`
+
+If you want to build the Python bindings too:
+
+- Install [Maturin](https://github.com/pyo3/maturin)
+- Navigate to the `libtd0/td0-python` directory
+- Activate your virtualenv or use uv to invoke maturin
+- Build:
+  - `maturin build --generate-stubs`
+
+The compiled binaries are saved in the `libtd0/target/release` directory by default.
+
+## Changelog
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -131,15 +156,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ## [0.1.1] - Bugfix
+
 - Fixed: Roland factory restore backup files not considered valid.
 - Changed: More efficient macros. The full build now takes ~1/3 of the previous time.
 - Fixed: td0file chunk-values command now prints each item's values on a new line.
 
 ## [0.1.0] - Initial release
+
 - `td0file` tool works in most cases.
 - `pytd0` Python bindings work in a proof-of-concept.
 - **Known Bugs**
-    - Roland Factory restore backup files aren't considered valid.
-    - `td0file` binary emits the wrong error in the above case-
-      "unknown chunk" when a chunk access is attempted, should be
-      "invalid firmware".
+  - Roland Factory restore backup files aren't considered valid.
+  - `td0file` binary emits the wrong error in the above case-
+    "unknown chunk" when a chunk access is attempted, should be
+    "invalid firmware".
