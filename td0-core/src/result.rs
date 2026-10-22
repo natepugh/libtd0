@@ -112,7 +112,7 @@ impl Display for TD0Error {
             Self::FileParse(err) => err.to_string(),
             Self::FileTooLarge => "the file is too large to complete this operation.".to_string(),
             Self::InvalidChunk(val) => val.to_string(),
-            Self::InvalidField(field) => format!("unknown field '{field}'"),
+            Self::InvalidField(field) => format!("unknown field '{field:.128}'"),
             Self::InvalidInput(msg) => msg.clone(),
             Self::OutOfRange(val) => val.to_string(),
             Self::OutOfRangeDecimal(val) => val.to_string(),
