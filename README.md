@@ -155,6 +155,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - Bugfix, libtd0 (python)
+
+- Fixed: libtd0 (python) ValueError "unknown field 'Decimal'" when setting a Decimal value.
+- Changed: Made the "invalid field" error message more helpful.
+- Fixed: pypi should receive proper package metadata, including attestation.
+- Changed: PyO3 version bump to [0.30.1](https://pyo3.rs/main/changelog#0300---2026-10-13) .
+
 ## [0.1.1] - Bugfix
 
 - Fixed: Roland factory restore backup files not considered valid.
