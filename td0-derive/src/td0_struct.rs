@@ -587,7 +587,7 @@ fn build_impl_td0_chunkitem_set_value_helper(source_meta: &ItemStructMeta) -> To
         &source_meta.type_generics,
         source_meta.where_clause,
     );
-    let trait_name = format_ident!("TD0ChunkItemMutDeriveHelper{ident}");
+    let trait_name = format_ident!("TD0ChunkItemSetValueHelper{ident}");
 
     parse_quote!(
         #[automatically_derived]
@@ -604,7 +604,7 @@ fn build_impl_td0_chunkitem_set_value_helper(source_meta: &ItemStructMeta) -> To
 
             fn set_enumstr_field(field: &mut u8, val: &str, field_name: &str, collection: &[&str]) -> #core_lib_path::TD0Result<()> {
                 let mut index = collection.iter().position(|item| *item == val)
-                    .ok_or_else(|| #core_lib_path::TD0Error::InvalidInput(format!("ah that sucks")))?;
+                    .ok_or_else(|| #core_lib_path::TD0Error::InvalidInput(format!("'{:.128}' is not an allowed option for field `{field_name}`. Hint: call item.field_options(\"{field_name}\") for a list of valid options.", val)))?;
                 *field = u8::try_from(index).expect("EnumStr indexes are all valid u8 values.");
                 Ok(())
             }
@@ -797,7 +797,7 @@ fn build_trait_chunkitem_set_value_helper(
     source_ident: &Ident,
     core_lib_path: &Path,
 ) -> TokenStream {
-    let name = format_ident!("TD0ChunkItemMutDeriveHelper{}", source_ident);
+    let name = format_ident!("TD0ChunkItemSetValueHelper{}", source_ident);
 
     parse_quote!(
         trait #name {
@@ -833,7 +833,7 @@ fn core_lib_path_from_struct(source: &ItemStruct) -> syn::Result<Option<Path>> {
                     Err(_) => {
                         return Err(syn::Error::new_spanned(
                             attr,
-                            "invalid path (should look like crate::module",
+                            "invalid path (should look like crate::module)",
                         ));
                     }
                 }
