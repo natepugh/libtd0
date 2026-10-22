@@ -38,9 +38,9 @@ Should you choose to do so,
 
 Binary downloads available for Windows, MacOS, and Linux.
 
-[Get the Latest Release](releases/latest)
+[Get the Latest Release](https://github.com/natepugh/libtd0/releases/latest/)
 
-[View All Releases](releases)
+[View All Releases](https://github.com/natepugh/libtd0/releases/)
 
 If you're unsure which Linux version to pick, start with the -linux-musl binary which should be compatible
 with a wider range of Linux installs than the -linux-gnu version.
