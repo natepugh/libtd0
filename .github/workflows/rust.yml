@@ -14,6 +14,9 @@ env:
   CARGO_TERM_COLOR: always
 jobs:
   test:
+    permissions:
+      contents: read
+      pull-requests: write
     name: Lint + Test
     runs-on: ubuntu-latest
     steps:
@@ -40,6 +43,8 @@ jobs:
   build-td0file-release:
     name: Build for ${{ matrix.name }}
     needs: test
+    permissions:
+      contents: read
     strategy:
       matrix:
         include:
