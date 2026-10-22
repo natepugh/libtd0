@@ -9,7 +9,18 @@ build-backend = "maturin"
 [project]
 name = "libtd0"
 requires-python = ">=3.11"
-dynamic = ["version"]
+readme = "README.md"
+dynamic = [
+    "version",
+    "description",
+    "authors",
+    "license",
+    "keywords",
+]
+
+[project.urls]
+Homepage = "https://github.com/natepugh/libtd0"
+Repository = "https://github.com/natepugh/libtd0"
 
 [tool.maturin]
 binding = "pyo3"
