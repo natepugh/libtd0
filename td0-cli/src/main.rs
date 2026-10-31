@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use clap::{Parser, Subcommand};
-use td0::{TD0Error, TD0File, TD0Result, parse_td0_file};
+use td0::{ChunkTagString, TD0Chunk, TD0Error, TD0File, TD0Result, parse_td0_file};
 
 use std::error::Error;
 use std::fs;
@@ -12,8 +12,8 @@ use std::process::exit;
 
 mod commands;
 use commands::{
-    IndexedItemValues, command_compare_chunk_items, command_dump_chunk, command_dump_chunk_item,
-    command_dump_chunk_values, command_reorder_chunk_items, command_set_chunk_item_values,
+    IndexedItemValues, command_dump_chunk, command_dump_chunk_item, command_dump_chunk_values,
+    command_reorder_chunk_items, command_set_chunk_item_values,
 };
 
 mod format;
@@ -36,11 +36,35 @@ fn exit_err(err: &str, code: Option<i32>) -> ! {
     exit(code.unwrap_or(ERR_UNKNOWN.unwrap()));
 }
 
-fn parse_td0_file_or_exit(file_path: &PathBuf) -> Box<dyn TD0File> {
+fn parse_td0_file_or_exit(file_path: &PathBuf) -> TD0File {
     let bytes: Vec<u8> = fs::read(file_path).expect("Could not read input file.");
     match parse_td0_file(&bytes) {
         Ok(td0file) => td0file,
         Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
+    }
+}
+
+fn get_chunk_or_exit<'a>(td0file: &'a TD0File, chunk_name: &str) -> &'a TD0Chunk {
+    let chunk_name: ChunkTagString = match ChunkTagString::try_from(chunk_name) {
+        Ok(name) => name,
+        Err(_) => exit_err("invalid chunk name", ERR_INVALID_CHUNK),
+    };
+
+    match td0file.chunk(&chunk_name) {
+        Some(chunk) => chunk,
+        None => exit_err("invalid chunk", ERR_INVALID_CHUNK),
+    }
+}
+
+fn get_chunk_or_exit_mut<'a>(td0file: &'a mut TD0File, chunk_name: &str) -> &'a mut TD0Chunk {
+    let chunk_name: ChunkTagString = match ChunkTagString::try_from(chunk_name) {
+        Ok(name) => name,
+        Err(_) => exit_err("invalid chunk name", ERR_INVALID_CHUNK),
+    };
+
+    match td0file.chunk_mut(&chunk_name) {
+        Some(chunk) => chunk,
+        None => exit_err("invalid chunk", ERR_INVALID_CHUNK),
     }
 }
 
@@ -56,8 +80,8 @@ fn reindex_item_num_or_exit(val: usize) -> usize {
     val - 1
 }
 
-fn write_td0_file(td0file: &mut dyn TD0File, dest: &PathBuf) -> TD0Result<()> {
-    let output_bytes = td0file.try_to_bytes()?;
+fn write_td0_file(td0file: &TD0File, dest: &PathBuf) -> TD0Result<()> {
+    let output_bytes: Vec<u8> = td0file.into();
 
     fs::write(dest, output_bytes).map_err(|err| TD0Error::ValidationFailed(err.to_string()))
 }
@@ -101,12 +125,6 @@ fn reindex_chunk_values_for_output(mut values: IndexedItemValues) -> IndexedItem
 #[derive(Subcommand)]
 enum Commands {
     DisplayManifest {},
-    ChunkItemCompare {
-        chunk_name_1: String,
-        chunk_name_2: String,
-        #[arg(short, long)]
-        item_num: usize,
-    },
     ChunkItemsReorder {
         chunk_name: String,
         display_field: String,
@@ -147,7 +165,7 @@ enum Commands {
     },
 }
 
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 fn main() {
     let cli = Cli::parse();
 
@@ -175,29 +193,6 @@ fn main() {
                 OutputFormat::Text => format!("{manifest_data}"),
             };
             println!("{text_output}");
-        }
-        Commands::ChunkItemCompare {
-            chunk_name_1,
-            chunk_name_2,
-            item_num,
-        } => {
-            let inum_reindexed = reindex_item_num_or_exit(*item_num);
-            let td0file = parse_td0_file_or_exit(&cli.file);
-            let diff =
-                command_compare_chunk_items(&*td0file, chunk_name_1, chunk_name_2, inum_reindexed)
-                    .unwrap_or_else(|err| {
-                        let code = match err {
-                            TD0Error::InvalidChunk(_) => ERR_INVALID_CHUNK,
-                            TD0Error::OutOfRange(_) => ERR_INVALID_ITEM_INDEX,
-                            _ => ERR_UNKNOWN,
-                        };
-                        exit_td0_err(&err, code);
-                    });
-
-            let output = fmt_chunk_item_compare_result(&diff, cli.output_format)
-                .unwrap_or_else(|err| exit_err(err, ERR_UNKNOWN));
-
-            println!("{output}");
         }
         Commands::ChunkValues {
             chunk_name,
@@ -254,7 +249,7 @@ fn main() {
             // TD0 devices show the user 1-based indexes, while libtd0 uses 0-based indexes.
             // Convert the indexing to match the lib call here.
             let chunk_data_result = item_num.as_ref().map_or_else(
-                || command_dump_chunk(&*td0file, chunk_name),
+                || command_dump_chunk(&td0file, chunk_name),
                 |inum| {
                     let Some(inum_reindexed) = inum.checked_sub(1) else {
                         exit_err(
@@ -262,7 +257,8 @@ fn main() {
                             ERR_INVALID_ITEM_INDEX,
                         );
                     };
-                    command_dump_chunk_item(&*td0file, chunk_name, inum_reindexed)
+                    command_dump_chunk_item(&td0file, chunk_name, inum_reindexed)
+                        .map(|it| it.to_vec())
                 },
             );
 
@@ -280,14 +276,18 @@ fn main() {
             }
             println!(
                 "{}",
-                fmt_hex_dump(chunk_data, &create_hexout_settings(&*td0file, chunk_name))
+                fmt_hex_dump(
+                    chunk_data.as_slice(),
+                    &create_hexout_settings(&td0file, chunk_name)
+                )
             );
         }
         Commands::ListFields { chunk_name } => {
             let td0file = parse_td0_file_or_exit(&cli.file);
-            let Some(chunk_item) = td0file.chunk_item_default(chunk_name) else {
-                exit_err("invalid chunk", ERR_INVALID_CHUNK);
-            };
+            let chunk = get_chunk_or_exit(&td0file, chunk_name);
+
+            let chunk_item = chunk.default_item();
+
             let text_output = match cli.output_format {
                 OutputFormat::Json => serde_json::to_string(&chunk_item.list_fields())
                     .expect("Could not serialize output."),
@@ -312,7 +312,7 @@ fn main() {
             let mut td0file = parse_td0_file_or_exit(&cli.file);
             let inum_reindexed = reindex_item_num_or_exit(*item_num);
             let diffs =
-                command_set_chunk_item_values(&mut *td0file, chunk_name, inum_reindexed, values)
+                command_set_chunk_item_values(&mut td0file, chunk_name, inum_reindexed, values)
                     .unwrap_or_else(|err| {
                         exit_td0_err(&err, ERR_UNKNOWN);
                     });
@@ -323,10 +323,7 @@ fn main() {
             println!("{output}");
 
             // Finalize before write, always.
-            td0file
-                .finalize()
-                .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
-            match write_td0_file(&mut *td0file, output_file) {
+            match write_td0_file(&td0file, output_file) {
                 Ok(_) => (),
                 Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
             }
@@ -340,7 +337,7 @@ fn main() {
         } => {
             let mut td0file = parse_td0_file_or_exit(&cli.file);
             let diffs =
-                command_reorder_chunk_items(&mut *td0file, chunk_name, new_order, display_field)
+                command_reorder_chunk_items(&mut td0file, chunk_name, new_order, display_field)
                     .unwrap_or_else(|err| {
                         exit_td0_err(&err, ERR_UNKNOWN);
                     });
@@ -350,10 +347,7 @@ fn main() {
 
             println!("{output}");
 
-            td0file
-                .finalize()
-                .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
-            match write_td0_file(&mut *td0file, output_file) {
+            match write_td0_file(&td0file, output_file) {
                 Ok(_) => (),
                 Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
             }
@@ -366,18 +360,16 @@ fn main() {
             output_file,
         } => {
             let mut td0file = parse_td0_file_or_exit(&cli.file);
+            let chunk: &mut TD0Chunk = get_chunk_or_exit_mut(&mut td0file, chunk_name);
             let inum_1_reindexed = reindex_item_num_or_exit(*item_1);
             let inum_2_reindexed = reindex_item_num_or_exit(*item_2);
 
-            match td0file.chunk_items_swap(chunk_name, inum_1_reindexed, inum_2_reindexed) {
+            match chunk.items_swap(inum_1_reindexed, inum_2_reindexed) {
                 Ok(_) => (),
                 Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
             }
 
-            td0file
-                .finalize()
-                .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
-            match write_td0_file(&mut *td0file, output_file) {
+            match write_td0_file(&td0file, output_file) {
                 Ok(_) => (),
                 Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
             }

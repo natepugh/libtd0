@@ -10,8 +10,8 @@ use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::spanned::Spanned as _;
 use syn::{
-    Arm, Attribute, Expr, Field, FieldValue, Fields, Ident, ImplGenerics, ImplItemFn, ItemStruct,
-    Lit, Path, TypeGenerics, WhereClause, parse_macro_input, parse_quote, parse2,
+    Arm, Attribute, Expr, Field, FieldValue, Fields, Ident, ImplGenerics, ImplItemFn, ItemStatic,
+    ItemStruct, Lit, Path, TypeGenerics, WhereClause, parse_macro_input, parse_quote, parse2,
 };
 
 use super::common::{
@@ -271,18 +271,24 @@ fn build_default_fieldvalue_for_field(
     }
 }
 
-fn build_fn_chunkitem_field_type(fields: &[TD0Field]) -> ImplItemFn {
+fn build_fn_chunkitem_field_type(
+    exprs_by_field: &HashMap<Ident, Expr>,
+    fields: &[TD0Field],
+    core_lib_path: &Path,
+) -> ImplItemFn {
     let arms: Vec<Arm> = fields
         .iter()
         .map(|field| {
             let field_name = &field.ident_str;
-            let field_type = field_type_pretty_name(field);
-            parse_quote!( #field_name => Some(#field_type) )
+            let field_type = exprs_by_field
+                .get(&field.ident)
+                .expect("field names and exprs_by_field are in sync.");
+            parse_quote!( #field_name => Some(&#field_type))
         })
         .collect();
 
     parse_quote!(
-        fn field_type(&self, field: &str) -> Option<&'static str> {
+        fn field_type(&self, field: &str) -> Option<&'static #core_lib_path::FieldType> {
             match field {
                 #( #arms, )*
                 _ => None
@@ -535,6 +541,107 @@ fn build_impl_default(
     ))
 }
 
+fn create_chunkitem_field_type_exprs(
+    fields: &[TD0Field],
+    core_lib_path: &Path,
+) -> HashMap<Ident, Expr> {
+    let mut field_types: HashMap<Ident, Expr> = HashMap::new();
+
+    for field in fields {
+        let field_type_expr: Expr = match field.field_type {
+            FieldType::EnumStr { ref collection } => {
+                let collection_ident: Ident = format_ident!("{collection}");
+                parse_quote!(#core_lib_path::FieldType::EnumText{ options: &#collection_ident })
+            }
+            FieldType::I8 { min, max } => {
+                let (min, max) = (min.unwrap_or(i8::MIN), max.unwrap_or(i8::MAX));
+                parse_quote!(#core_lib_path::FieldType::I8{min: #min, max: #max})
+            }
+            FieldType::I16 { min, max } => {
+                let (min, max) = (min.unwrap_or(i16::MIN), max.unwrap_or(i16::MAX));
+                parse_quote!(#core_lib_path::FieldType::I16{min: #min, max: #max})
+            }
+            FieldType::Slice => {
+                let NativeType::Slice(native_type) = &field.native_type else {
+                    panic!(
+                        "field `{}` type and native type are out of sync!",
+                        field.ident_str
+                    );
+                };
+                let size: usize = native_type.size;
+
+                parse_quote!(#core_lib_path::FieldType::Slice{ len: #size })
+            }
+            FieldType::Text { .. } => {
+                let NativeType::Slice(native_type) = &field.native_type else {
+                    panic!(
+                        "field `{}` type and native type are out of sync!",
+                        field.ident_str
+                    );
+                };
+                let size: usize = native_type.size;
+
+                parse_quote!(#core_lib_path::FieldType::AsciiText{max_len: #size})
+            }
+            FieldType::TD0Decimal { min, max } => {
+                parse_quote!(#core_lib_path::FieldType::Decimal{min: #min, max: #max})
+            }
+            FieldType::U8 { min, max } => {
+                let (min, max) = (min.unwrap_or(u8::MIN), max.unwrap_or(u8::MAX));
+                parse_quote!(#core_lib_path::FieldType::U8{min: #min, max: #max})
+            }
+            FieldType::U16 { min, max } => {
+                let (min, max) = (min.unwrap_or(u16::MIN), max.unwrap_or(u16::MAX));
+                parse_quote!(#core_lib_path::FieldType::U16{min: #min, max: #max})
+            }
+            FieldType::U32 { min, max } => {
+                let (min, max) = (min.unwrap_or(u32::MIN), max.unwrap_or(u32::MAX));
+                parse_quote!(#core_lib_path::FieldType::U32{min: #min, max: #max})
+            }
+            FieldType::Volume => {
+                let min: Path = parse_quote!(#core_lib_path::Volume::MIN);
+                let max: Path = parse_quote!(#core_lib_path::Volume::MAX);
+                parse_quote!(#core_lib_path::FieldType::Decimal{min: #min, max: #max})
+            }
+        };
+        field_types.insert(field.ident.clone(), field_type_expr);
+    }
+    field_types
+}
+
+fn build_static_chunkitem_field_types(
+    ident: &Ident,
+    exprs_by_field: &HashMap<Ident, Expr>,
+    fields: &[TD0Field],
+    core_lib_path: &Path,
+) -> (Ident, ItemStatic) {
+    let array_ident: Ident = format_ident!("{}_FIELD_DEFS", const_name_from_ident(ident));
+    let num_fields: usize = fields.len();
+
+    let field_defs: Vec<Expr> = fields
+        .iter()
+        .map(|field| {
+            let field_type_expr = exprs_by_field
+                .get(&field.ident)
+                .expect("exprs_by_field and fields are in sync.");
+            let field_name = &field.ident_str;
+
+            parse_quote!(
+                #core_lib_path::FieldDef{name: #field_name, field_type: #field_type_expr}
+            )
+        })
+        .collect();
+
+    (
+        array_ident.clone(),
+        parse_quote!(
+            static #array_ident : [#core_lib_path::FieldDef; #num_fields] = [
+                #( #field_defs, )*
+            ];
+        ),
+    )
+}
+
 fn build_impl_td0_chunkitem(
     fields: &[TD0Field],
     source_meta: &ItemStructMeta,
@@ -545,8 +652,11 @@ fn build_impl_td0_chunkitem(
         &source_meta.type_generics,
         source_meta.where_clause,
     );
+    let field_type_exprs: HashMap<Ident, Expr> =
+        create_chunkitem_field_type_exprs(fields, source_meta.core_lib_path);
     let fn_field_options: ImplItemFn = build_fn_chunkitem_field_options(fields);
-    let fn_field_type: ImplItemFn = build_fn_chunkitem_field_type(fields);
+    let fn_field_type: ImplItemFn =
+        build_fn_chunkitem_field_type(&field_type_exprs, fields, source_meta.core_lib_path);
     let fn_field_value: ImplItemFn =
         build_fn_chunkitem_field_value(fields, source_meta.core_lib_path);
     let fn_field_value_raw: ImplItemFn =
@@ -561,8 +671,16 @@ fn build_impl_td0_chunkitem(
     let num_fields: usize = field_names.len();
     let field_names_array = format_ident!("{}_FIELDS", const_name_from_ident(ident));
 
+    let (field_types_array, field_types) = build_static_chunkitem_field_types(
+        ident,
+        &field_type_exprs,
+        fields,
+        source_meta.core_lib_path,
+    );
+
     Ok(quote! {
         const #field_names_array : [&str; #num_fields] = [ #( #field_names, )* ];
+        #field_types
 
         #[automatically_derived]
         impl #impl_generics #core_lib_path::TD0ChunkItem for #ident #type_generics #where_clause {
@@ -576,6 +694,7 @@ fn build_impl_td0_chunkitem(
             #fn_set_field_value
             #fn_set_field_value_raw
             fn list_fields(&self) -> &'static [&'static str] { &#field_names_array }
+            fn field_types(&self) -> &'static [#core_lib_path::FieldDef] { &#field_types_array }
         }
     })
 }

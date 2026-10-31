@@ -10,10 +10,10 @@ mod libtd0 {
     use super::*;
     use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
     use rust_decimal::prelude::FromPrimitive;
-    use td0::{new_td0_file, parse_td0_file};
+    use td0::{FieldType, TD0Chunk, TD0Error, TD0Result, new_td0_file, parse_td0_file};
     use td0_core::{
-        ChunkManifest as Impl_ChunkManifest, TD0BackupType as Impl_TD0BackupType,
-        TD0ChunkItem as Impl_TD0ChunkItem, TD0DeviceModel as Impl_TD0DeviceModel, TD0Error,
+        ChunkManifest as Impl_ChunkManifest, ChunkTagStr, TD0BackupType as Impl_TD0BackupType,
+        TD0ChunkItem as Impl_TD0ChunkItem, TD0DeviceModel as Impl_TD0DeviceModel,
         TD0File as Impl_TD0File, TD0Manifest as Impl_TD0Manifest, TD0Value as Impl_TD0Value,
         TD0ValueRaw as Impl_TD0ValueRaw,
     };
@@ -26,6 +26,23 @@ mod libtd0 {
             TD0Error::ChunkItemParse => PyErr::new::<PyValueError, _>("Invalid chunk item index"),
             _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
         }
+    }
+
+    fn chunk<'a>(td0file: &'a Impl_TD0File, chunk_name: &str) -> TD0Result<&'a TD0Chunk> {
+        let chunk_name: &ChunkTagStr = chunk_name.try_into()?;
+        td0file
+            .chunk(chunk_name)
+            .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))
+    }
+
+    fn chunk_mut<'a>(
+        td0file: &'a mut Impl_TD0File,
+        chunk_name: &str,
+    ) -> TD0Result<&'a mut TD0Chunk> {
+        let chunk_name: &ChunkTagStr = chunk_name.try_into()?;
+        td0file
+            .chunk_mut(chunk_name)
+            .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))
     }
 
     #[pyclass(from_py_object)]
@@ -227,6 +244,18 @@ mod libtd0 {
         }
     }
 
+    impl From<&FieldType> for TD0ValueType {
+        fn from(value: &FieldType) -> Self {
+            match value {
+                FieldType::Decimal { .. } => Self::Decimal,
+                FieldType::AsciiText { .. } | FieldType::EnumText { .. } => Self::String,
+                FieldType::Slice { .. } => Self::Bytes,
+                FieldType::I8 { .. } | FieldType::I16 { .. } => Self::Int,
+                FieldType::U8 { .. } | FieldType::U16 { .. } | FieldType::U32 { .. } => Self::Int,
+            }
+        }
+    }
+
     struct TD0Value(Impl_TD0Value);
 
     impl<'py> IntoPyObject<'py> for TD0Value {
@@ -336,10 +365,7 @@ mod libtd0 {
         }
 
         fn field_type(&self, field: &str) -> Option<TD0ValueType> {
-            self._impl.field_type(field).map(|val| {
-                val.parse::<TD0ValueType>()
-                    .expect("all field types accounted for.")
-            })
+            self._impl.field_type(field).map(TD0ValueType::from)
         }
 
         fn list_fields(&self) -> &'static [&'static str] {
@@ -348,26 +374,23 @@ mod libtd0 {
 
         fn set_field_value<'py>(&mut self, field: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
             let val: Impl_TD0Value = match self._impl.field_type(field) {
-                Some("Text") => Impl_TD0Value::Text(value.extract::<String>()?),
-                Some("I8") => Impl_TD0Value::I8(value.extract::<i8>()?),
-                Some("I16") => Impl_TD0Value::I16(value.extract::<i16>()?),
-                Some("Slice") => {
+                Some(FieldType::AsciiText { .. }) | Some(FieldType::EnumText { .. }) => {
+                    Impl_TD0Value::Text(value.extract::<String>()?)
+                }
+                Some(FieldType::I8 { .. }) => Impl_TD0Value::I8(value.extract::<i8>()?),
+                Some(FieldType::I16 { .. }) => Impl_TD0Value::I16(value.extract::<i16>()?),
+                Some(FieldType::Slice { .. }) => {
                     Impl_TD0Value::Slice(value.extract::<Vec<u8>>()?.into_boxed_slice())
                 }
-                Some("Decimal") => {
+                Some(FieldType::Decimal { .. }) => {
                     let dec_value = value.extract::<rust_decimal::Decimal>()?;
                     Impl_TD0Value::Decimal(f32::try_from(dec_value).map_err(|err| {
                         PyErr::new::<PyValueError, _>(format!("Out of range: {err}"))
                     })?)
                 }
-                Some("U8") => Impl_TD0Value::U8(value.extract::<u8>()?),
-                Some("U16") => Impl_TD0Value::U16(value.extract::<u16>()?),
-                Some("U32") => Impl_TD0Value::U32(value.extract::<u32>()?),
-                Some(unknown) => {
-                    return Err(PyErr::new::<PyKeyError, _>(format!(
-                        "unknown field type '{unknown}'"
-                    )));
-                }
+                Some(FieldType::U8 { .. }) => Impl_TD0Value::U8(value.extract::<u8>()?),
+                Some(FieldType::U16 { .. }) => Impl_TD0Value::U16(value.extract::<u16>()?),
+                Some(FieldType::U32 { .. }) => Impl_TD0Value::U32(value.extract::<u32>()?),
                 None => {
                     return Err(PyErr::new::<PyKeyError, _>(format!(
                         "unknown field '{field}'"
@@ -385,20 +408,17 @@ mod libtd0 {
             value: Bound<'py, PyAny>,
         ) -> PyResult<()> {
             let val: Impl_TD0ValueRaw = match self._impl.field_type(field) {
-                Some("Slice") | Some("Text") => {
+                Some(FieldType::Slice { .. })
+                | Some(FieldType::AsciiText { .. })
+                | Some(FieldType::EnumText { .. }) => {
                     Impl_TD0ValueRaw::Slice(value.extract::<Vec<u8>>()?.into_boxed_slice())
                 }
-                Some("I8") => Impl_TD0ValueRaw::I8(value.extract::<i8>()?),
-                Some("I16") => Impl_TD0ValueRaw::I16(value.extract::<i16>()?),
-                Some("Decimal") => Impl_TD0ValueRaw::I16(value.extract::<i16>()?),
-                Some("U8") => Impl_TD0ValueRaw::U8(value.extract::<u8>()?),
-                Some("U16") => Impl_TD0ValueRaw::U16(value.extract::<u16>()?),
-                Some("U32") => Impl_TD0ValueRaw::U32(value.extract::<u32>()?),
-                Some(unknown) => {
-                    return Err(PyErr::new::<PyKeyError, _>(format!(
-                        "unknown field type '{unknown}'"
-                    )));
-                }
+                Some(FieldType::I8 { .. }) => Impl_TD0ValueRaw::I8(value.extract::<i8>()?),
+                Some(FieldType::I16 { .. }) => Impl_TD0ValueRaw::I16(value.extract::<i16>()?),
+                Some(FieldType::Decimal { .. }) => Impl_TD0ValueRaw::I16(value.extract::<i16>()?),
+                Some(FieldType::U8 { .. }) => Impl_TD0ValueRaw::U8(value.extract::<u8>()?),
+                Some(FieldType::U16 { .. }) => Impl_TD0ValueRaw::U16(value.extract::<u16>()?),
+                Some(FieldType::U32 { .. }) => Impl_TD0ValueRaw::U32(value.extract::<u32>()?),
                 None => {
                     return Err(PyErr::new::<PyKeyError, _>(format!(
                         "unknown field '{field}'"
@@ -413,7 +433,7 @@ mod libtd0 {
 
     #[pyclass]
     struct TD0File {
-        _impl: Box<dyn Impl_TD0File>,
+        _impl: Impl_TD0File,
     }
 
     #[pymethods]
@@ -435,10 +455,16 @@ mod libtd0 {
             Ok(Self { _impl: td0file })
         }
 
+        // TODO: Add the concept of TD0Chunk to Python libtd0, then return the value from _impl.add_chunk.
         pub fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> PyResult<()> {
-            self._impl
+            let chunk_name: &ChunkTagStr = chunk_name
+                .try_into()
+                .map_err(|err: TD0Error| PyErr::new::<PyValueError, _>(err.to_string()))?;
+            _ = self
+                ._impl
                 .add_chunk(chunk_name, num_items)
-                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))
+                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
+            Ok(())
         }
 
         pub fn chunk_item_replace(
@@ -447,8 +473,10 @@ mod libtd0 {
             item_index: usize,
             source: Bound<'_, TD0ChunkItem>,
         ) -> PyResult<()> {
-            self._impl
-                .chunk_item_replace(chunk_name, item_index, &*(source.borrow()._impl))
+            let chunk = chunk_mut(&mut self._impl, chunk_name)
+                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
+            chunk
+                .item_replace(item_index, &*(source.borrow()._impl))
                 .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))
         }
 
@@ -458,9 +486,11 @@ mod libtd0 {
             source_index: usize,
             dest_index: usize,
         ) -> PyResult<()> {
-            self._impl
-                .chunk_item_copy(chunk_name, source_index, dest_index)
-                .map_err(map_chunk_item_error)
+            let chunk = chunk_mut(&mut self._impl, chunk_name)
+                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
+            chunk
+                .item_copy(source_index, dest_index)
+                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))
         }
 
         pub fn chunk_items_swap(
@@ -469,9 +499,11 @@ mod libtd0 {
             index_1: usize,
             index_2: usize,
         ) -> PyResult<()> {
-            self._impl
-                .chunk_items_swap(chunk_name, index_1, index_2)
-                .map_err(map_chunk_item_error)
+            let chunk = chunk_mut(&mut self._impl, chunk_name)
+                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
+            chunk
+                .items_swap(index_1, index_2)
+                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))
         }
 
         pub fn chunk_items_reorder(
@@ -479,32 +511,15 @@ mod libtd0 {
             chunk_name: &str,
             new_order: Vec<usize>,
         ) -> PyResult<()> {
-            self._impl
-                .chunk_items_reorder(chunk_name, new_order.as_slice())
-                .map_err(|err| match err {
-                    TD0Error::InvalidInput(msg) => PyErr::new::<PyValueError, _>(msg),
-                    TD0Error::InvalidChunk(chunk_err) => {
-                        PyErr::new::<PyValueError, _>(chunk_err.to_string())
-                    }
-                    TD0Error::ChunkItemParse => {
-                        PyErr::new::<PyValueError, _>("Invalid chunk item index")
-                    }
-                    _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
-                })
+            let chunk = chunk_mut(&mut self._impl, chunk_name)
+                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
+            chunk
+                .items_reorder(&new_order)
+                .map_err(|err| PyErr::new::<PyValueError, _>(err.to_string()))
         }
 
-        pub fn finalize(&mut self) -> PyResult<()> {
-            self._impl.finalize().map_err(|err| match err {
-                TD0Error::FileParse(msg) => PyErr::new::<PyValueError, _>(msg),
-                _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
-            })
-        }
-
-        pub fn to_bytes(&self) -> PyResult<Vec<u8>> {
-            self._impl.try_to_bytes().map_err(|err| match err {
-                TD0Error::ValidationFailed(msg) => PyErr::new::<PyValueError, _>(msg),
-                _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
-            })
+        pub fn to_bytes(&self) -> Vec<u8> {
+            std::convert::Into::<Vec<u8>>::into(self._impl.clone())
         }
 
         pub fn get_chunk_item(
@@ -512,22 +527,28 @@ mod libtd0 {
             chunk_name: &str,
             item_index: usize,
         ) -> PyResult<TD0ChunkItem> {
-            Ok(TD0ChunkItem {
-                _impl: self
-                    ._impl
-                    .chunk_item(chunk_name, item_index)
-                    .map_err(map_chunk_item_error)?,
-            })
+            let chunk = chunk(&self._impl, chunk_name)
+                .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
+
+            chunk
+                .item_at(item_index)
+                .map(|item| TD0ChunkItem { _impl: item })
+                .map_err(map_chunk_item_error)
         }
 
         fn get_chunk_item_default(&self, chunk_name: &str) -> Option<TD0ChunkItem> {
-            self._impl
-                .chunk_item_default(chunk_name)
-                .map(|item| TD0ChunkItem { _impl: item })
+            let chunk = chunk(&self._impl, chunk_name).ok()?;
+            Some(TD0ChunkItem {
+                _impl: chunk.default_item(),
+            })
         }
 
         pub fn list_chunks(&self) -> Vec<String> {
-            self._impl.list_chunks()
+            self._impl
+                .list_chunks()
+                .iter()
+                .map(|tag_str| tag_str.to_string())
+                .collect()
         }
 
         pub fn manifest(&self) -> PyResult<TD0Manifest> {

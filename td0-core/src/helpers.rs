@@ -11,6 +11,33 @@ use zerocopy::{LittleEndian, U32};
 
 use crate::result::{TD0Error, TD0Result};
 
+pub const SZ_MD5_DIGEST: usize = 16;
+
+pub fn bytes_or_error<F>(
+    buf: &[u8],
+    range: std::ops::Range<usize>,
+    error_factory: F,
+) -> TD0Result<&[u8]>
+where
+    F: FnOnce() -> TD0Error,
+{
+    buf.get(range).ok_or_else(error_factory)
+}
+
+pub fn calc_md5_checksum(bytes_objs: &[&[u8]]) -> [u8; SZ_MD5_DIGEST] {
+    use md5::Digest;
+    use zerocopy::IntoBytes;
+
+    let mut hasher: md5::Md5 = md5::Md5::new();
+    for bytes in bytes_objs.iter() {
+        hasher.update(bytes);
+    }
+
+    let mut checksum: [u8; SZ_MD5_DIGEST] = [0u8; SZ_MD5_DIGEST];
+    checksum.copy_from_slice(hasher.finalize().as_bytes());
+    checksum
+}
+
 pub fn calc_range_overlap<T>(r1: Range<T>, r2: Range<T>) -> Option<Range<T>>
 where
     T: Ord,
@@ -84,6 +111,16 @@ where
     S: Serializer,
 {
     serializer.serialize_str(checksum_bytes_to_string(bytes).as_str())
+}
+
+pub fn text_from_u8_array(source: &[u8], pad_val: u8) -> String {
+    for pos in (0..source.len()).rev() {
+        if source[pos] != pad_val {
+            return String::from_utf8_lossy(&source[..=pos]).to_string();
+        }
+    }
+
+    "".to_string()
 }
 
 pub fn try_u32_from_usize(val: usize) -> TD0Result<u32> {

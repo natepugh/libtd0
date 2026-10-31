@@ -5,114 +5,170 @@
 pub mod chunk;
 
 use super::v1_10::chunk::{CURaItem, KITaItem, STLaItem, STPaItem, TGLaItem, TRGaItem, WVPaItem};
-use crate::common::HDRaItem;
 use chunk::{KITbItem, PVRaItem, STPbItem};
-use td0_core::{TD0ChunkItem, TD0Error, TD0Result};
-use zerocopy::{FromBytes, TryFromBytes};
+use td0_core::{ChunkItemAccessorCallbacks, HDRaItem, TD0Error};
+use zerocopy::TryFromBytes;
 
-static _CHUNK_NAMES: [&str; 11] = [
+pub(crate) static CHUNK_NAMES: [&str; 11] = [
     "HDRa", "KITa", "KITb", "CURa", "PVRa", "STLa", "STPa", "STPb", "TGLa", "TRGa", "WVPa",
 ];
 
-pub fn valid_chunk_names() -> &'static [&'static str] {
-    &_CHUNK_NAMES
-}
-
-pub fn chunk_item_from_bytes<'b>(
-    chunk_name: &str,
-    bytes: &'b [u8],
-) -> TD0Result<&'b dyn TD0ChunkItem> {
+pub fn build_chunk_callbacks(chunk_name: &str) -> Option<ChunkItemAccessorCallbacks> {
     match chunk_name {
-        "HDRa" => Ok(HDRaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "KITa" => Ok(KITaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "KITb" => Ok(KITbItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "CURa" => Ok(CURaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "PVRa" => Ok(PVRaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "STLa" => Ok(STLaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "STPa" => Ok(STPaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "STPb" => Ok(STPbItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "TGLa" => Ok(TGLaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "TRGa" => Ok(TRGaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "WVPa" => Ok(WVPaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        _ => Err(TD0Error::unknown_chunk_error(chunk_name)),
-    }
-}
-
-pub fn chunk_item_from_bytes_mut<'b>(
-    chunk_name: &str,
-    bytes: &'b mut [u8],
-) -> TD0Result<&'b mut dyn TD0ChunkItem> {
-    match chunk_name {
-        "HDRa" => Ok(HDRaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "KITa" => Ok(KITaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "KITb" => Ok(KITbItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "CURa" => Ok(CURaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "PVRa" => Ok(PVRaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "STLa" => Ok(STLaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "STPa" => Ok(STPaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "STPb" => Ok(STPbItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "TGLa" => Ok(TGLaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "TRGa" => Ok(TRGaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        "WVPa" => Ok(WVPaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?),
-        _ => Err(TD0Error::unknown_chunk_error(chunk_name)),
-    }
-}
-
-pub fn chunk_item_from_bytes_owned(
-    chunk_name: &str,
-    bytes: &[u8],
-) -> TD0Result<Box<dyn TD0ChunkItem>> {
-    match chunk_name {
-        "HDRa" => Ok(Box::new(
-            HDRaItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        "KITa" => Ok(Box::new(
-            KITaItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        "KITb" => Ok(Box::new(
-            KITbItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        "CURa" => Ok(Box::new(
-            CURaItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        "PVRa" => Ok(Box::new(
-            PVRaItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        "STLa" => Ok(Box::new(
-            STLaItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        "STPa" => Ok(Box::new(
-            STPaItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        "STPb" => Ok(Box::new(
-            STPbItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        "TGLa" => Ok(Box::new(
-            TGLaItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        "TRGa" => Ok(Box::new(
-            TRGaItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        "WVPa" => Ok(Box::new(
-            WVPaItem::read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
-        )),
-        _ => Err(TD0Error::unknown_chunk_error(chunk_name)),
-    }
-}
-
-pub fn get_default_chunk_item(chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>> {
-    match chunk_name {
-        "HDRa" => Some(Box::new(HDRaItem::default())),
-        "KITa" => Some(Box::new(KITaItem::default())),
-        "KITb" => Some(Box::new(KITbItem::default())),
-        "CURa" => Some(Box::new(CURaItem::default())),
-        "PVRa" => Some(Box::new(PVRaItem::default())),
-        "STLa" => Some(Box::new(STLaItem::default())),
-        "STPa" => Some(Box::new(STPaItem::default())),
-        "STPb" => Some(Box::new(STPbItem::default())),
-        "TGLa" => Some(Box::new(TGLaItem::default())),
-        "TRGa" => Some(Box::new(TRGaItem::default())),
-        "WVPa" => Some(Box::new(WVPaItem::default())),
+        "HDRa" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(HDRaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(HDRaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    HDRaItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(HDRaItem::default()),
+        }),
+        "KITa" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(KITaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(KITaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    KITaItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(KITaItem::default()),
+        }),
+        "KITb" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(KITbItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(KITbItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    KITbItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(KITbItem::default()),
+        }),
+        "CURa" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(CURaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(CURaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    CURaItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(CURaItem::default()),
+        }),
+        "PVRa" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(PVRaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(PVRaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    PVRaItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(PVRaItem::default()),
+        }),
+        "STLa" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(STLaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(STLaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    STLaItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(STLaItem::default()),
+        }),
+        "STPa" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(STPaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(STPaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    STPaItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(STPaItem::default()),
+        }),
+        "STPb" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(STPbItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(STPbItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    STPbItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(STPbItem::default()),
+        }),
+        "TGLa" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(TGLaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(TGLaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    TGLaItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(TGLaItem::default()),
+        }),
+        "TRGa" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(TRGaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(TRGaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    TRGaItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(TRGaItem::default()),
+        }),
+        "WVPa" => Some(ChunkItemAccessorCallbacks {
+            chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+                Ok(WVPaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+                Ok(WVPaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+            },
+            chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+                Ok(Box::new(
+                    WVPaItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+                ))
+            },
+            default_chunk_item_cb: || Box::new(WVPaItem::default()),
+        }),
         _ => None,
     }
 }

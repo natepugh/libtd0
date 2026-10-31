@@ -79,16 +79,26 @@ pub enum TD0Error {
     ChecksumMismatch,
     /// The requested [TD0ChunkItem](super::TD0ChunkItem) is invalid or otherwise unparsable.
     ChunkItemParse,
+    /// The chunks aren't a comparable type (for e.g. diff).
+    ChunksNotComparable,
+    /// The chunk is duplicated.
+    DuplicateChunk(String),
     /// The file is unable to be parsed into a [TD0File](super::TD0File).
     FileParse(String),
     /// The file is too large for limits inherent to the file type.
     FileTooLarge,
     /// The requested chunk is invalid, missing, or otherwise unparsable.
     InvalidChunk(InvalidChunkError),
+    /// The chunk name provided is not a valid one.
+    InvalidChunkName,
     /// The requested [TD0ChunkItem](super::TD0ChunkItem) field doesn't exist.
     InvalidField(String),
     /// The supplied input isn't valid.
     InvalidInput(String),
+    /// The string provided isn't entirely ASCII printable characters.
+    NotAsciiPrintable,
+    /// This file type (default, most likely) does not support returning item references.
+    OperationNotSupported,
     /// The supplied input isn't in the correct range.
     OutOfRange(OutOfRangeError),
     /// The supplied input isn't in the correct range (Decimal input).
@@ -109,11 +119,16 @@ impl Display for TD0Error {
             Self::DataType(message) => message.clone(),
             Self::ChecksumMismatch => "checksum mismatch.".to_string(),
             Self::ChunkItemParse => "unable to parse chunk item.".to_string(),
+            Self::ChunksNotComparable => "chunks are not comparable.".to_string(),
+            Self::DuplicateChunk(chunk_name) => format!("duplicate chunk '{chunk_name}'"),
             Self::FileParse(err) => err.to_string(),
             Self::FileTooLarge => "the file is too large to complete this operation.".to_string(),
             Self::InvalidChunk(val) => val.to_string(),
+            Self::InvalidChunkName => "invalid chunk name.".to_string(),
             Self::InvalidField(field) => format!("unknown field '{field:.128}'"),
             Self::InvalidInput(msg) => msg.clone(),
+            Self::NotAsciiPrintable => "not an ascii printable string.".to_string(),
+            Self::OperationNotSupported => "not supported with this file type.".to_string(),
             Self::OutOfRange(val) => val.to_string(),
             Self::OutOfRangeDecimal(val) => val.to_string(),
             Self::ReadOnlyField(field_name) => format!("field '{field_name}' is read-only."),
@@ -134,6 +149,10 @@ impl Error for TD0Error {}
 pub type TD0Result<T> = Result<T, TD0Error>;
 
 impl TD0Error {
+    pub fn file_parse_error(message: impl Into<String>) -> Self {
+        Self::FileParse(message.into())
+    }
+
     pub fn unknown_chunk_error(chunk_name: impl Into<String>) -> Self {
         Self::InvalidChunk(InvalidChunkError {
             chunk_name: chunk_name.into(),
@@ -181,5 +200,9 @@ impl TD0Error {
 
     pub fn out_of_range_error_decimal(min: impl Into<f64>, max: impl Into<f64>) -> Self {
         Self::OutOfRangeDecimal(OutOfRangeErrorTD0Decimal::new(min.into(), max.into()))
+    }
+
+    pub fn validation_error(message: impl Into<String>) -> Self {
+        Self::ValidationFailed(message.into())
     }
 }

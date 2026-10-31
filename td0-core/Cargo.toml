@@ -23,14 +23,18 @@ document-features = { version = "0.2.12" }
 num-traits = "0.2.19"
 zerocopy = { version = "0.8.60", features = ["derive"] }
 zerocopy-derive = "0.8.60"
+td0-derive = { version = "0.1.2", path = "../td0-derive" }
 
 #! ### Optional dependencies
 ## Enable this feature to enable serde serialization of [`TD0Manifest`] objects.
 serde = { version = "1.0.229", features = ["derive"], optional = true }
-td0-derive = { version = "0.1.2", path = "../td0-derive" }
+md-5 = "0.11.0"
+bytes = "1.12.1"
 
 [dev-dependencies]
 td0 = { path = "../td0" }
+hexout = "0.3.2"
+pretty_assertions = "1.4.1"
 
 [features]
 default = []

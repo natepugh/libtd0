@@ -6,9 +6,13 @@
 //! ## Feature flags
 #![doc = document_features::document_features!()]
 
+pub(crate) mod ascii_string;
 pub(crate) mod header;
 pub(crate) mod helpers;
 pub(crate) mod result;
+pub(crate) mod td0chunk;
+pub(crate) mod td0file;
+mod test;
 pub(crate) mod type_impls;
 pub(crate) mod types;
 
@@ -23,15 +27,18 @@ pub(crate) mod types;
 //      [SemVer Compatibility] https://doc.rust-lang.org/cargo/reference/semver.html
 //      guidelines.
 //
-pub use header::{OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0IdChunk, TD0ManifestTag, validate_id_tag};
+pub use ascii_string::{ChunkTagStr, ChunkTagString};
+pub use header::{HDRaItem, OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
 pub use helpers::{
     calc_range_overlap, clamp_optional, copy_ascii_str_to_u8_slice, copy_slice_to_native,
     copy_slice_to_native_padded, in_range_inclusive, try_u32_from_usize, usize_from_u32,
 };
 pub use result::{TD0Error, TD0Result};
+pub use td0chunk::{ChunkItemAccessorCallbacks, TD0Chunk, TD0ChunkDiff};
+pub use td0file::{TD0File, TD0FileDiff};
 pub use types::{
-    ChunkManifest, IntEncodedDecimal, TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0File,
-    TD0Manifest, TD0Value, TD0ValueRaw, Volume,
+    ChunkManifest, FieldDef, FieldType, IntEncodedDecimal, TD0BackupType, TD0ChunkItem,
+    TD0DeviceModel, TD0Manifest, TD0Value, TD0ValueRaw, Volume,
 };
 
 #[cfg(test)]

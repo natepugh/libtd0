@@ -18,14 +18,15 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     /// Example:
     /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File};
+    /// use td0::{ChunkTagStr, TD0Chunk, TD0ChunkItem, TD0Error, TD0File, parse_td0_file};
     ///
     /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa` There are 10 TGLa items.
     /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/example_tgl_items.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    /// let chunk_name : &ChunkTagStr = "TGLa".try_into()?;
+    /// let chunk : &TD0Chunk = td0file.chunk(chunk_name).ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
     ///
-    /// let chunk_item = td0file.chunk_item("TGLa", 2)?;
+    /// let chunk_item = chunk.item_at(2)?;
     /// assert_eq!(chunk_item.as_bytes(), b"Kick Proc/Elec  ");
     ///
     /// # Ok::<(), TD0Error>(())
@@ -37,19 +38,19 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     /// # Example
     /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File};
+    /// use td0::{ChunkTagStr, TD0Chunk, TD0ChunkItem, TD0Error, TD0File, new_td0_file, TD0DeviceModel};
     ///
     /// // Load the initial file, which contains a single chunk: `HDRa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    /// let mut td0file : TD0File = new_td0_file(TD0DeviceModel::SPDSXPro, "1.10")?;
+    /// let chunk_name : &ChunkTagStr = "KITa".try_into()?;
+    /// let chunk : &TD0Chunk = td0file.add_chunk(chunk_name, 1)?;
     ///
     /// # // NOTE FOR DOCTEST MAKERS: CHOOSE KIT FIELDS HERE THAT ARE COMPATIBLE WITH THE (faster_incomplete_compile)
     /// # // CFG OPTION! OTHERWISE THAT OPTION CANNOT BE USED WHEN RUNNING DOCTESTS.
     /// #
     /// // Get a default KITa `TDOChunkItem` and call its field_options. TD0Error::ChunkItemParse is used here for
     /// // brevity, it's not a good fit otherwise.
-    /// let default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa").ok_or(TD0Error::ChunkItemParse)?;
+    /// let default_kit : Box<dyn TD0ChunkItem> = chunk.default_item();
     /// assert_eq!(
     ///     default_kit.field_options("click_mode").ok_or(TD0Error::ChunkItemParse)?,
     ///     &["PLAY INTERNAL CLICK", "PLAY WAVE as CLICK", "PLAY WAVE as CLICK-TRACK",]
@@ -67,43 +68,80 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     /// # Example
     /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File};
+    /// use td0::{parse_td0_file, FieldType, TD0Error, TD0Chunk, TD0ChunkItem, TD0File};
     ///
-    /// // Load the initial file, which contains a single chunk: `HDRa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_kit.TD0");
+    /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    /// let chunk : &TD0Chunk = td0file.chunk("KITa").ok_or(TD0Error::unknown_chunk_error("KITa"))?;
+    /// let kit : &dyn TD0ChunkItem = chunk.item_at_ref(0)?;
     ///
-    /// # // NOTE FOR DOCTEST MAKERS: CHOOSE KIT FIELDS HERE THAT ARE COMPATIBLE WITH THE (faster_incomplete_compile)
-    /// # // CFG OPTION! OTHERWISE THAT OPTION CANNOT BE USED WHEN RUNNING DOCTESTS.
-    /// #
-    /// // Get a default KITa `TDOChunkItem` and call its field_type. TD0Error::ChunkItemParse is used here for
-    /// // brevity, it's not a good fit otherwise.
-    /// let default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa").ok_or(TD0Error::ChunkItemParse)?;
-    /// assert_eq!(default_kit.field_type("name"), Some("Text"));
-    /// assert_eq!(default_kit.field_type("volume"), Some("Decimal"));
-    /// assert_eq!(default_kit.field_type("click_pan"), Some("I8"));
+    /// // Get a default KITa `TDOChunkItem` and call its field_type.
+    /// assert_eq!(kit.field_type("name"), Some(&FieldType::AsciiText{ max_len: 16 }));
+    /// assert_eq!(kit.field_type("volume"), Some(&FieldType::Decimal{ min: -60.0, max: 6.0 }));
+    /// assert_eq!(kit.field_type("click_pan"), Some(&FieldType::I8{ min: -15, max: 15 }));
     ///
-    /// // field_options() returns None when the field isn't valid for this item.
-    /// assert_eq!(default_kit.field_options("foo"), None);
+    /// // field_type() returns None when the field isn't valid for this item.
+    /// assert_eq!(kit.field_type("foo"), None);
     ///
     /// # Ok::<(), TD0Error>(())
     /// ```
     ///
-    fn field_type(&self, field: &str) -> Option<&'static str>;
+    fn field_type(&self, field: &str) -> Option<&'static FieldType>;
+
+    /// Return an array of [FieldDef] structs describing all available fields for this chunk.
+    /// The description includes the field type and known constraints. For more information,
+    /// see [FieldDef].
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{FieldDef, FieldType, TD0Chunk, TD0ChunkItem, TD0File, parse_td0_file};
+    ///
+    /// // This file contains a WVPa chunk with a single item. WVPa items describe the
+    /// // sample files stored on the device.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_wvp.TD0");
+    /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    /// let chunk : &TD0Chunk = td0file.chunk("WVPa").ok_or(TD0Error::unknown_chunk_error("WVPa"))?;
+    /// let wvp : &dyn TD0ChunkItem = chunk.item_at_ref(0)?;
+    /// // WVPa contains eleven fields, of four different types, U32, U8, Slice, and AsciiText.
+    /// let defs : &[FieldDef] = wvp.field_types();
+    ///
+    /// let mut actual: Vec<String> = Vec::new();
+    /// for field_def in defs.iter() {
+    ///     // Skip all unknown fields except the first, so the Slice output will be shown.
+    ///     if !field_def.name.starts_with("unknown") || field_def.name == "unknown4" {
+    ///         actual.push(format!("{}: {:?}", field_def.name, field_def.field_type));
+    ///     }
+    /// }
+    ///
+    /// let expected = vec![
+    ///     "start_point: U32 { min: 0, max: 4294967295 }",
+    ///     "end_point: U32 { min: 0, max: 4294967295 }",
+    ///     "loop_point: U32 { min: 0, max: 4294967295 }",
+    ///     "volume: U8 { min: 0, max: 127 }",
+    ///     "unknown4: Slice { len: 3 }",
+    ///     "name: AsciiText { max_len: 16 }",
+    ///     "filename: AsciiText { max_len: 100 }",
+    ///     "device_serial_number: AsciiText { max_len: 8 }",
+    /// ];
+    ///
+    /// assert_eq!(actual, expected);
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    fn field_types(&self) -> &'static [FieldDef];
 
     /// Return the value of `field` as a Option<[TD0Value]>, or None if `field` is not a valid field for this item.
     ///
     /// Example:
     /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0Value};
+    /// use td0::{parse_td0_file, TD0Error, TD0Chunk, TD0ChunkItem, TD0File, TD0Value};
     ///
     /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa` There are 10 TGLa items.
     /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/example_tgl_items.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// let chunk_item = td0file.chunk_item("TGLa", 9)?;
+    /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    /// let tgl_chunk : &TD0Chunk = td0file.chunk("TGLa").ok_or(TD0Error::unknown_chunk_error("TGLa"))?;
+    /// let chunk_item : &dyn TD0ChunkItem = tgl_chunk.item_at_ref(9)?;
     /// assert_eq!(chunk_item.field_value("name"), Some(TD0Value::new_text_value("HiHat")));
     ///
     /// # Ok::<(), TD0Error>(())
@@ -115,15 +153,15 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     /// Example:
     /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0ValueRaw};
+    /// use td0::{parse_td0_file, TD0Chunk, TD0ChunkItem, TD0Error, TD0File, TD0ValueRaw};
     ///
     /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa` There are 10 TGLa items.
     /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/example_tgl_items.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    /// let tgl_chunk : &TD0Chunk = td0file.chunk("TGLa").ok_or(TD0Error::unknown_chunk_error("TGLa"))?;
+    /// let chunk_item : &dyn TD0ChunkItem = tgl_chunk.item_at_ref(4)?;
     ///
     /// // The raw value of a TD0Value::Text field (such as "name") is a boxed [u8] array.
-    /// let chunk_item = td0file.chunk_item("TGLa", 4)?;
     /// assert_eq!(
     ///     chunk_item.field_value_raw("name"),
     ///     Some(TD0ValueRaw::Slice(Box::from(*b"Snare Proc/Elec ")))
@@ -137,16 +175,17 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     /// # Example
     /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File};
+    /// use td0::{ChunkTagStr, TD0Chunk, TD0ChunkItem, TD0Error, TD0File, parse_td0_file};
     ///
     /// // Load the initial file, which contains a single chunk: `HDRa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
+    /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    /// let chunk_name : &ChunkTagStr = "TGLa".try_into()?;
+    /// let chunk : &TD0Chunk = td0file.chunk(chunk_name).ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
     ///
     /// // Get a default TGLa `TDOChunkItem` and call its list_fields. It has one field, "name".
     /// // Some other chunk types' collection of fields, while interesting, are not brief.
-    /// let default_tgl : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("TGLa").ok_or(TD0Error::ChunkItemParse)?;
+    /// let default_tgl : Box<dyn TD0ChunkItem> = chunk.default_item();
     /// assert_eq!(default_tgl.list_fields(), ["name"]);
     ///
     /// # Ok::<(), TD0Error>(())
@@ -179,37 +218,39 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     /// ## Setting a [Text](TD0Value::Text) field
     /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0Value};
+    /// use td0::{parse_td0_file, TD0Chunk, TD0ChunkItem, TD0Error, TD0File, TD0Value};
     ///
     /// // Load the initial file.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_kit.TD0");
+    /// let mut td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    /// let chunk : &mut TD0Chunk = td0file.chunk_mut("KITa").ok_or(TD0Error::unknown_chunk_error("KITa"))?;
     ///
-    /// // Get a default KITa `TDOChunkItem` and set its "name" field, which is a text field.
-    /// let mut default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa")
-    ///     .ok_or(TD0Error::unknown_chunk_error("KITa"))?;
-    /// let set_result = default_kit.set_field_value(
+    /// // Get the kit item from the example file. Its name field is currently set to "Dance".
+    /// let mut kit : &mut dyn TD0ChunkItem = chunk.item_at_mut(0)?;
+    /// assert_eq!(kit.field_value("name"), Some(TD0Value::new_text_value("Dance")));
+    ///
+    /// // Change its name field and verify the value was changed.
+    /// let set_result = kit.set_field_value(
     ///     "name",
     ///     TD0Value::new_text_value("Kilt, er, kit")
     /// );
-    /// assert!(set_result.is_ok());
+    /// assert_eq!(kit.field_value("name"), Some(TD0Value::new_text_value("Kilt, er, kit")));
     ///
     /// # Ok::<(), TD0Error>(())
     /// ```
     ///
     /// ## Setting an integer field.
     /// The example shows how to set a [TD0Value::I8] field. The other integer types
-    /// are set in the same way, using a TD0Value of that type instad. See [TD0Value].
+    /// are set in the same way, using a TD0Value of that type instead. See [TD0Value].
     /// ```
     /// # use td0::TD0Error;
-    /// # use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0Value};
-    /// # const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// # let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    /// # let mut default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa")
-    /// #    .ok_or(TD0Error::unknown_chunk_error("KITa"))?;
+    /// # use td0::{parse_td0_file, TD0Chunk, TD0ChunkItem, TD0File, TD0Value};
+    /// # const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_kit.TD0");
+    /// # let mut td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    /// # let chunk : &mut TD0Chunk = td0file.chunk_mut("KITa").ok_or(TD0Error::unknown_chunk_error("KITa"))?;
+    /// # let mut kit : &mut dyn TD0ChunkItem = chunk.item_at_mut(0)?;
     /// // (Identical test setup as "Setting a Text field section." omitted here.)
-    /// let set_result = default_kit.set_field_value(
+    /// let set_result = kit.set_field_value(
     ///     "click_pan",
     ///     TD0Value::I8(-12)
     /// );
@@ -224,15 +265,15 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// See the note here: [TD0Value::Decimal]
     /// ```
     /// # use td0::TD0Error;
-    /// # use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0Value};
-    /// # const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// # let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    /// # let mut default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa")
-    /// #    .ok_or(TD0Error::unknown_chunk_error("KITa"))?;
+    /// # use td0::{parse_td0_file, TD0Chunk, TD0ChunkItem, TD0File, TD0Value};
+    /// # const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_kit.TD0");
+    /// # let mut td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    /// # let chunk : &mut TD0Chunk = td0file.chunk_mut("KITa").ok_or(TD0Error::unknown_chunk_error("KITa"))?;
+    /// # let mut kit : &mut dyn TD0ChunkItem = chunk.item_at_mut(0)?;
     /// // (Identical test setup as "Setting a Text field section." omitted here.)
     ///
     /// let my_tempo : f32 = 125.5_f32;
-    /// let set_result = default_kit.set_field_value(
+    /// let set_result = kit.set_field_value(
     ///     "tempo",
     ///     TD0Value::Decimal(my_tempo)
     /// );
@@ -266,20 +307,19 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     /// ## Setting the raw data of a [Text](TD0Value::Text) as a boxed [u8] slice.
     /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0ChunkItem, TD0File, TD0ValueRaw};
+    /// use td0::{parse_td0_file, TD0Chunk, TD0ChunkItem, TD0Error, TD0File, TD0Value, TD0ValueRaw};
     ///
     /// // Load the initial file.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_kit.TD0");
+    /// let mut td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    /// let chunk : &mut TD0Chunk = td0file.chunk_mut("KITa").ok_or(TD0Error::unknown_chunk_error("KITa"))?;
     ///
-    /// // Get a default KITa `TDOChunkItem`.
-    /// let mut default_kit : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("KITa")
-    ///     .ok_or(TD0Error::unknown_chunk_error("KITa"))?;
+    /// // Get the kit item from the example file. Its name field is currently set to "Dance".
+    /// let mut kit : &mut dyn TD0ChunkItem = chunk.item_at_mut(0)?;
     ///
     /// // Set its "name" field, a Text field. Note the spaces used to pad the str
     /// // to 16 characters- the "name" field is 16 bytes in size.
-    /// let set_result = default_kit.set_field_value_raw(
+    /// let set_result = kit.set_field_value_raw(
     ///     "name",
     ///     TD0ValueRaw::Slice(Box::new(*b"I Like Danger   "))
     /// );
@@ -288,615 +328,6 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// # Ok::<(), TD0Error>(())
     /// ```
     fn set_field_value_raw(&mut self, field: &str, raw_value: TD0ValueRaw) -> TD0Result<()>;
-}
-
-/// Interface to the data in a .TD0 file.
-pub trait TD0File: Send + Sync + core::fmt::Debug {
-    /// Add a chunk of `chunk_name` type to the file, containing `num_items` [TD0ChunkItem] items of the
-    /// appropriate type.
-    ///
-    /// The newly created items will be default [TD0ChunkItem] items of the expected type for `chunk_name`. See the
-    /// documentation for [TD0File::chunk_item_default] for more information on what data the default items contain.
-    ///
-    /// # Errors
-    /// Errors may vary based on model/firmware-specific implementation of TD0File.
-    /// Expected errors include:
-    /// - [TD0Error::InvalidChunk](crate::result::TD0Error::InvalidChunk)
-    ///   - if `chunk_name` is not a valid chunk name. (This can differ per
-    ///     device model and per firmware revision.)
-    ///   - if a valid chunk header tag was unable to be created.
-    /// - [TD0Error::UnsupportedDeviceFirmwareVersion](crate::result::TD0Error::UnsupportedDeviceFirmwareVersion)
-    ///   if the file contains an unexpected firmware version.
-    /// - [TD0Error::FileParse](crate::result::TD0Error::FileParse) if this
-    ///   file's firmware version and/or model can't be determined.
-    /// - [TD0Error::OutOfRange](crate::result::TD0Error::OutOfRange)
-    ///   - if the supplied `item_size` is larger than the file's native
-    ///     representation allows.
-    ///   - if the new chunk offset would be larget than the file format
-    ///     allows.
-    ///
-    /// # Example
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0File};
-    ///
-    /// // Load the initial file, which contains a single chunk: `HDRa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// // Add a `TGLa` chunk with five items, and verify that it was added.
-    /// td0file.add_chunk("TGLa", 5)?;
-    /// assert_eq!(td0file.list_chunks(), vec!["HDRa", "TGLa"]);
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> TD0Result<()>;
-
-    /// Remove the chunk `chunk_name` from the file.
-    ///
-    /// # Errors
-    /// Errors may vary based on model/firmware-specific implementation of TD0File.
-    /// Expected errors include:
-    /// - [TD0Error::InvalidChunk](crate::result::TD0Error::InvalidChunk)
-    ///   - if `chunk_name` is not a valid chunk name. (This can differ per
-    ///     device model and per firmware revision.)
-    ///   - if the chunk size in the file metadata is invalid.
-    /// - [TD0Error::FileParse](crate::result::TD0Error::FileParse) if this
-    ///   file's firmware version and/or model can't be determined.
-    ///
-    /// # Example
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0File};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// // Remove the`TGLa` chunk, and verify the chunk was removed.
-    /// td0file.remove_chunk("TGLa")?;
-    /// assert_eq!(td0file.list_chunks(), vec!["HDRa"]);
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn remove_chunk(&mut self, chunk_name: &str) -> TD0Result<()>;
-
-    /// Replace a chunk item with a `source`, another [TD0ChunkItem] of the same type.
-    ///
-    /// # Errors
-    /// - [TD0Error::InvalidChunk](crate::result::TD0Error::InvalidChunk) if `chunk_name` is not a valid chunk name.
-    ///   (This can differ per device model and per firmware revision.)
-    /// - [TD0Error::InvalidInput](crate::result::TD0Error::InvalidInput) if `source` is an incorrect [TD0ChunkItem]
-    ///   type for `chunk_name`.
-    /// - [TD0Error::OutOfRange](crate::result::TD0Error::OutOfRange) if `item_index` is greater than the maximum index
-    ///   already available in the chunk. (This method may NOT be used to add a new item to the chunk.)
-    ///
-    /// # Example
-    /// ```
-    /// use td0::{parse_td0_file, TD0Error, TD0File, TD0ChunkItem, TD0Result, TD0Value};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// // Create a default TGLa TD0ChunkItem and set its "name" field.
-    /// let mut test_item : Box<dyn TD0ChunkItem> = td0file.chunk_item_default("TGLa").ok_or(
-    ///     TD0Error::unknown_chunk_error("TGLa")
-    /// )?;
-    /// test_item.set_field_value("name", TD0Value::new_text_value("This is a test"))?;
-    ///
-    /// // Test helper to retrieve the TGLa name field from a TGLa item as a String.
-    /// fn tgl_name_as_string(fileobj: &dyn TD0File, item_index: usize) -> TD0Result<String> {
-    ///     let chunk_item : &dyn TD0ChunkItem = fileobj.chunk_item_ref("TGLa", item_index)?;
-    ///     let field_value : TD0Value = chunk_item.field_value("name").ok_or(
-    ///         TD0Error::InvalidField("name".to_string())
-    ///     )?;
-    ///     Ok(field_value.to_string())
-    /// }
-    ///
-    /// // Ensure that the expected value isn't already set.
-    /// assert_ne!(tgl_name_as_string(&*td0file, 0)?, "This is a test".to_string());
-    ///
-    /// // Replace TGLa item 0 in thefile with test_item, and verify that the replacement worked.
-    /// td0file.chunk_item_replace("TGLa", 0, &*test_item)?;
-    /// assert_eq!(tgl_name_as_string(&*td0file, 0)?, "This is a test".to_string());
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn chunk_item_replace(
-        &mut self,
-        chunk_name: &str,
-        item_index: usize,
-        source: &dyn TD0ChunkItem,
-    ) -> TD0Result<()>;
-
-    /// Copy a [TD0ChunkItem] within `chunk_name` to `dest_index` overwriting the item at that index.
-    ///
-    /// The source item is not affected by the copy.
-    ///
-    /// # Errors
-    /// - [TD0Error::InvalidChunk](crate::result::TD0Error::InvalidChunk) if `chunk_name` is not a valid chunk name.
-    ///   (This can differ per device model and per firmware revision.)
-    /// - [TD0Error::OutOfRange](crate::result::TD0Error::OutOfRange) if `source_index` or `dest_index` is greater
-    ///   than the maximum index available in the chunk.
-    ///
-    /// # Example
-    /// ```
-    /// use td0::{parse_td0_file, TD0Error, TD0File, TD0ChunkItem, TD0Result, TD0Value};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// // Test helper to retrieve the TGLa name field from a TGLa item as a String.
-    /// fn tgl_name_as_string(fileobj: &dyn TD0File, item_index: usize) -> TD0Result<String> {
-    ///     let chunk_item : &dyn TD0ChunkItem = fileobj.chunk_item_ref("TGLa", item_index)?;
-    ///     let field_value : TD0Value = chunk_item.field_value("name").ok_or(
-    ///         TD0Error::InvalidField("name".to_string())
-    ///     )?;
-    ///     Ok(field_value.to_string())
-    /// }
-    ///
-    /// // Set the name field of TGLa item 0.
-    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", TD0Value::new_text_value("My New Tag"))?;
-    ///
-    /// // Verify that TGLa item 2 isn't already the new value:
-    /// assert_ne!(tgl_name_as_string(&*td0file, 2)?, "My New Tag".to_string());
-    ///
-    /// // Copy item 0 to item 2 and verify the value is now set:
-    /// td0file.chunk_item_copy("TGLa", 0, 2)?;
-    /// assert_eq!(tgl_name_as_string(&*td0file, 2)?, "My New Tag".to_string());
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn chunk_item_copy(
-        &mut self,
-        chunk_name: &str,
-        source_index: usize,
-        dest_index: usize,
-    ) -> TD0Result<()>;
-
-    /// Swap two chunk items in `chunk_name`.
-    ///
-    /// # Errors
-    /// - [TD0Error::InvalidChunk](crate::result::TD0Error::InvalidChunk) if `chunk_name` is not a valid chunk name.
-    ///   (This can differ per device model and per firmware revision.)
-    /// - [TD0Error::OutOfRange](crate::result::TD0Error::OutOfRange) if `source_index` or `dest_index` is greater
-    ///   than the maximum index available in the chunk.
-    ///
-    /// # Example
-    /// ```
-    /// use td0::{parse_td0_file, TD0Error, TD0File, TD0ChunkItem, TD0Result, TD0Value};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// // Test helper to retrieve the TGLa name field from a TGLa item as a String.
-    /// fn tgl_name_as_string(fileobj: &dyn TD0File, item_index: usize) -> TD0Result<String> {
-    ///     let chunk_item : &dyn TD0ChunkItem = fileobj.chunk_item_ref("TGLa", item_index)?;
-    ///     let field_value : TD0Value = chunk_item.field_value("name").ok_or(
-    ///         TD0Error::InvalidField("name".to_string())
-    ///     )?;
-    ///     Ok(field_value.to_string())
-    /// }
-    ///
-    /// // Set the name field of TGLa item 0.
-    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", TD0Value::new_text_value("Was item 0"))?;
-    /// td0file.chunk_item_mut("TGLa", 1)?.set_field_value("name", TD0Value::new_text_value("Not swapped"))?;
-    /// td0file.chunk_item_mut("TGLa", 2)?.set_field_value("name", TD0Value::new_text_value("Was item 2"))?;
-    ///
-    /// // Perform the swap and verify the expected results.
-    /// td0file.chunk_items_swap("TGLa", 0, 2)?;
-    /// assert_eq!(tgl_name_as_string(&*td0file, 0)?, "Was item 2".to_string());
-    /// assert_eq!(tgl_name_as_string(&*td0file, 1)?, "Not swapped".to_string());
-    /// assert_eq!(tgl_name_as_string(&*td0file, 2)?, "Was item 0".to_string());
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn chunk_items_swap(
-        &mut self,
-        chunk_name: &str,
-        index_1: usize,
-        index_2: usize,
-    ) -> TD0Result<()>;
-
-    /// Reorder all [TD0ChunkItem]s in `chunk_name`.
-    ///
-    /// Every valid item index in `chunk_name` must be present exactly 1 time in `new_order`. Precisely, new_order must:
-    /// - Contain every usize value in the range 0..[TD0File::chunk_num_items],
-    /// - Must be of size [TD0File::chunk_num_items], and
-    /// - Must not have any duplicate values.
-    ///
-    /// # Errors
-    /// - [TD0Error::InvalidChunk](crate::result::TD0Error::InvalidChunk) if `chunk_name` is not a valid chunk name.
-    ///   (This can differ per device model and per firmware revision.)
-    /// - [TD0Error::InvalidInput](crate::result::TD0Error::InvalidInput) if `new_order` does not meet the preconditions
-    ///   outlined above.
-    ///
-    /// # Example
-    /// ```
-    /// use td0::{parse_td0_file, TD0Error, TD0File, TD0ChunkItem, TD0Result, TD0Value};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// // `TGLa` has three (3) chunk items.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// // Test helper to retrieve the TGLa name field from a TGLa item as a String.
-    /// fn tgl_name_as_string(fileobj: &dyn TD0File, item_index: usize) -> TD0Result<String> {
-    ///     let chunk_item : &dyn TD0ChunkItem = fileobj.chunk_item_ref("TGLa", item_index)?;
-    ///     let field_value : TD0Value = chunk_item.field_value("name").ok_or(
-    ///         TD0Error::InvalidField("name".to_string())
-    ///     )?;
-    ///     Ok(field_value.to_string())
-    /// }
-    ///
-    /// // Set the name field of TGLa item 0.
-    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", TD0Value::new_text_value("Was item 0"))?;
-    /// td0file.chunk_item_mut("TGLa", 1)?.set_field_value("name", TD0Value::new_text_value("Was item 1"))?;
-    /// td0file.chunk_item_mut("TGLa", 2)?.set_field_value("name", TD0Value::new_text_value("Was item 2"))?;
-    ///
-    /// // Perform the swap and verify the expected results.
-    /// td0file.chunk_items_reorder("TGLa", &[1, 2, 0])?;
-    /// assert_eq!(tgl_name_as_string(&*td0file, 0)?, "Was item 1".to_string());
-    /// assert_eq!(tgl_name_as_string(&*td0file, 1)?, "Was item 2".to_string());
-    /// assert_eq!(tgl_name_as_string(&*td0file, 2)?, "Was item 0".to_string());
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn chunk_items_reorder(&mut self, chunk_name: &str, new_order: &[usize]) -> TD0Result<()>;
-
-    /// Ensure that the [TD0File] is ready to be read via [TD0File::try_to_bytes]. This method should be called
-    /// prior to exporting the file's bytes, otherwise the user risks exporting an invalid backup file.
-    ///
-    /// ## Why is this Needed?
-    /// [TD0File] implementations MAY perform various optimizations (e.g. caching data or deferring calculations)
-    /// behind the scenes, as long as they're transparent to the user. If such leave the data in a stale or inconsistent
-    /// state, the implementation MUST raise [TD0Error::ValidationFailed](crate::result::TD0Error::ValidationFailed) upon
-    /// a call to [TD0File::try_to_bytes], or any other call that exports the [TD0File]'s bytes.
-    ///
-    /// An example is deferring the calculation of the file checksum, which speeds up edit operations (vs recalculating
-    /// it on every for every edit,) but leaves the file in an inconsistent state. finalize() triggers a checksum
-    /// calculation in those cases.
-    ///
-    /// # Errors
-    /// - [TD0Error::FileParse](crate::result::TD0Error::FileParse) If the modified [TD0File] is invalid/unparsable.
-    ///
-    /// # Example
-    /// ```
-    /// use td0::{parse_td0_file, TD0Error, TD0File, TD0ChunkItem, TD0Result, TD0Value};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// // Modify a value, and attempt to call try_to_bytes.
-    /// td0file.chunk_item_mut("TGLa", 0)?.set_field_value("name", TD0Value::new_text_value("Changed value!"))?;
-    /// let bytes_result = td0file.try_to_bytes();
-    /// // Expected failure, finalize() hasn't been called!
-    /// assert!(matches!(bytes_result, Err(TD0Error::ValidationFailed(_))));
-    ///
-    /// // Try it again...
-    /// td0file.finalize()?;
-    /// let bytes_result = td0file.try_to_bytes();
-    /// assert!(matches!(bytes_result, Ok(_)));
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    fn finalize(&mut self) -> TD0Result<()>;
-
-    /// Parse a new TD0File from bytes.
-    ///
-    /// This method can't be invokedd directly by clients of `td0` or `td0-core`. Instead, they can use
-    /// [td0::parse_td0_file](../td0/fn.parse_td0_file.html), which selects the proper `TD0File` implementation
-    /// to parse the bytes.
-    ///
-    /// # Errors
-    /// Errors that may be raised include:
-    /// - [TD0Error::FileParse](crate::result::TD0Error::FileParse) if the bytes are unparsable as a TD0File.
-    /// - [TD0Error::InvalidChunk](crate::result::TD0Error::InvalidChunk) if a data chunk's chunk header can't be
-    ///   parsed.
-    ///
-    /// # Examples
-    /// See [td0::parse_td0_file](../td0/fn.parse_td0_file.html#examples) documentation for an example.
-    ///
-    fn try_from_bytes(bytes: &[u8]) -> TD0Result<Self>
-    where
-        Self: Sized;
-
-    /// Return a copy of the file's bytes.
-    ///
-    /// # Errors
-    /// - [TD0Error::ValidationFailed](crate::result::TD0Error::ValidationFailed) if the file is not valid for saving.
-    ///   Can often be remedied by calling [TD0File::finalize()] before retrying.
-    fn try_to_bytes(&self) -> TD0Result<Vec<u8>>;
-
-    /// Retrieve a reference to a data item from `chunk_name`.
-    fn chunk_item_ref(&self, chunk_name: &str, item_index: usize) -> TD0Result<&dyn TD0ChunkItem>;
-
-    /// Retrieve a mutable reference to a data item from `chunk_name`.
-    fn chunk_item_mut(
-        &mut self,
-        chunk_name: &str,
-        item_index: usize,
-    ) -> TD0Result<&mut dyn TD0ChunkItem>;
-
-    /// Return an owned copy of a data item from `chunk_name`.
-    fn chunk_item(&self, chunk_name: &str, item_index: usize) -> TD0Result<Box<dyn TD0ChunkItem>>;
-
-    /// Return a Some(default [TD0ChunkItem]) for `chunk_name` or None if chunk_name is invalid.
-    ///
-    /// The set of valid chunk names differs based on device model and firmware revision. To retrieve a list of valid
-    /// chunks, use the [TD0File::valid_chunk_names] method.
-    ///
-    /// ## What Does "default" Mean here?
-    /// Default items initialize each field to a default value, which varies based on the [TD0Value] type of the field:
-    /// - 0 for numeric fields ([TD0Value::U16], [TD0Value::I8], [TD0Value::Decimal], etc.)
-    /// - Box<[0; N]> for [TD0Value::Slice] fields,
-    /// - The field-appropriate padding character for [TD0Value::Text] fields, or the zeroth option in the field's list
-    ///   of options if one exists.
-    ///
-    /// # Example
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0File};
-    ///
-    /// // Load the initial file, which contains a single chunk: `HDRa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// // A default item will be returned `chunk_name` is valid for model + firmware revision of the file,
-    /// // regardless of whether the file contains that chunk or not. (In this case it doesn't.)
-    /// let mut chunk_item_option = td0file.chunk_item_default("TGLa");
-    /// assert!(matches!(chunk_item_option, Some(_)));
-    /// if let Some(chunk_item) = chunk_item_option {
-    ///     // TGLa has a single field, "name".
-    ///     assert_eq!(chunk_item.list_fields(), ["name"]);
-    /// }
-    ///
-    /// // Returns option None if `chunk_name` is not valid.
-    /// assert!(matches!(td0file.chunk_item_default("FOOa"), None));
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn chunk_item_default(&self, chunk_name: &str) -> Option<Box<dyn TD0ChunkItem>>;
-
-    /// Return the number of items in `chunk_name`. Returns None if `chunk_name` is present in this file.
-    ///
-    /// # Example
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0File};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// // In this example file `HDRa` has one item and `TGLa` has three.
-    /// assert_eq!(td0file.chunk_num_items("HDRa"), Some(1usize));
-    /// assert_eq!(td0file.chunk_num_items("TGLa"), Some(3usize));
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn chunk_num_items(&self, chunk_name: &str) -> Option<usize>;
-
-    /// Return the absolute position of `chunk_name`. Returns None if `chunk_name` is present in this file.
-    ///
-    /// # Example
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0File};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// assert_eq!(td0file.chunk_pos("HDRa"), Some(48usize));
-    /// assert_eq!(td0file.chunk_pos("TGLa"), Some(128usize));
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    fn chunk_pos(&self, chunk_name: &str) -> Option<usize>;
-
-    /// Return a reference to the bytes of a `chunk_name`. Returns None if `chunk_name` is present in this file.
-    ///
-    /// # Example
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0File, TD0Value};
-    ///
-    /// // Load the initial file, which contains a single chunk: `HDRa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// // Add the shortest chunk possible for this file type, TGLa, then set its one item's name.
-    /// td0file.add_chunk("TGLa", 1)?;
-    /// let mut tgl_item = td0file.chunk_item_mut("TGLa", 0)?;
-    /// tgl_item.set_field_value("name", TD0Value::new_text_value("Taggy tag tag"))?;
-    ///
-    /// /// The expected output is implementation-specific.
-    /// let mut expected : Vec<u8> = vec![
-    ///     // Chunk header, describes the number of items, the item size, the start offset of the items.
-    ///     1, 0, 0, 0, 16, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0
-    /// ];
-    /// expected.extend(b"Taggy tag tag   ");   // Must be 16 bytes for TGLa in this file type.
-    ///
-    /// assert_eq!(td0file.chunk_raw("TGLa").unwrap_or_default(), expected.as_slice());
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn chunk_raw(&self, chunk_name: &str) -> Option<&[u8]>;
-
-    /// Return the size of chunk `chunk_name`. Returns None if `chunk_name` is present in this file.
-    ///
-    /// # Example
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0File};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// assert_eq!(td0file.chunk_size("HDRa"), Some(80usize));
-    /// assert_eq!(td0file.chunk_size("TGLa"), Some(64usize));
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    fn chunk_size(&self, chunk_name: &str) -> Option<usize>;
-
-    /// Return a list of the names of the chunks present in this file.
-    ///
-    /// ## Note
-    /// This does not list all possible valid chunk names, only those that exist in this file.
-    /// To retrieve all valid chunk names for this type of file, use the [TD0File::valid_chunk_names] method.
-    ///
-    /// # Example
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0File};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// assert_eq!(td0file.list_chunks(), vec!["HDRa".to_string(), "TGLa".to_string()]);
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn list_chunks(&self) -> Vec<String>;
-
-    /// Return a [TD0Manifest] containing metadata about the file an its data chunks.
-    ///
-    /// # Errors:
-    /// - [TD0Error::FileParse](crate::result::TD0Error::FileParse)
-    ///   - if the file header cannot be parsed.
-    ///   - if the file manifest tags can't be parsed.
-    ///   - if the file backup manifest chunk (`HDRa`) isn't present or can't be parsed.
-    /// - [TD0Error::InvalidChunk](crate::result::TD0Error::InvalidChunk) if chunk header data in the file can't
-    ///   be parsed.
-    ///
-    /// # Example
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0BackupType, TD0DeviceModel, TD0File, TD0Manifest};
-    ///
-    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    ///
-    /// let manifest : TD0Manifest = td0file.manifest()?;
-    ///
-    /// // Test that the manifest has retrievable data.
-    /// assert_eq!(manifest.backup_name(), "USER KIT        ");
-    /// assert_eq!(manifest.backup_type(), TD0BackupType::Kit);
-    /// assert_eq!(manifest.device_model(), TD0DeviceModel::SPDSXPro);
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    fn manifest(&self) -> TD0Result<TD0Manifest>;
-
-    /// Return a new default [TD0File].
-    ///
-    /// To be implemented when creating new TD0File types.
-    /// Regular users of this library should use [td0::new_td0_file](../td0/fn.new_td0_file.html#examples) instead.
-    fn new() -> Self
-    where
-        Self: Sized;
-
-    /// Return the valid chunk names for this TD0File, based on its device model and firmware revision.
-    ///
-    /// ## Note
-    /// All possible valid chunk names are returned, regardless of their presence or absence in the current file.
-    /// To retrieve only the chunks found in the current file, use the [TD0File::list_chunks] method.
-    ///
-    /// # Example
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{new_td0_file, TD0File, TD0DeviceModel, TD0BackupType};
-    ///
-    /// let file_v1_10 = new_td0_file(TD0DeviceModel::SPDSXPro, "1.10")?;
-    /// assert_eq!(file_v1_10.valid_chunk_names(), &[
-    ///     "HDRa", "KITa", "CURa", "STLa", "STPa", "TGLa", "TRGa", "WVPa",
-    /// ]);
-    ///
-    /// let file_v2_00 = new_td0_file(TD0DeviceModel::SPDSXPro, "2.00")?;
-    /// assert_eq!(file_v2_00.valid_chunk_names(), &[
-    ///     "HDRa", "KITa", "KITb", "CURa", "PVRa", "STLa", "STPa", "STPb", "TGLa", "TRGa", "WVPa",
-    /// ]);
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn valid_chunk_names(&self) -> &'static [&'static str];
-
-    /// Perform a post-parse validation of the file.
-    ///
-    /// (Implementation specific.) Validate that that the file meets expectations after parsing,
-    /// raise a TD0Error if problems were found.
-    ///
-    /// # Errors
-    /// - [TD0Error::ValidationFailed](crate::result::TD0Error::ValidationFailed) - if the file is not correctly
-    ///   formatted, or its metadata doesn't match the actual data.
-    ///
-    /// # Examples
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0File};
-    ///
-    /// // Load the initial file, test that it passes validation.
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
-    /// let td0file_good : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    /// assert!(td0file_good.validate_load().is_ok());
-    ///
-    /// // Load a broken version of the initial file, test that it fails validation.
-    /// let td0file_bad : Box<dyn TD0File> = parse_td0_file(&TD0_BYTES[0..TD0_BYTES.len() - 16])?;
-    /// assert!(matches!(td0file_bad.validate_load(), Err(TD0Error::ValidationFailed(_))));
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn validate_load(&self) -> TD0Result<()>;
-
-    /// Perform a pre-save validation of the file.
-    ///
-    /// (Implementation specific.) Validate that that the file meets expectations prior to saving,
-    /// raise a TD0Error if problems were found.
-    ///
-    /// # Errors
-    /// - [TD0Error::ValidationFailed](crate::result::TD0Error::ValidationFailed)
-    ///   - if the file is dirty (thus requiring [TD0File::finalize] to be called on it.)
-    ///   - if the file is not correctly formatted, or its metadata doesn't match the actual data.
-    ///
-    /// # Examples
-    /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, TD0File};
-    ///
-    /// // Load the initial file, add a chunk (thus making it dirty.)
-    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
-    /// let mut td0file : Box<dyn TD0File> = parse_td0_file(TD0_BYTES)?;
-    /// td0file.add_chunk("TGLa", 2)?;
-    /// // Test for the expected TD0Error:
-    /// assert!(matches!(td0file.validate_save(), Err(TD0Error::ValidationFailed(_))));
-    ///
-    /// // Finalize the file and try again:
-    /// td0file.finalize()?;
-    /// assert!(td0file.validate_save().is_ok());
-    ///
-    /// # Ok::<(), TD0Error>(())
-    /// ```
-    ///
-    fn validate_save(&self) -> TD0Result<()>;
 }
 
 /// A read-only description of a [`TD0File`] data chunk.
@@ -955,6 +386,9 @@ impl ChunkManifest {
     }
 }
 
+/// An intermediate type between TD0's native decimal storage (as an integer) and
+/// the float-backed Decimal representation found in [TD0Value]. Used for input
+/// validation.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct IntEncodedDecimal(pub f32);
 
@@ -994,13 +428,13 @@ pub struct TD0Manifest {
         feature = "serde",
         serde(serialize_with = "serde_checksum_bytes_to_string")
     )]
-    pub(crate) checksum_actual: [u8; 16],
+    pub(crate) checksum_actual: Vec<u8>,
 
     #[cfg_attr(
         feature = "serde",
         serde(serialize_with = "serde_checksum_bytes_to_string")
     )]
-    pub(crate) checksum_calculated: [u8; 16],
+    pub(crate) checksum_calculated: Vec<u8>,
     pub(crate) device_model: TD0DeviceModel,
     pub(crate) device_firmware_version: String,
     pub(crate) device_firmware_build: String,
@@ -1061,6 +495,9 @@ pub enum TD0ValueRaw {
     U32(u32),
 }
 
+/// An intermediate between a TD0Decimal/f32 type and a Decimal volume value.
+/// This struct's implementation provides validation for TD0 "main" volume
+/// values.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Volume(pub f32);
 impl core::fmt::Display for Volume {
@@ -1071,4 +508,46 @@ impl core::fmt::Display for Volume {
             write!(f, "{:.1}", self.0)
         }
     }
+}
+
+/// Rich field type information containing field-specific validation constraints.
+#[derive(Clone, PartialEq, Debug)]
+pub enum FieldType {
+    /// A string composed of only printable ASCII characters, of `max_len` or
+    /// shorter length. Printable characters are code points 32 (" ") - 126 "~".
+    AsciiText { max_len: usize },
+    /// A string that precisely matches one of the options in `options`.
+    EnumText { options: &'static [&'static str] },
+    /// A signed 8-bit integer. Valid values are between `min` and `max`, inclusive.
+    I8 { min: i8, max: i8 },
+    /// A signed 16-bit integer. Valid values are between `min` and `max`, inclusive.
+    I16 { min: i16, max: i16 },
+    /// A Decimal value, accurate to 1 decimal place.
+    /// Valid values are between `min` and `max`, inclusive.
+    Decimal { min: f32, max: f32 },
+    /// An unsigned 8-bit integer. Valid values are between `min` and `max`, inclusive.
+    U8 { min: u8, max: u8 },
+    /// An unsigned 16-bit integer. Valid values are between `min` and `max`, inclusive.
+    U16 { min: u16, max: u16 },
+    /// An unsigned 32-bit integer. Valid values are between `min` and `max`, inclusive.
+    U32 { min: u32, max: u32 },
+    /// An [u8] slice of exactly `len` size.
+    Slice { len: usize },
+}
+
+/// A field definition containing the field name and a FieldType value.
+#[derive(Clone, PartialEq, Debug)]
+pub struct FieldDef {
+    pub name: &'static str,
+    pub field_type: FieldType,
+}
+
+/// A generic difference between two items.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Diff<T>
+where
+    T: Clone + core::fmt::Debug + PartialEq,
+{
+    pub left: T,
+    pub right: T,
 }

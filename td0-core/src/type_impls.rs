@@ -202,6 +202,14 @@ impl TryFrom<&str> for TD0DeviceModel {
     }
 }
 
+impl TryFrom<String> for TD0DeviceModel {
+    type Error = TD0Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_str())
+    }
+}
+
 impl TD0Manifest {
     pub fn backup_name(&self) -> String {
         self.backup_name.clone()
@@ -254,8 +262,8 @@ impl TD0Manifest {
     pub fn new(
         backup_name: impl Into<String>,
         backup_type: impl Into<TD0BackupType>,
-        checksum_actual: &[u8],
-        checksum_calculated: &[u8],
+        checksum_actual: Vec<u8>,
+        checksum_calculated: Vec<u8>,
         device_model: impl Into<TD0DeviceModel>,
         device_firmware_version: impl Into<String>,
         device_firmware_build: impl Into<String>,
@@ -281,8 +289,8 @@ impl TD0Manifest {
         Self {
             backup_name: backup_name.into(),
             backup_type: backup_type.into(),
-            checksum_actual: my_checksum_actual,
-            checksum_calculated: my_checksum_calculated,
+            checksum_actual,
+            checksum_calculated,
             device_model: device_model.into(),
             device_firmware_version: device_firmware_version.into(),
             device_firmware_build: device_firmware_build.into(),

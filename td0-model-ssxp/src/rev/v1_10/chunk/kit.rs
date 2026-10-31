@@ -4,7 +4,7 @@
 
 use td0_derive::{TD0ChunkItemDerive, repeat_fields};
 use zerocopy::{I16, LittleEndian, U16};
-use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
+use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
 #[cfg_attr(
     faster_incomplete_compile,
@@ -58,7 +58,18 @@ use crate::strings::{
 // The struct immediately below this comment is the complete, slow compiling version.
 #[cfg(not(faster_incomplete_compile))]
 #[repeat_fields]
-#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    FromBytes,
+    Immutable,
+    IntoBytes,
+    KnownLayout,
+    TD0ChunkItemDerive,
+    PartialEq,
+    Unaligned,
+)]
 #[repr(C, packed)]
 pub struct KITaItem {
     #[td0_field(field_type = "Text", pad_byte = 0x20)]
@@ -1274,7 +1285,9 @@ pub struct KITaItem {
 // Please see the WARNING near the top of this file for a more detailed explanation.
 #[cfg(faster_incomplete_compile)]
 #[repeat_fields]
-#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
+#[derive(
+    Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive, Unaligned,
+)]
 #[repr(C, packed)]
 pub struct KITaItem {
     #[td0_field(field_type = "Text", pad_byte = 0x20)]
