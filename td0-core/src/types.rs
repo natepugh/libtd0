@@ -7,12 +7,14 @@ use crate::result::TD0Result;
 #[cfg(feature = "serde")]
 use crate::helpers::serde_checksum_bytes_to_string;
 
-/// Data accessors for individual data chunk items. (e.g. a single Kit
-/// configuration or a single sample metadata tag.) Contains methods to
-/// describe available fields, and read or modify those fields' values.
+/// Data accessors for individual data chunk items.
 ///
-/// TD0ChunkItem instances aren't created directly, but rather retrieved from
-/// a [TD0File] instance.
+/// (e.g. a single Kit configuration or a single sample metadata tag.)
+/// Contains methods to describe available fields, and read or modify
+/// those fields' values.
+///
+/// [`TD0ChunkItem`] instances aren't created directly, but rather retrieved from
+/// a [`TD0Chunk`](crate::td0chunk::TD0Chunk) instance.
 pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// Return a borrowed reference to this object's buffer.
     ///
@@ -64,7 +66,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     fn field_options(&self, field: &str) -> Option<&'static [&'static str]>;
 
-    /// Return the name of the [TD0Value] data type of `field`. Return None if the `field` is not valid for this item.
+    /// Return the name of the [`TD0Value`] data type of `field`. Return None if the `field` is not valid for this item.
     ///
     /// # Example
     /// ```
@@ -88,9 +90,9 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     fn field_type(&self, field: &str) -> Option<&'static FieldType>;
 
-    /// Return an array of [FieldDef] structs describing all available fields for this chunk.
+    /// Return an array of [`FieldDef`] structs describing all available fields for this chunk.
     /// The description includes the field type and known constraints. For more information,
-    /// see [FieldDef].
+    /// see [`FieldDef`].
     ///
     /// # Example
     /// ```
@@ -131,7 +133,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// ```
     fn field_types(&self) -> &'static [FieldDef];
 
-    /// Return the value of `field` as a Option<[TD0Value]>, or None if `field` is not a valid field for this item.
+    /// Return the value of `field` as a Option<[`TD0Value`]>, or None if `field` is not a valid field for this item.
     ///
     /// Example:
     /// ```
@@ -148,7 +150,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// ```
     fn field_value(&self, field: &str) -> Option<TD0Value>;
 
-    /// Return the raw value of `field` as a Option<[TD0ValueRaw]>, or None if `field` is not a valid field
+    /// Return the raw value of `field` as a Option<[`TD0ValueRaw`]>, or None if `field` is not a valid field
     /// for this item.
     ///
     /// Example:
@@ -161,7 +163,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// let tgl_chunk : &TD0Chunk = td0file.chunk("TGLa").ok_or(TD0Error::unknown_chunk_error("TGLa"))?;
     /// let chunk_item : &dyn TD0ChunkItem = tgl_chunk.item_at_ref(4)?;
     ///
-    /// // The raw value of a TD0Value::Text field (such as "name") is a boxed [u8] array.
+    /// // The raw value of a TD0Value::Text field (such as "name") is a boxed [`u8`] array.
     /// assert_eq!(
     ///     chunk_item.field_value_raw("name"),
     ///     Some(TD0ValueRaw::Slice(Box::from(*b"Snare Proc/Elec ")))
@@ -193,30 +195,30 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     fn list_fields(&self) -> &'static [&'static str];
 
-    /// Set the value of `field` to [TD0Value] `value`.
+    /// Set the value of `field` to [`TD0Value`] `value`.
     ///
     /// # Errors
-    /// - [TD0Error::InvalidField](crate::result::TD0Error::InvalidField) if `field` is not valid for this item type.
-    /// - [TD0Error::DataType](crate::result::TD0Error::DataType) if `value` is not the correct [TD0Value]
-    ///   variant for `field`. To determine the variant, use [TD0ChunkItem::field_type].
-    /// - [TD0Error::OutOfRange](crate::result::TD0Error::OutOfRange)
+    /// - [`TD0Error::InvalidField`](crate::result::TD0Error::InvalidField) if `field` is not valid for this item type.
+    /// - [`TD0Error::DataType`](crate::result::TD0Error::DataType) if `value` is not the correct [`TD0Value`]
+    ///   variant for `field`. To determine the variant, use [`TD0ChunkItem::field_type`].
+    /// - [`TD0Error::OutOfRange`](crate::result::TD0Error::OutOfRange)
     ///   - if `value` is outside of the allowable range (for int types.)
     ///   - if `value` is too long (for Text types.)
-    /// - [TD0Error::OutOfRangeDecimal](crate::result::TD0Error::OutOfRangeDecimal) if `value` is outside of the
+    /// - [`TD0Error::OutOfRangeDecimal`](crate::result::TD0Error::OutOfRangeDecimal) if `value` is outside of the
     ///   allowable range (for Decimal types.)
-    /// - [TD0Error::InvalidInput](crate::result::TD0Error::InvalidInput) if `value` is of the correct type but not
-    ///   an allowable value, and none of the OutOfRange errors apply.
+    /// - [`TD0Error::InvalidInput`](crate::result::TD0Error::InvalidInput) if `value` is of the correct type but not
+    ///   an allowable value, and none of the `OutOfRange` errors apply.
     ///   Some possible reasons:
     ///   - `field` requires only ASCII printable characters, and `value` doesn't conform.
     ///   - `field` has a set of allowable options that `value` doesn't belong to.
-    /// - [TD0Error::ReadOnlyField](crate::result::TD0Error::ReadOnlyField) if `field` is not editable. Used as
+    /// - [`TD0Error::ReadOnlyField`](crate::result::TD0Error::ReadOnlyField) if `field` is not editable. Used as
     ///   a safety feature when it's not yet determined what a range of bytes in the raw data represents.
     ///   An escape hatch exists for the clever, or foolhardy,
-    ///   [set_field_value_raw](TD0ChunkItem::set_field_value_raw) allows setting any field.
+    ///   [`set_field_value_raw`](TD0ChunkItem::set_field_value_raw) allows setting any field.
     ///
     /// # Examples
     ///
-    /// ## Setting a [Text](TD0Value::Text) field
+    /// ## Setting a [`Text`](TD0Value::Text) field
     /// ```
     /// use td0::{parse_td0_file, TD0Chunk, TD0ChunkItem, TD0Error, TD0File, TD0Value};
     ///
@@ -240,8 +242,8 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// ```
     ///
     /// ## Setting an integer field.
-    /// The example shows how to set a [TD0Value::I8] field. The other integer types
-    /// are set in the same way, using a TD0Value of that type instead. See [TD0Value].
+    /// The example shows how to set a [`TD0Value::I8`] field. The other integer types
+    /// are set in the same way, using a `TD0Value` of that type instead. See [`TD0Value`].
     /// ```
     /// # use td0::TD0Error;
     /// # use td0::{parse_td0_file, TD0Chunk, TD0ChunkItem, TD0File, TD0Value};
@@ -259,10 +261,10 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// # Ok::<(), TD0Error>(())
     /// ```
     ///
-    /// # Setting a [Decimal](TD0Value::Decimal) field
+    /// # Setting a [`Decimal`](TD0Value::Decimal) field
     /// Decimal fields are set with a f32, rounded to a single decimal point.
     /// Ensure that your f32 value is rounded ahead of time to avoid any unexpected results.
-    /// See the note here: [TD0Value::Decimal]
+    /// See the note here: [`TD0Value::Decimal`]
     /// ```
     /// # use td0::TD0Error;
     /// # use td0::{parse_td0_file, TD0Chunk, TD0ChunkItem, TD0File, TD0Value};
@@ -284,19 +286,19 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     fn set_field_value(&mut self, field: &str, value: TD0Value) -> TD0Result<()>;
 
-    /// Set the raw value of `field` to [TD0ValueRaw] `raw_value`.
+    /// Set the raw value of `field` to [`TD0ValueRaw`] `raw_value`.
     ///
     /// # Errors
-    /// - [TD0Error::InvalidField](crate::result::TD0Error::InvalidField) if `field` is not valid for this item type.
-    /// - [TD0Error::DataType](crate::result::TD0Error::DataType) if `value` is not the correct [TD0ValueRaw]
-    ///   variant for `field`. To determine the variant, use [TD0ChunkItem::field_type].
-    /// - [TD0Error::InvalidInput](crate::result::TD0Error::InvalidInput) if `value` is of the correct type but not
-    ///   an allowable value, (e.g. a [TD0ValueRaw::Slice] is the wrong size.)
+    /// - [`TD0Error::InvalidField`](crate::result::TD0Error::InvalidField) if `field` is not valid for this item type.
+    /// - [`TD0Error::DataType`](crate::result::TD0Error::DataType) if `value` is not the correct [`TD0ValueRaw`]
+    ///   variant for `field`. To determine the variant, use [`TD0ChunkItem::field_type`].
+    /// - [`TD0Error::InvalidInput`](crate::result::TD0Error::InvalidInput) if `value` is of the correct type but not
+    ///   an allowable value, (e.g. a [`TD0ValueRaw::Slice`] is the wrong size.)
     ///
     /// # Warning!
     /// The intended use of this method is as an escape hatch during development and debugging.
     /// It does not perform any of the data validation that
-    /// [set_field_value](TD0ChunkItem::set_field_value) does and is inherently unsafe to
+    /// [`set_field_value`](TD0ChunkItem::set_field_value) does and is inherently unsafe to
     /// use for editing any backup file that may get loaded into an actual physical device.
     ///
     /// THE AUTHOR(S) OF THIS LIBRARY ASSUME NO RESPONSIBILITY FOR YOU BRICKING YOUR SAMPLE
@@ -305,7 +307,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     /// # Examples
     ///
-    /// ## Setting the raw data of a [Text](TD0Value::Text) as a boxed [u8] slice.
+    /// ## Setting the raw data of a [`Text`](TD0Value::Text) as a boxed [`u8`] slice.
     /// ```
     /// use td0::{parse_td0_file, TD0Chunk, TD0ChunkItem, TD0Error, TD0File, TD0Value, TD0ValueRaw};
     ///
@@ -331,9 +333,9 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
 }
 
 /// A read-only description of a [`TD0File`] data chunk.
-/// [`TD0Manifest`] structs contain one ChunkManifest item for each data chunk in the file.
+/// [`TD0Manifest`] structs contain one `ChunkManifest` item for each data chunk in the file.
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChunkManifest {
     pub(crate) name: String,
     pub(crate) pos: usize,
@@ -346,20 +348,24 @@ impl ChunkManifest {
     pub fn name(&self) -> String {
         self.name.clone()
     }
-    pub fn pos(&self) -> usize {
+
+    pub const fn pos(&self) -> usize {
         self.pos
     }
-    pub fn size(&self) -> usize {
+
+    pub const fn size(&self) -> usize {
         self.size
     }
-    pub fn num_items(&self) -> usize {
+
+    pub const fn num_items(&self) -> usize {
         self.num_items
     }
-    pub fn item_size(&self) -> usize {
+
+    pub const fn item_size(&self) -> usize {
         self.item_size
     }
 
-    /// Create a new ChunkManfest struct.
+    /// Create a new `ChunkManfest` struct.
     ///
     /// # Example
     /// ```
@@ -387,13 +393,13 @@ impl ChunkManifest {
 }
 
 /// An intermediate type between TD0's native decimal storage (as an integer) and
-/// the float-backed Decimal representation found in [TD0Value]. Used for input
+/// the float-backed Decimal representation found in [`TD0Value`]. Used for input
 /// validation.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct IntEncodedDecimal(pub f32);
 
 /// The type of backup a [`TD0File`] contains.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum TD0BackupType {
     /// A backup of a single kit.
@@ -405,7 +411,7 @@ pub enum TD0BackupType {
 }
 
 /// The model of the device that created the [`TD0File`] backup.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum TD0DeviceModel {
     /// Roland SPD-SX Pro (NOT compatible with the original SPD-SX.)
@@ -444,8 +450,8 @@ pub struct TD0Manifest {
     pub(crate) chunks: Vec<ChunkManifest>,
 }
 
-/// The value type returned from [TD0ChunkItem::field_value()], and required as
-/// the value parameter in [TD0ChunkItem::set_field_value()].
+/// The value type returned from [`TD0ChunkItem::field_value()`], and required as
+/// the value parameter in [`TD0ChunkItem::set_field_value()`].
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
 pub enum TD0Value {
@@ -455,7 +461,7 @@ pub enum TD0Value {
     /// This value is rounded to one decimal place (0.1) upon display and
     /// before setting the value of any field. To prevent unexpected results,
     /// ensure that your f32 value has already been rounded to one decimal
-    /// place _before_ creating a [TD0Value::Decimal].
+    /// place _before_ creating a [`TD0Value::Decimal`].
     Decimal(f32),
     /// A signed 8-bit integer.
     I8(i8),
@@ -476,9 +482,9 @@ pub enum TD0Value {
     U32(u32),
 }
 
-/// The value type returned from [TD0ChunkItem::field_value_raw()], and required as
-/// the value parameter in [TD0ChunkItem::set_field_value_raw()].
-#[derive(Debug, PartialEq, Clone)]
+/// The value type returned from [`TD0ChunkItem::field_value_raw()`], and required as
+/// the value parameter in [`TD0ChunkItem::set_field_value_raw()`].
+#[derive(Debug, Eq, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(untagged))]
 pub enum TD0ValueRaw {
     /// A signed 8-bit integer.
@@ -535,7 +541,7 @@ pub enum FieldType {
     Slice { len: usize },
 }
 
-/// A field definition containing the field name and a FieldType value.
+/// A field definition containing the field name and a [`FieldType`] value.
 #[derive(Clone, PartialEq, Debug)]
 pub struct FieldDef {
     pub name: &'static str,
@@ -543,7 +549,7 @@ pub struct FieldDef {
 }
 
 /// A generic difference between two items.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct Diff<T>
 where
     T: Clone + core::fmt::Debug + PartialEq,

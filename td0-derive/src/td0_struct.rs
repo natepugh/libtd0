@@ -49,7 +49,7 @@ enum FieldType {
     Volume,
 }
 
-/// Metadata about a syn::ItemStruct, extracted for use in helper functions.
+/// Metadata about a `syn::ItemStruct`, extracted for use in helper functions.
 struct ItemStructMeta<'a> {
     pub ident: &'a Ident,
     pub impl_generics: ImplGenerics<'a>,
@@ -78,7 +78,7 @@ struct TD0Field {
     pub native_type: NativeType,
 }
 
-/// The derive macro that creates TD0ChunkItem and TD0ChunkItemMut implementations.
+/// The derive macro that creates `TD0ChunkItem` and `TD0ChunkItemMut` implementations.
 pub fn td0_struct_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     //let input = TokenStream::from(input);
     let input = parse_macro_input!(input);
@@ -159,25 +159,16 @@ fn build_bounded_setter_expr<T>(
 where
     T: Bounded + ToTokens + Copy,
 {
-    let min_expr: Expr = match min {
-        Some(min_val) => parse_quote!(Some(#min_val)),
-        None => parse_quote!(None),
-    };
-
-    let max_expr: Expr = match max {
-        Some(max_val) => parse_quote!(Some(#max_val)),
-        None => parse_quote!(None),
-    };
-
-    let min_val: Expr = match min {
-        Some(val) => parse_quote!(#val),
-        None => parse_quote!(0),
-    };
-
-    let max_val: Expr = match max {
-        Some(val) => parse_quote!(#val),
-        None => parse_quote!(i16::MAX),
-    };
+    let min_expr: Expr = min.map_or_else(
+        || parse_quote!(None),
+        |min_val| parse_quote!(Some(#min_val)),
+    );
+    let max_expr: Expr = max.map_or_else(
+        || parse_quote!(None),
+        |max_val| parse_quote!(Some(#max_val)),
+    );
+    let min_val: Expr = min.map_or_else(|| parse_quote!(0), |val| parse_quote!(#val));
+    let max_val: Expr = max.map_or_else(|| parse_quote!(0), |val| parse_quote!(#val));
 
     parse_quote!(
         if #core_lib_path::in_range_inclusive(val, #min_expr, #max_expr) {
@@ -190,19 +181,23 @@ where
     )
 }
 
+#[expect(
+    clippy::ref_option,
+    reason = "The caller(s) of this function don't own the Option either."
+)]
 fn build_clamp_vals<T>(min: &Option<T>, max: &Option<T>) -> (Expr, Expr)
 where
     T: Ord + Bounded + quote::ToTokens,
 {
     (
-        match min {
-            Some(val) => parse_quote!(Some(#val)),
-            None => parse_quote!(None),
-        },
-        match max {
-            Some(val) => parse_quote!(Some(#val)),
-            None => parse_quote!(None),
-        },
+        min.as_ref().map_or_else(
+            || parse_quote!(None),
+            |min_val| parse_quote!(Some(#min_val)),
+        ),
+        max.as_ref().map_or_else(
+            || parse_quote!(None),
+            |max_val| parse_quote!(Some(#max_val)),
+        ),
     )
 }
 
@@ -345,7 +340,7 @@ fn build_fn_chunkitem_set_field_value(
     let mut set_fields_clauses: Vec<Arm> = Vec::new();
     let mut field_errors: Option<syn::Error> = None;
 
-    for field in fields.iter() {
+    for field in fields {
         match build_setter_expr(field, core_lib_path) {
             Ok(arm) => set_fields_clauses.push(arm),
             Err(field_error) => match field_errors {
@@ -390,26 +385,11 @@ fn build_fn_chunkitem_set_field_value(
     Ok(fn_skel)
 }
 
-fn build_fn_chunkitem_set_field_value_raw(
-    fields: &[TD0Field],
-    core_lib_path: &Path,
-) -> syn::Result<ImplItemFn> {
-    let mut set_fields_clauses: Vec<Arm> = Vec::new();
-    let mut field_errors: Option<syn::Error> = None;
-
-    for field in fields.iter() {
-        match build_setter_expr_raw(field, core_lib_path) {
-            Ok(arm) => set_fields_clauses.push(arm),
-            Err(field_error) => match field_errors {
-                Some(ref mut existing) => existing.combine(field_error),
-                None => field_errors = Some(field_error),
-            },
-        }
-    }
-
-    if let Some(errors) = field_errors {
-        return Err(errors);
-    }
+fn build_fn_chunkitem_set_field_value_raw(fields: &[TD0Field], core_lib_path: &Path) -> ImplItemFn {
+    let mut set_fields_clauses: Vec<Arm> = fields
+        .iter()
+        .map(|field| build_setter_expr_raw(field, core_lib_path))
+        .collect();
 
     // Create DataType errors for all fields. ("field1" | "field2", _) ... for all fields.
     set_fields_clauses.extend(build_setter_data_type_errors(
@@ -439,7 +419,7 @@ fn build_fn_chunkitem_set_field_value_raw(
         push_arm_to_fn_match(&mut fn_skel, &arm);
     }
 
-    Ok(fn_skel)
+    fn_skel
 }
 
 fn build_getter_expr(field: &TD0Field, core_lib_path: &Path) -> Expr {
@@ -515,7 +495,7 @@ fn build_impl_default(
     let mut field_value_pairs: Vec<FieldValue> = Vec::new();
     let mut field_value_errors: Option<syn::Error> = None;
 
-    for field in fields.iter() {
+    for field in fields {
         match build_default_fieldvalue_for_field(field, core_lib_path) {
             Ok(field_value) => field_value_pairs.push(field_value),
             Err(err) => match field_value_errors {
@@ -563,10 +543,13 @@ fn create_chunkitem_field_type_exprs(
             }
             FieldType::Slice => {
                 let NativeType::Slice(native_type) = &field.native_type else {
-                    panic!(
-                        "field `{}` type and native type are out of sync!",
-                        field.ident_str
-                    );
+                    #[allow(clippy::panic, reason = "This is a useful compile-time error.")]
+                    {
+                        panic!(
+                            "field `{}` type and native type are out of sync!",
+                            field.ident_str
+                        );
+                    }
                 };
                 let size: usize = native_type.size;
 
@@ -574,10 +557,13 @@ fn create_chunkitem_field_type_exprs(
             }
             FieldType::Text { .. } => {
                 let NativeType::Slice(native_type) = &field.native_type else {
-                    panic!(
-                        "field `{}` type and native type are out of sync!",
-                        field.ident_str
-                    );
+                    #[allow(clippy::panic, reason = "This is a useful compile-time error.")]
+                    {
+                        panic!(
+                            "field `{}` type and native type are out of sync!",
+                            field.ident_str
+                        );
+                    }
                 };
                 let size: usize = native_type.size;
 
@@ -665,7 +651,7 @@ fn build_impl_td0_chunkitem(
     let fn_set_field_value: ImplItemFn =
         build_fn_chunkitem_set_field_value(fields, source_meta.core_lib_path)?;
     let fn_set_field_value_raw =
-        build_fn_chunkitem_set_field_value_raw(fields, source_meta.core_lib_path)?;
+        build_fn_chunkitem_set_field_value_raw(fields, source_meta.core_lib_path);
 
     let field_names: Vec<&String> = fields.iter().map(|field| &field.ident_str).collect();
     let num_fields: usize = field_names.len();
@@ -772,7 +758,7 @@ fn build_setter_data_type_errors(
     // Build match arms to create "invalid data type" errors for all fields at once.
     // The match arms are consolidated, e.g. ("field1" | "field2", _)  => {Err(..)}.
     let mut field_names_by_pretty_name: HashMap<&str, Vec<&str>> = HashMap::new();
-    for field in fields.iter() {
+    for field in fields {
         field_names_by_pretty_name
             .entry(pretty_field_name_fn(field))
             .or_default()
@@ -780,7 +766,7 @@ fn build_setter_data_type_errors(
     }
 
     let mut arms: Vec<Arm> = Vec::new();
-    for (&expected_type, field_names) in field_names_by_pretty_name.iter() {
+    for (expected_type, field_names) in field_names_by_pretty_name {
         // let fields_str = field_names.join(" | ");
         let err_str =
             format!("invalid data type setting field '{{field}}'. Expected `{expected_type}`");
@@ -883,32 +869,32 @@ fn build_setter_expr(field: &TD0Field, core_lib_path: &Path) -> syn::Result<Arm>
     }
 }
 
-fn build_setter_expr_raw(field: &TD0Field, core_lib_path: &Path) -> syn::Result<Arm> {
+fn build_setter_expr_raw(field: &TD0Field, core_lib_path: &Path) -> Arm {
     let ident = &field.ident;
     let ident_str = &field.ident_str;
 
     match &field.native_type {
-        NativeType::I8 => Ok(parse_quote!(
+        NativeType::I8 => parse_quote!(
             (#ident_str, #core_lib_path::TD0ValueRaw::I8(val)) => { self.#ident = val; Ok(())}
-        )),
-        NativeType::U8 => Ok(parse_quote!(
+        ),
+        NativeType::U8 => parse_quote!(
             (#ident_str, #core_lib_path::TD0ValueRaw::U8(val)) => { self.#ident = val; Ok(())}
-        )),
-        NativeType::I16 => Ok(parse_quote!(
+        ),
+        NativeType::I16 => parse_quote!(
             (#ident_str, #core_lib_path::TD0ValueRaw::I16(val)) => { self.#ident = I16::from(val); Ok(())}
-        )),
-        NativeType::U16 => Ok(parse_quote!(
+        ),
+        NativeType::U16 => parse_quote!(
             (#ident_str, #core_lib_path::TD0ValueRaw::U16(val)) => { self.#ident = U16::from(val); Ok(())}
-        )),
-        NativeType::U32 => Ok(parse_quote!(
+        ),
+        NativeType::U32 => parse_quote!(
             (#ident_str, #core_lib_path::TD0ValueRaw::U32(val)) => { self.#ident = U32::from(val); Ok(())}
-        )),
-        NativeType::Slice(_) => Ok(parse_quote!(
+        ),
+        NativeType::Slice(_) => parse_quote!(
             (#ident_str, #core_lib_path::TD0ValueRaw::Slice(val)) => {
                 #core_lib_path::copy_slice_to_native(&*val, &mut self.#ident)?;
                 Ok(())
             }
-        )),
+        ),
     }
 }
 
@@ -967,6 +953,10 @@ fn core_lib_path_from_struct(source: &ItemStruct) -> syn::Result<Option<Path>> {
     Ok(lib_path)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Better than a proliferation of called-once functions."
+)]
 fn field_type_from_attrs(kv_map: &AttrHashMap, attr_span: Span) -> syn::Result<FieldType> {
     let Some(field_type_kv) = kv_map.get("field_type") else {
         return Err(syn::Error::new(attr_span, "field_type is required."));
@@ -975,7 +965,7 @@ fn field_type_from_attrs(kv_map: &AttrHashMap, attr_span: Span) -> syn::Result<F
         .val()
         .to_token_stream()
         .to_string()
-        .replace("\"", "")
+        .replace('"', "")
         .as_str()
     {
         "U8" => {
@@ -1123,20 +1113,20 @@ fn field_type_from_attrs(kv_map: &AttrHashMap, attr_span: Span) -> syn::Result<F
     }
 }
 
-fn field_type_pretty_name(field: &TD0Field) -> &'static str {
+const fn field_type_pretty_name(field: &TD0Field) -> &'static str {
     match &field.field_type {
         FieldType::EnumStr { .. } | FieldType::Text { .. } => "Text",
         FieldType::I16 { .. } => "I16",
         FieldType::I8 { .. } => "I8",
         FieldType::Slice => "Slice",
         FieldType::TD0Decimal { .. } | FieldType::Volume => "Decimal",
-        FieldType::U32 { .. } => "U16",
+        FieldType::U32 { .. } => "U32",
         FieldType::U16 { .. } => "U16",
         FieldType::U8 { .. } => "U8",
     }
 }
 
-fn field_type_pretty_name_raw(field: &TD0Field) -> &'static str {
+const fn field_type_pretty_name_raw(field: &TD0Field) -> &'static str {
     match field.native_type {
         NativeType::I16 => "I16",
         NativeType::I8 => "I8",
@@ -1178,7 +1168,7 @@ fn get_td0_field_attrs(field: &mut Field) -> syn::Result<(Attribute, AttrHashMap
 
     if let Some(error) = parse_error {
         return Err(error);
-    };
+    }
 
     if td0_field_attr.is_none() || field_attrs_kv.is_none() {
         return Err(syn::Error::new_spanned(
@@ -1218,22 +1208,17 @@ fn parse_struct_fields(source: ItemStruct) -> syn::Result<Vec<TD0Field>> {
         return Ok(fields);
     }
 
-    match field_errors {
-        Some(errors) => Err(errors),
-        None => Ok(fields),
-    }
+    field_errors.map_or(Ok(fields), Err)
 }
 
 fn try_parse_field(field: &mut Field) -> syn::Result<TD0Field> {
-    let ident = match field.ident.clone() {
-        Some(val) => val,
-        None => {
-            return Err(syn::Error::new_spanned(
-                field,
-                "td0_field may only be used on named fields.",
-            ));
-        }
+    let Some(ident) = field.ident.clone() else {
+        return Err(syn::Error::new_spanned(
+            field,
+            "td0_field may only be used on named fields.",
+        ));
     };
+
     let (td0_field_attr, field_attrs_kv) = get_td0_field_attrs(field)?;
     let field_type = field_type_from_attrs(&field_attrs_kv, td0_field_attr.span())?;
     let Some(native_type) = get_field_native_type(field) else {
@@ -1285,9 +1270,5 @@ fn validate_field_type_keys(
         }
     }
 
-    if let Some(error) = errors {
-        Err(error)
-    } else {
-        Ok(())
-    }
+    errors.map_or(Ok(()), Err)
 }

@@ -5,7 +5,7 @@
 use core::error::Error;
 use core::fmt::Display;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvalidChunkError {
     chunk_name: String,
     reason: &'static str,
@@ -47,7 +47,7 @@ impl OutOfRangeErrorTD0Decimal {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OutOfRangeError {
     min: i64,
     max: i64,
@@ -77,13 +77,13 @@ pub enum TD0Error {
     DataType(String),
     /// The checksum stored in the file does not match the file data.
     ChecksumMismatch,
-    /// The requested [TD0ChunkItem](super::TD0ChunkItem) is invalid or otherwise unparsable.
+    /// The requested [`TD0ChunkItem`](super::TD0ChunkItem) is invalid or otherwise unparsable.
     ChunkItemParse,
     /// The chunks aren't a comparable type (for e.g. diff).
     ChunksNotComparable,
     /// The chunk is duplicated.
     DuplicateChunk(String),
-    /// The file is unable to be parsed into a [TD0File](super::TD0File).
+    /// The file is unable to be parsed into a [`TD0File`](super::TD0File).
     FileParse(String),
     /// The file is too large for limits inherent to the file type.
     FileTooLarge,
@@ -91,7 +91,7 @@ pub enum TD0Error {
     InvalidChunk(InvalidChunkError),
     /// The chunk name provided is not a valid one.
     InvalidChunkName,
-    /// The requested [TD0ChunkItem](super::TD0ChunkItem) field doesn't exist.
+    /// The requested [`TD0ChunkItem`](super::TD0ChunkItem) field doesn't exist.
     InvalidField(String),
     /// The supplied input isn't valid.
     InvalidInput(String),
@@ -116,12 +116,12 @@ pub enum TD0Error {
 impl Display for TD0Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let repr: String = match self {
-            Self::DataType(message) => message.clone(),
+            Self::DataType(message) | Self::ValidationFailed(message) => message.clone(),
             Self::ChecksumMismatch => "checksum mismatch.".to_string(),
             Self::ChunkItemParse => "unable to parse chunk item.".to_string(),
             Self::ChunksNotComparable => "chunks are not comparable.".to_string(),
             Self::DuplicateChunk(chunk_name) => format!("duplicate chunk '{chunk_name}'"),
-            Self::FileParse(err) => err.to_string(),
+            Self::FileParse(err) => err.clone(),
             Self::FileTooLarge => "the file is too large to complete this operation.".to_string(),
             Self::InvalidChunk(val) => val.to_string(),
             Self::InvalidChunkName => "invalid chunk name.".to_string(),
@@ -136,10 +136,9 @@ impl Display for TD0Error {
                 format!("unsupported firmware version '{version}'")
             }
             Self::UnsupportedDeviceModel(model) => format!("unsupported device model '{model}'"),
-            Self::ValidationFailed(message) => message.clone(),
         };
 
-        write!(f, "{}", repr)
+        write!(f, "{repr}")
     }
 }
 impl Error for TD0Error {}
@@ -175,22 +174,21 @@ impl TD0Error {
     }
 
     pub fn out_of_range_error_from_usize(min: usize, max: usize) -> Self {
-        let i64_min = i64::try_from(min);
-        if i64_min.is_err() {
+        let Ok(i64_min) = i64::try_from(min) else {
             return Self::DataType(
                 "min value of too great a magnitude to fit in a i64!".to_string(),
             );
-        }
-        let i64_max = i64::try_from(max);
-        if i64_max.is_err() {
+        };
+
+        let Ok(i64_max) = i64::try_from(max) else {
             return Self::DataType(
                 "max value of too great a magnitude to fit in a i64!".to_string(),
             );
-        }
+        };
 
         Self::OutOfRange(OutOfRangeError {
-            min: i64_min.unwrap(),
-            max: i64_max.unwrap(),
+            min: i64_min,
+            max: i64_max,
         })
     }
 

@@ -11,21 +11,23 @@ use super::common::{
     validate_attr_list_valid_attrs,
 };
 
+// TODO: Break this apart an simplify!
+#[expect(clippy::too_many_lines, reason = "It's awful, see the TODO above.")]
 pub fn repeat_fields(
     _args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
+    static MY_ATTR_NAMES: [&str; 3] = ["repeat", "repeat_section", "repeat_section_last"];
     let input = TokenStream::from(input);
     let mut source: ItemStruct = parse2(input).expect("Error parsing input struct!");
-    static MY_ATTR_NAMES: [&str; 3] = ["repeat", "repeat_section", "repeat_section_last"];
 
     if let syn::Fields::Named(ref mut fields) = source.fields {
         let mut new_fields = FieldsNamed {
-            brace_token: Default::default(),
+            brace_token: syn::token::Brace::default(),
             named: syn::punctuated::Punctuated::new(),
         };
         let mut new_section_fields = FieldsNamed {
-            brace_token: Default::default(),
+            brace_token: syn::token::Brace::default(),
             named: syn::punctuated::Punctuated::new(),
         };
         let fake_ident: Ident = format_ident!("{}", "__BOGUS_IDENT_DO_NOT_USE__");
@@ -33,7 +35,7 @@ pub fn repeat_fields(
         let mut section_attr: Option<RepeatSectionAttr> = None;
         let mut section_last_attr: Option<RepeatSectionLastAttr> = None;
 
-        for field in fields.named.iter() {
+        for field in &fields.named {
             let repeat_field_attr = get_named_attr("repeat", field);
             let repeat_section_attr = get_named_attr("repeat_section", field);
             let repeat_section_last_attr = get_named_attr("repeat_section_last", field);
@@ -98,7 +100,7 @@ pub fn repeat_fields(
             // move to the next iteration.
             if repeat_field_attr.is_none() {
                 let mut fld = field.clone();
-                fld.attrs = new_attrs.clone();
+                fld.attrs.clone_from(&new_attrs);
                 if section_attr.is_some() {
                     new_section_fields.named.push(fld);
                     if section_last_attr.is_some() {
@@ -156,9 +158,9 @@ fn push_field_repeated(
     count: u8,
     format: &str,
 ) {
-    for idx in 1..count + 1 {
+    for idx in 1..=count {
         let mut new_field = field.clone();
-        new_field.attrs = new_attrs.to_vec().clone();
+        new_field.attrs.clone_from(&new_attrs.to_vec());
 
         let ident_str = format.replace("{}", idx.to_string().as_str());
         new_field.ident = format_ident!("{}", ident_str).into();
@@ -171,11 +173,11 @@ fn push_section_repeated(
     section: &FieldsNamed,
     section_attr: &RepeatSectionAttr,
 ) {
-    for section_num in 1..section_attr.count + 1 {
+    for section_num in 1..=section_attr.count {
         let section_prefix = section_attr
             .prefix_format
             .replace("{}", section_num.to_string().as_str());
-        for field in section.named.iter() {
+        for field in &section.named {
             let mut new_field = field.clone();
             new_field.ident = Some(format_ident!(
                 "{}_{}",

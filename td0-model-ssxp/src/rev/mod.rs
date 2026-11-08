@@ -15,7 +15,7 @@ pub mod v2_00;
 /// If information is found contrary to the above, this will need to become
 /// more sophisticated.
 pub fn fuzzy_match_firmware(version: &str) -> &'static str {
-    let major = version.split(".").next().unwrap_or("0");
+    let major = version.split('.').next().unwrap_or("0");
     match major {
         "2" => "2.00",
         "1" => "1.10",

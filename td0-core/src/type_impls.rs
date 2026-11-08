@@ -4,7 +4,7 @@
 
 #![doc(hidden)]
 
-use super::helpers::checksum_bytes_to_string;
+use super::helpers::hex_encode;
 use super::result::{OutOfRangeErrorTD0Decimal, TD0Error, TD0Result};
 use super::types::{
     ChunkManifest, IntEncodedDecimal, TD0BackupType, TD0DeviceModel, TD0Manifest, TD0Value, Volume,
@@ -24,10 +24,10 @@ impl core::fmt::Display for ChunkManifest {
 }
 
 impl IntEncodedDecimal {
-    pub fn val(&self) -> f32 {
+    pub const fn val(&self) -> f32 {
         self.0
     }
-    pub fn val_mut(&mut self) -> &f32 {
+    pub const fn val_mut(&mut self) -> &f32 {
         &mut self.0
     }
 }
@@ -52,8 +52,12 @@ impl<T: ByteOrder> TryFrom<IntEncodedDecimal> for I16<T> {
     type Error = <i16 as TryFrom<i32>>::Error;
 
     fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "will be converted to i16 anyway."
+        )]
         let i32val = val.0.mul(10.0f32).round() as i32;
-        Ok(I16::from(i16::try_from(i32val)?))
+        Ok(Self::from(i16::try_from(i32val)?))
     }
 }
 
@@ -61,52 +65,70 @@ impl<T: ByteOrder> TryFrom<IntEncodedDecimal> for U16<T> {
     type Error = <u16 as TryFrom<i32>>::Error;
 
     fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "will be converted to i16 anyway."
+        )]
         let i32val = val.0.mul(10.0f32).round() as i32;
-        Ok(U16::from(u16::try_from(i32val)?))
+        Ok(Self::from(u16::try_from(i32val)?))
     }
 }
 
 impl From<IntEncodedDecimal> for f32 {
-    fn from(val: IntEncodedDecimal) -> f32 {
+    fn from(val: IntEncodedDecimal) -> Self {
         val.0
     }
 }
 
 impl TryFrom<IntEncodedDecimal> for i8 {
-    type Error = <i8 as TryFrom<i32>>::Error;
+    type Error = <Self as TryFrom<i32>>::Error;
 
     fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
-        i8::try_from(val.0.mul(10.0f32).round() as i32)
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "will be converted to i8 anyway."
+        )]
+        Self::try_from(val.0.mul(10.0f32).round() as i32)
     }
 }
 
 impl TryFrom<IntEncodedDecimal> for i16 {
-    type Error = <i16 as TryFrom<i32>>::Error;
+    type Error = <Self as TryFrom<i32>>::Error;
 
     fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
-        i16::try_from(val.0.mul(10.0f32).round() as i32)
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "will be converted to i16 anyway."
+        )]
+        Self::try_from(val.0.mul(10.0f32).round() as i32)
     }
 }
 
 impl From<IntEncodedDecimal> for i32 {
-    fn from(val: IntEncodedDecimal) -> i32 {
-        val.0.mul(10.0f32).round() as i32
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "truncation is expected here."
+    )]
+    fn from(val: IntEncodedDecimal) -> Self {
+        val.0.mul(10.0f32).round() as Self
     }
 }
 
 impl TryFrom<IntEncodedDecimal> for u8 {
-    type Error = <u8 as TryFrom<i32>>::Error;
+    type Error = <Self as TryFrom<i32>>::Error;
 
+    #[expect(clippy::cast_possible_truncation, reason = "the destination is a u8.")]
     fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
-        u8::try_from(val.0.mul(10.0f32).round() as i32)
+        Self::try_from(val.0.mul(10.0f32).round() as i32)
     }
 }
 
 impl TryFrom<IntEncodedDecimal> for u16 {
-    type Error = <u16 as TryFrom<i32>>::Error;
+    type Error = <Self as TryFrom<i32>>::Error;
 
+    #[expect(clippy::cast_possible_truncation, reason = "the destination is a u16.")]
     fn try_from(val: IntEncodedDecimal) -> Result<Self, Self::Error> {
-        u16::try_from(val.0.mul(10.0f32).round() as i32)
+        Self::try_from(val.0.mul(10.0f32).round() as i32)
     }
 }
 
@@ -142,6 +164,10 @@ impl From<i16> for IntEncodedDecimal {
 
 impl From<i32> for IntEncodedDecimal {
     fn from(val: i32) -> Self {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "only needs one decimal place of precision."
+        )]
         Self((val as f32).div(10.0f32))
     }
 }
@@ -170,7 +196,7 @@ impl core::fmt::Display for TD0BackupType {
 }
 
 impl TD0DeviceModel {
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Self::SPDSXPro => "SSXP",
             Self::Unknown => "UNKN",
@@ -215,19 +241,19 @@ impl TD0Manifest {
         self.backup_name.clone()
     }
 
-    pub fn backup_type(&self) -> TD0BackupType {
+    pub const fn backup_type(&self) -> TD0BackupType {
         self.backup_type
     }
 
     pub fn checksum_actual(&self) -> String {
-        checksum_bytes_to_string(&self.checksum_actual)
+        hex_encode(&self.checksum_actual)
     }
 
     pub fn checksum_calculated(&self) -> String {
-        checksum_bytes_to_string(&self.checksum_calculated)
+        hex_encode(&self.checksum_calculated)
     }
 
-    pub fn device_model(&self) -> TD0DeviceModel {
+    pub const fn device_model(&self) -> TD0DeviceModel {
         self.device_model
     }
 
@@ -243,11 +269,11 @@ impl TD0Manifest {
         self.device_serial.clone()
     }
 
-    pub fn size_actual(&self) -> usize {
+    pub const fn size_actual(&self) -> usize {
         self.size_actual
     }
 
-    pub fn size_calculated(&self) -> usize {
+    pub const fn size_calculated(&self) -> usize {
         self.size_calculated
     }
 
@@ -320,8 +346,8 @@ impl core::fmt::Display for TD0Manifest {
     {}",
             self.backup_name,
             self.backup_type,
-            checksum_bytes_to_string(&self.checksum_actual),
-            checksum_bytes_to_string(&self.checksum_calculated),
+            hex_encode(&self.checksum_actual),
+            hex_encode(&self.checksum_calculated),
             self.device_model,
             self.device_firmware_version,
             self.device_firmware_build,
@@ -330,7 +356,7 @@ impl core::fmt::Display for TD0Manifest {
             self.size_calculated,
             self.chunks
                 .iter()
-                .map(|ch| format!("{}", ch))
+                .map(|ch| format!("{ch}"))
                 .collect::<Vec<String>>()
                 .join("\n    "),
         )
@@ -345,7 +371,7 @@ impl TD0Value {
             }
         }
 
-        Self::Text("".to_string())
+        Self::Text(String::new())
     }
 
     pub fn new_text_value(text: impl Into<String>) -> Self {
@@ -360,13 +386,13 @@ impl core::fmt::Display for TD0Value {
             Self::Decimal(val) => format!("{val:.1}"),
             Self::I16(val) => val.to_string(),
             Self::I8(val) => val.to_string(),
-            Self::Text(val) => val.to_string(),
+            Self::Text(val) => val.clone(),
             Self::U16(val) => val.to_string(),
             Self::U32(val) => val.to_string(),
             Self::U8(val) => val.to_string(),
         };
 
-        write!(f, "{}", repr)
+        write!(f, "{repr}")
     }
 }
 
@@ -377,7 +403,7 @@ impl Volume {
     pub const MINUS_INF_FLOAT: f32 = f32::NEG_INFINITY;
     pub const MINUS_INF_I16: i16 = -601;
 
-    fn validate_impl_range(val: &f32) -> TD0Result<()> {
+    fn validate_impl_range(val: f32) -> TD0Result<()> {
         if (val.lt(&Self::MIN) || val.gt(&Self::MAX)) && val.ne(&Self::MINUS_INF_FLOAT) {
             Err(TD0Error::OutOfRangeDecimal(OutOfRangeErrorTD0Decimal::new(
                 Self::MIN,
@@ -389,7 +415,7 @@ impl Volume {
     }
 
     pub fn validate(&self) -> TD0Result<()> {
-        Self::validate_impl_range(&self.0)
+        Self::validate_impl_range(self.0)
     }
 }
 
@@ -413,9 +439,15 @@ impl<T: ByteOrder> TryFrom<Volume> for I16<T> {
 
     fn try_from(val: Volume) -> Result<Self, Self::Error> {
         if val.0 == Volume::MINUS_INF_FLOAT {
-            Ok(I16::from(Volume::MINUS_INF_I16))
+            Ok(Self::from(Volume::MINUS_INF_I16))
         } else {
-            Ok(I16::from(i16::try_from(val.0.mul(10.0f32).round() as i32)?))
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "will be converted to I16 anyway."
+            )]
+            Ok(Self::from(
+                i16::try_from(val.0.mul(10.0f32).round() as i32)?,
+            ))
         }
     }
 }
@@ -427,13 +459,17 @@ impl From<Volume> for f32 {
 }
 
 impl TryFrom<Volume> for i16 {
-    type Error = <i16 as TryFrom<i32>>::Error;
+    type Error = <Self as TryFrom<i32>>::Error;
 
     fn try_from(val: Volume) -> Result<Self, Self::Error> {
         if val.0 == Volume::MINUS_INF_FLOAT {
             Ok(Volume::MINUS_INF_I16)
         } else {
-            i16::try_from(val.0.mul(10.0f32).round() as i32)
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "will be converted to i16 anyway."
+            )]
+            Self::try_from(val.0.mul(10.0f32).round() as i32)
         }
     }
 }

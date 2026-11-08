@@ -11,8 +11,10 @@ use super::TD0Error;
 const CHUNK_TAG_LEN: usize = 4;
 
 pub fn is_chunk_name(val: &str) -> bool {
-    val.len() == CHUNK_TAG_LEN
-        && val[0..3]
+    val.chars().count() == CHUNK_TAG_LEN
+        && val
+            .get(0..3)
+            .unwrap()
             .chars()
             .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit())
         && val.chars().nth(3).unwrap().is_ascii_lowercase()
@@ -27,13 +29,13 @@ pub fn is_ascii_printable(val: &str) -> bool {
 pub struct AsciiPrintableStr(str);
 
 impl AsciiPrintableStr {
-    fn from_str_unchecked(s: &str) -> &Self {
-        unsafe { &*(s as *const str as *const Self) }
+    const fn from_str_unchecked(s: &str) -> &Self {
+        unsafe { &*(std::ptr::from_ref::<str>(s) as *const Self) }
     }
 
     #[allow(dead_code)]
     fn from_mut_str_unchecked(s: &mut str) -> &mut Self {
-        unsafe { &mut *(s as *mut str as *mut Self) }
+        unsafe { &mut *(std::ptr::from_mut::<str>(s) as *mut Self) }
     }
 }
 
@@ -119,7 +121,7 @@ impl TryFrom<String> for AsciiPrintableString {
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
         <&AsciiPrintableStr>::try_from(s.as_str())?;
-        Ok(AsciiPrintableString(s))
+        Ok(Self(s))
     }
 }
 
@@ -128,7 +130,7 @@ impl TryFrom<&str> for AsciiPrintableString {
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         <&AsciiPrintableStr>::try_from(s)?;
-        Ok(AsciiPrintableString(s.to_string()))
+        Ok(Self(s.to_string()))
     }
 }
 
@@ -173,13 +175,13 @@ impl PartialEq<AsciiPrintableStr> for AsciiPrintableString {
 pub struct ChunkTagStr(str);
 
 impl ChunkTagStr {
-    pub fn from_str_unchecked(s: &str) -> &Self {
-        unsafe { &*(s as *const str as *const Self) }
+    pub const fn from_str_unchecked(s: &str) -> &Self {
+        unsafe { &*(std::ptr::from_ref::<str>(s) as *const Self) }
     }
 
     #[allow(dead_code)]
-    pub fn from_mut_str_unchecked(s: &mut str) -> &mut Self {
-        unsafe { &mut *(s as *mut str as *mut Self) }
+    fn from_mut_str_unchecked(s: &mut str) -> &mut Self {
+        unsafe { &mut *(std::ptr::from_mut::<str>(s) as *mut Self) }
     }
 }
 
@@ -277,7 +279,7 @@ impl TryFrom<String> for ChunkTagString {
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
         <&ChunkTagStr>::try_from(s.as_str())?;
-        Ok(ChunkTagString(s))
+        Ok(Self(s))
     }
 }
 
@@ -286,7 +288,7 @@ impl TryFrom<&String> for ChunkTagString {
 
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         <&ChunkTagStr>::try_from(value.as_str())?;
-        Ok(ChunkTagString(value.clone()))
+        Ok(Self(value.clone()))
     }
 }
 
@@ -295,7 +297,7 @@ impl TryFrom<&str> for ChunkTagString {
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         <&ChunkTagStr>::try_from(s)?;
-        Ok(ChunkTagString(s.to_string()))
+        Ok(Self(s.to_string()))
     }
 }
 
@@ -344,7 +346,7 @@ mod test {
         let valid_bytes: Vec<u8> = Vec::from_iter(32u8..126u8);
         let valid_str = str::from_utf8(&valid_bytes).unwrap();
         let result = <&AsciiPrintableStr>::try_from(valid_str);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[test]
@@ -367,13 +369,13 @@ mod test {
     #[test]
     pub fn test_chunk_tag_string_success() {
         let result = ChunkTagString::try_from("TD0a");
-        assert!(result.is_ok());
+        result.unwrap();
 
         let result = ChunkTagString::try_from("TD0b");
-        assert!(result.is_ok());
+        result.unwrap();
 
         let result = ChunkTagString::try_from("TD0z");
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[test]

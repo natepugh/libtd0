@@ -81,7 +81,7 @@ pub fn command_dump_chunk_item<'a>(
     let chunk = td0file
         .chunk(chunk_name)
         .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))?;
-    chunk.item_at_ref(item_num).map(|it| it.as_bytes())
+    chunk.item_at_ref(item_num).map(td0::TD0ChunkItem::as_bytes)
 }
 
 pub fn command_dump_chunk(td0file: &TD0File, chunk_name: &str) -> TD0Result<Vec<u8>> {
@@ -236,7 +236,7 @@ pub fn command_reorder_chunk_items(
             chunk
                 .item_at_ref(idx)?
                 .field_value(display_field)
-                .ok_or(TD0Error::InvalidField(display_field.to_string()))?,
+                .ok_or_else(|| TD0Error::InvalidField(display_field.to_string()))?,
         );
     }
 
@@ -248,7 +248,7 @@ pub fn command_reorder_chunk_items(
             chunk
                 .item_at_ref(idx)?
                 .field_value(display_field)
-                .ok_or(TD0Error::InvalidField(display_field.to_string()))?,
+                .ok_or_else(|| TD0Error::InvalidField(display_field.to_string()))?,
         );
     }
 

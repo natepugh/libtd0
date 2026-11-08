@@ -39,15 +39,15 @@ pub struct ChunkHeader {
 }
 
 impl ChunkHeader {
-    pub fn first_item_offset(&self) -> usize {
+    pub const fn first_item_offset(&self) -> usize {
         self.first_item_offset.get() as usize
     }
 
-    pub fn item_size(&self) -> usize {
+    pub const fn item_size(&self) -> usize {
         self.item_size.get() as usize
     }
 
-    pub fn num_items(&self) -> usize {
+    pub const fn num_items(&self) -> usize {
         self.num_items.get() as usize
     }
 
@@ -60,7 +60,7 @@ impl ChunkHeader {
         let mut unknown_buf: [u8; 4] = [0; 4];
         if let Some(buf) = unknown_header_data {
             unknown_buf.copy_from_slice(buf);
-        };
+        }
 
         Self {
             num_items: U32::from(num_items),
@@ -106,7 +106,7 @@ impl Default for ChunkHeader {
         Self {
             num_items: U32::from(1),
             item_size: U32::from(u32::try_from(size_of::<TD0ManifestTag>()).unwrap()),
-            first_item_offset: U32::from(u32::try_from(size_of::<ChunkHeader>()).unwrap()),
+            first_item_offset: U32::from(u32::try_from(size_of::<Self>()).unwrap()),
             unknown_header_data: [0u8; 4],
         }
     }
@@ -259,7 +259,7 @@ pub struct TD0Chunk {
 }
 
 impl TD0Chunk {
-    pub fn new(
+    pub const fn new(
         header: BytesMut,
         chunk_extra_data: BytesMut,
         items: Vec<BytesMut>,
@@ -273,6 +273,11 @@ impl TD0Chunk {
         }
     }
 
+    /// Try to create a new `TD0Chunk` with the same item type as `default_item`.
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - If `num_items` or the size of `default_item` is not supported by
+    /// this file type.
     pub fn new_with(num_items: usize, default_item: &dyn TD0ChunkItem) -> TD0Result<Self> {
         use zerocopy::IntoBytes;
 
@@ -304,6 +309,11 @@ impl TD0Chunk {
         size_of_val(obj1) == size_of_val(obj2) && obj1.field_types() == obj2.field_types()
     }
 
+    /// Return a diff between self and other, or None if there are no differences.
+    ///
+    /// # Errors
+    /// - [`TD0Error::ChunksNotComparable`] if the chunks don't hold items of the same type.
+    /// - [`TD0Error::ChunkItemParse`] if a chunk has invalid item data.
     pub fn diff(&self, other: &Self) -> TD0Result<Option<TD0ChunkDiff>> {
         let (my_default_item, other_default_item) = (self.default_item(), other.default_item());
         if !Self::chunk_item_types_comparable(&*my_default_item, &*other_default_item) {
@@ -347,13 +357,13 @@ impl TD0Chunk {
                         .map_err(|_| TD0Error::ChunkItemParse)?,
                 );
 
-                for field in fields.iter() {
+                for field in fields {
                     let (left, right) = (
                         left_obj.field_value(field).unwrap(),
                         right_obj.field_value(field).unwrap(),
                     );
                     if left != right {
-                        fields_diff.push((field.to_string(), Diff { left, right }))
+                        fields_diff.push((field.to_string(), Diff { left, right }));
                     }
                 }
 
@@ -401,9 +411,14 @@ impl TD0Chunk {
         (self.callbacks.default_chunk_item_cb)()
     }
 
-    pub fn item_at_mut(&mut self, pos: usize) -> TD0Result<&mut dyn TD0ChunkItem> {
-        if pos < self.items.len() {
-            (self.callbacks.chunk_item_mut_from_bytes_cb)(&mut self.items[pos])
+    /// Return a mutable reference to the [`TD0ChunkItem`] at `index`.
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - if `index` is greater than the number of items this chunk has.
+    /// - [`TD0Error::ChunkItemParse`] if the chunk item in the file is invalid.
+    pub fn item_at_mut(&mut self, index: usize) -> TD0Result<&mut dyn TD0ChunkItem> {
+        if index < self.items.len() {
+            (self.callbacks.chunk_item_mut_from_bytes_cb)(&mut self.items[index])
         } else {
             Err(TD0Error::out_of_range_error_from_usize(0, self.items.len()))
         }
@@ -417,6 +432,10 @@ impl TD0Chunk {
         self.header().item_size()
     }
 
+    /// Return an owned [`TD0ChunkItem`] copied from the item at `index`.
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - if `index` is greater than the number of items this chunk has.
     pub fn item_copy(&mut self, source_index: usize, dest_index: usize) -> TD0Result<()> {
         if source_index >= self.items.len() || dest_index >= self.items.len() {
             return Err(TD0Error::out_of_range_error_from_usize(0, self.items.len()));
@@ -428,6 +447,11 @@ impl TD0Chunk {
         Ok(())
     }
 
+    /// Replace the [`TD0ChunkItem`] at `pos` with `source`.
+    ///
+    /// # Errors
+    /// - [`TD0Error::OutOfRange`] - if `index` is greater than the number of items this chunk has.
+    /// - [`TD0Error::InvalidInput`] - if `source` does not match this chunk's item type.
     pub fn item_replace(&mut self, pos: usize, source: &dyn TD0ChunkItem) -> TD0Result<()> {
         let existing = self.item_at(pos)?;
 
@@ -439,6 +463,10 @@ impl TD0Chunk {
         Ok(())
     }
 
+    /// Replace the [`TD0ChunkItem`] at `pos` with `source`.
+    ///
+    /// # Errors
+    /// - [`TD0Error::OutOfRange`] - if `index` is greater than the number of items this chunk has.
     pub fn items_swap(&mut self, index_1: usize, index_2: usize) -> TD0Result<()> {
         let items_len = self.items.len();
         if index_1 < items_len && index_2 < items_len {
@@ -449,6 +477,11 @@ impl TD0Chunk {
         }
     }
 
+    /// Reorder all items in this chunk.
+    ///
+    /// # Errors
+    /// - [`TD0Error::InvalidInput`] if `new_order` does not contain every
+    ///   index from 0..[num items] (exclusive) exactly once.
     pub fn items_reorder(&mut self, new_order: &[usize]) -> TD0Result<()> {
         // Check preconditions
         // new_order must have correct number of elements
@@ -476,23 +509,33 @@ impl TD0Chunk {
         self.default_item().field_types()
     }
 
-    pub fn item_at(&self, pos: usize) -> TD0Result<Box<dyn TD0ChunkItem>> {
-        if pos < self.items.len() {
-            (self.callbacks.chunk_item_owned_from_bytes_cb)(&self.items[pos])
+    /// Return an owned copy of the [`TD0ChunkItem`] at `index`.
+    ///
+    /// # Errors
+    /// - [`TD0Error::OutOfRange`] if `index` is an invalid index.
+    /// - [`TD0Error::ChunkItemParse`] if the chunk item in the file is invalid.
+    pub fn item_at(&self, index: usize) -> TD0Result<Box<dyn TD0ChunkItem>> {
+        if index < self.items.len() {
+            (self.callbacks.chunk_item_owned_from_bytes_cb)(&self.items[index])
         } else {
             Err(TD0Error::out_of_range_error_from_usize(0, self.items.len()))
         }
     }
 
-    pub fn item_at_ref(&self, pos: usize) -> TD0Result<&dyn TD0ChunkItem> {
-        if pos < self.items.len() {
-            (self.callbacks.chunk_item_ref_from_bytes_cb)(&self.items[pos])
+    /// Return a reference to the [`TD0ChunkItem`] at `index`.
+    ///
+    /// # Errors
+    /// - [`TD0Error::OutOfRange`] if `index` is an invalid index.
+    /// - [`TD0Error::ChunkItemParse`] if the chunk item in the file is invalid.
+    pub fn item_at_ref(&self, index: usize) -> TD0Result<&dyn TD0ChunkItem> {
+        if index < self.items.len() {
+            (self.callbacks.chunk_item_ref_from_bytes_cb)(&self.items[index])
         } else {
             Err(TD0Error::out_of_range_error_from_usize(0, self.items.len()))
         }
     }
 
-    pub fn set_item_callbacks(&mut self, callbacks: ChunkItemAccessorCallbacks) {
+    pub const fn set_item_callbacks(&mut self, callbacks: ChunkItemAccessorCallbacks) {
         self.callbacks = callbacks;
     }
 }

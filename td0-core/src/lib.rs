@@ -31,7 +31,7 @@ pub use ascii_string::{ChunkTagStr, ChunkTagString};
 pub use header::{HDRaItem, OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
 pub use helpers::{
     calc_range_overlap, clamp_optional, copy_ascii_str_to_u8_slice, copy_slice_to_native,
-    copy_slice_to_native_padded, in_range_inclusive, try_u32_from_usize, usize_from_u32,
+    copy_slice_to_native_padded, in_range_inclusive, try_u32_from_usize,
 };
 pub use result::{TD0Error, TD0Result};
 pub use td0chunk::{ChunkItemAccessorCallbacks, TD0Chunk, TD0ChunkDiff};
@@ -50,14 +50,14 @@ mod tests {
 
     #[test]
     fn test_chunk_item_val_from_u8_array() {
-        let val = TD0Value::text_from_u8_array(" Test \0\0\0\0".as_bytes(), &0);
+        let val = TD0Value::text_from_u8_array(b" Test \0\0\0\0", &0);
         assert_eq!(
             val,
             TD0Value::Text(" Test ".to_string()),
             "Should keep space chars before and after token."
         );
 
-        let val = TD0Value::text_from_u8_array("Test With Spaces".as_bytes(), &0x20);
+        let val = TD0Value::text_from_u8_array(b"Test With Spaces", &0x20);
         assert_eq!(
             val,
             TD0Value::Text("Test With Spaces".to_string()),
@@ -108,6 +108,7 @@ mod tests {
 
     #[test]
     fn test_volume_max_from_i16() {
+        #[expect(clippy::cast_possible_truncation, reason = "the value is 10.0")]
         let max_as_i16: i16 = (Volume::MAX.mul(10.0f32).round() as i32)
             .try_into()
             .expect("Can't convert Volume::MAX to i16.");
@@ -118,6 +119,7 @@ mod tests {
 
     #[test]
     fn test_volume_min_from_i16() {
+        #[expect(clippy::cast_possible_truncation, reason = "the value is 10.0")]
         let min_as_i16: i16 = (Volume::MIN.mul(10.0f32).round() as i32)
             .try_into()
             .expect("Can't convert Volume::MIN to i16.");
@@ -263,22 +265,22 @@ mod tests {
     #[test]
     fn test_copy_slice_to_native_padded() {
         let mut dest = [0u8; 16];
-        let src: &[u8] = "I'm 16chars long".as_bytes();
+        let src: &[u8] = b"I'm 16chars long";
 
         let result = copy_slice_to_native_padded(src, &mut dest, 0);
         assert_eq!(result, Ok(()), "Should not return an error.");
         assert_eq!(&dest, src);
 
-        let result = copy_slice_to_native_padded("Needs padding".as_bytes(), &mut dest, b'.');
+        let result = copy_slice_to_native_padded(b"Needs padding", &mut dest, b'.');
         assert_eq!(
             result,
             Ok(()),
             "Testing padding. Should not return an error."
         );
-        assert_eq!(&dest, "Needs padding...".as_bytes());
+        assert_eq!(&dest, b"Needs padding...");
 
         debug_assert_matches!(
-            copy_slice_to_native_padded("I'm 17 chars long".as_bytes(), &mut dest, 0u8),
+            copy_slice_to_native_padded(b"I'm 17 chars long", &mut dest, 0u8),
             Err(result::TD0Error::InvalidInput(..)),
             "Error if source slice is too long."
         );
@@ -307,7 +309,7 @@ mod tests {
         let val = TD0Value::U8(221);
         assert_eq!(val.to_string().as_str(), "221");
 
-        let val = TD0Value::U32(299000);
+        let val = TD0Value::U32(299_000);
         assert_eq!(val.to_string().as_str(), "299000");
     }
 }

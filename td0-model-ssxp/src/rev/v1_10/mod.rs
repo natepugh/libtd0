@@ -8,10 +8,14 @@ use chunk::{CURaItem, KITaItem, STLaItem, STPaItem, TGLaItem, TRGaItem, WVPaItem
 use td0_core::{ChunkItemAccessorCallbacks, HDRaItem, TD0Error};
 use zerocopy::TryFromBytes;
 
-pub(crate) static CHUNK_NAMES: [&str; 8] = [
+pub static CHUNK_NAMES: [&str; 8] = [
     "HDRa", "KITa", "CURa", "STLa", "STPa", "TGLa", "TRGa", "WVPa",
 ];
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "no complicated logic, just a not DRY-able problem."
+)]
 pub fn build_chunk_callbacks(chunk_name: &str) -> Option<ChunkItemAccessorCallbacks> {
     match chunk_name {
         "HDRa" => Some(ChunkItemAccessorCallbacks {

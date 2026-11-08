@@ -9,10 +9,14 @@ use chunk::{KITbItem, PVRaItem, STPbItem};
 use td0_core::{ChunkItemAccessorCallbacks, HDRaItem, TD0Error};
 use zerocopy::TryFromBytes;
 
-pub(crate) static CHUNK_NAMES: [&str; 11] = [
+pub static CHUNK_NAMES: [&str; 11] = [
     "HDRa", "KITa", "KITb", "CURa", "PVRa", "STLa", "STPa", "STPb", "TGLa", "TRGa", "WVPa",
 ];
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "no complicated logic, just a not DRY-able problem."
+)]
 pub fn build_chunk_callbacks(chunk_name: &str) -> Option<ChunkItemAccessorCallbacks> {
     match chunk_name {
         "HDRa" => Some(ChunkItemAccessorCallbacks {

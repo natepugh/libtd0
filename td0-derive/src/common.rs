@@ -7,7 +7,7 @@ use syn::punctuated::Punctuated;
 use syn::{Arm, Expr, Stmt};
 use syn::{Attribute, Field, Ident, ImplItemFn, Lit, Meta, Path, Token, Type, parse::Parse};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AttrKeyValue {
     key: Ident,
     val: Lit,
@@ -126,7 +126,7 @@ impl TryFrom<&AttrKeyValue> for String {
 
     fn try_from(kv_pair: &AttrKeyValue) -> Result<Self, <Self as TryFrom<&AttrKeyValue>>::Error> {
         match &kv_pair.val {
-            Lit::Str(lit_text) => Ok(lit_text.to_token_stream().to_string().replace("\"", "")),
+            Lit::Str(lit_text) => Ok(lit_text.to_token_stream().to_string().replace('"', "")),
             _ => Err(syn::Error::new_spanned(
                 &kv_pair.val,
                 "Must be an string type.",
@@ -136,11 +136,11 @@ impl TryFrom<&AttrKeyValue> for String {
 }
 
 impl AttrKeyValue {
-    pub fn key(&self) -> &Ident {
+    pub const fn key(&self) -> &Ident {
         &self.key
     }
 
-    pub fn val(&self) -> &Lit {
+    pub const fn val(&self) -> &Lit {
         &self.val
     }
 
@@ -184,6 +184,10 @@ pub fn get_type_path(typeobj: &Type) -> &Path {
     match typeobj {
         Type::Path(tpath) => &tpath.path,
         Type::Array(apath) => get_type_path(&apath.elem),
+        #[expect(
+            clippy::unimplemented,
+            reason = "This compile-time panic ensures the developer knows which additional types to implement."
+        )]
         _ => unimplemented!("get_type_path: Type: {:#?}", typeobj),
     }
 }
@@ -192,14 +196,13 @@ pub fn validate_attr_list_valid_attrs(
     kv_list: &AttrKeyValueList,
     valid_names: &[&str],
 ) -> syn::Result<()> {
-    match kv_list
+    kv_list
         .pairs
         .iter()
         .find(|pair| !valid_names.contains(&pair.key.to_string().as_str()))
-    {
-        Some(pair) => Err(syn::Error::new_spanned(&pair.key, "Unexpected key")),
-        None => Ok(()),
-    }
+        .map_or(Ok(()), |pair| {
+            Err(syn::Error::new_spanned(&pair.key, "Unexpected key"))
+        })
 }
 
 pub fn validate_attr_list_required_attrs(
@@ -224,7 +227,7 @@ pub fn validate_attr_list_required_attrs(
 }
 
 pub fn push_arm_to_fn_match(func: &mut ImplItemFn, arm: &Arm) {
-    for stmt in func.block.stmts.iter_mut() {
+    for stmt in &mut func.block.stmts {
         if let Stmt::Expr(expr, _) = stmt
             && let Expr::Match(match_stmt) = expr
         {
@@ -237,16 +240,16 @@ pub fn get_named_attr<'a>(attr_name: &'static str, field: &'a Field) -> Option<&
     field.attrs.iter().find(|attr| match &attr.meta {
         Meta::List(mlist) => mlist.path.is_ident(attr_name),
         Meta::Path(mpath) => mpath.is_ident(attr_name),
-        _ => false,
+        Meta::NameValue(m_name_value) => m_name_value.path.is_ident(attr_name),
     })
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NativeTypeSlice {
     pub size: usize,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum NativeType {
     I8,
     I16,
@@ -260,14 +263,25 @@ pub fn get_field_native_type(field: &Field) -> Option<NativeType> {
     match &field.ty {
         Type::Path(tpath) => {
             if tpath.path.segments.len() == 1 {
-                match tpath.path.segments[0].ident.to_string().as_str() {
+                match tpath
+                    .path
+                    .segments
+                    .get(0)
+                    .unwrap()
+                    .ident
+                    .to_string()
+                    .as_str()
+                {
                     "I16" => Some(NativeType::I16),
                     "i8" => Some(NativeType::I8),
                     "u8" => Some(NativeType::U8),
                     "U16" => Some(NativeType::U16),
                     "U32" => Some(NativeType::U32),
                     _ => {
-                        println!("Unexpected type ident: {:#?}", tpath.path.segments[0].ident);
+                        println!(
+                            "Unexpected type ident: {:#?}",
+                            tpath.path.segments.get(0).unwrap().ident
+                        );
                         None
                     }
                 }
@@ -284,25 +298,22 @@ pub fn get_field_native_type(field: &Field) -> Option<NativeType> {
                 .next_back()
                 .expect("Path must have segments");
 
-            match last_segment.ident.to_string().as_str() {
-                "u8" => {
-                    if let Expr::Lit(type_expr) = &apath.len
-                        && let Lit::Int(int_expr) = &type_expr.lit
-                    {
-                        Some(NativeType::Slice(NativeTypeSlice {
-                            size: int_expr.base10_parse().unwrap_or(0),
-                        }))
-                    } else {
-                        None
-                    }
-                }
-                _ => {
-                    println!(
-                        "Unexpected array base type ident: {:#?}",
-                        last_segment.ident
-                    );
+            if last_segment.ident.to_string().as_str() == "u8" {
+                if let Expr::Lit(type_expr) = &apath.len
+                    && let Lit::Int(int_expr) = &type_expr.lit
+                {
+                    Some(NativeType::Slice(NativeTypeSlice {
+                        size: int_expr.base10_parse().unwrap_or(0),
+                    }))
+                } else {
                     None
                 }
+            } else {
+                println!(
+                    "Unexpected array base type ident: {:#?}",
+                    last_segment.ident
+                );
+                None
             }
         }
         _ => None,

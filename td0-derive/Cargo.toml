@@ -21,6 +21,9 @@ categories = ["parsing", "parser-implementations"]
 [lib]
 proc-macro = true
 
+[lints]
+workspace = true
+
 [dependencies]
 proc-macro2 = "1.0.107"
 quote = "1.0.47"

@@ -7,6 +7,10 @@ use pyo3::{PyErr, PyResult};
 
 #[pymodule]
 mod libtd0 {
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "the pyo3 imports above MUST be included before the module, and the module requires them."
+    )]
     use super::*;
     use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
     use rust_decimal::prelude::FromPrimitive;
@@ -104,28 +108,28 @@ mod libtd0 {
     #[pymethods]
     impl ChunkManifest {
         #[getter]
-        fn name(&self) -> PyResult<String> {
-            Ok(self.0.name().clone())
+        fn name(&self) -> String {
+            self.0.name()
         }
 
         #[getter]
-        fn pos(&self) -> PyResult<usize> {
-            Ok(self.0.pos())
+        const fn pos(&self) -> usize {
+            self.0.pos()
         }
 
         #[getter]
-        fn size(&self) -> PyResult<usize> {
-            Ok(self.0.size())
+        const fn size(&self) -> usize {
+            self.0.size()
         }
 
         #[getter]
-        fn num_items(&self) -> PyResult<usize> {
-            Ok(self.0.num_items())
+        const fn num_items(&self) -> usize {
+            self.0.num_items()
         }
 
         #[getter]
-        fn item_size(&self) -> PyResult<usize> {
-            Ok(self.0.item_size())
+        const fn item_size(&self) -> usize {
+            self.0.item_size()
         }
 
         fn __str__(&self) -> String {
@@ -150,63 +154,62 @@ mod libtd0 {
     #[pymethods]
     impl TD0Manifest {
         #[getter]
-        fn backup_name(&self) -> PyResult<String> {
-            Ok(self.0.backup_name())
+        fn backup_name(&self) -> String {
+            self.0.backup_name()
         }
 
         #[getter]
-        fn backup_type(&self) -> PyResult<TD0BackupType> {
-            Ok(TD0BackupType::from(self.0.backup_type()))
+        fn backup_type(&self) -> TD0BackupType {
+            TD0BackupType::from(self.0.backup_type())
         }
 
         #[getter]
-        fn checksum_actual(&self) -> PyResult<String> {
-            Ok(self.0.checksum_actual())
+        fn checksum_actual(&self) -> String {
+            self.0.checksum_actual()
         }
 
         #[getter]
-        fn checksum_calculated(&self) -> PyResult<String> {
-            Ok(self.0.checksum_calculated())
+        fn checksum_calculated(&self) -> String {
+            self.0.checksum_calculated()
         }
 
         #[getter]
-        fn device_model(&self) -> PyResult<TD0DeviceModel> {
-            Ok(TD0DeviceModel::from(self.0.device_model()))
+        fn device_model(&self) -> TD0DeviceModel {
+            TD0DeviceModel::from(self.0.device_model())
         }
 
         #[getter]
-        fn device_firmware_version(&self) -> PyResult<String> {
-            Ok(self.0.device_firmware_version())
+        fn device_firmware_version(&self) -> String {
+            self.0.device_firmware_version()
         }
 
         #[getter]
-        fn device_firmware_build(&self) -> PyResult<String> {
-            Ok(self.0.device_firmware_build())
+        fn device_firmware_build(&self) -> String {
+            self.0.device_firmware_build()
         }
 
         #[getter]
-        fn device_serial(&self) -> PyResult<String> {
-            Ok(self.0.device_serial())
+        fn device_serial(&self) -> String {
+            self.0.device_serial()
         }
 
         #[getter]
-        fn size_actual(&self) -> PyResult<usize> {
-            Ok(self.0.size_actual())
+        const fn size_actual(&self) -> usize {
+            self.0.size_actual()
         }
 
         #[getter]
-        fn size_calculated(&self) -> PyResult<usize> {
-            Ok(self.0.size_calculated())
+        const fn size_calculated(&self) -> usize {
+            self.0.size_calculated()
         }
 
         #[getter]
-        fn chunks(&self) -> PyResult<Vec<ChunkManifest>> {
-            Ok(self
-                .0
+        fn chunks(&self) -> Vec<ChunkManifest> {
+            self.0
                 .chunks()
                 .iter()
                 .map(|ch| ChunkManifest(ch.clone()))
-                .collect())
+                .collect()
         }
 
         fn __str__(&self) -> String {
@@ -238,8 +241,11 @@ mod libtd0 {
                 Impl_TD0Value::Decimal(_) => Self::Decimal,
                 Impl_TD0Value::Text(_) => Self::String,
                 Impl_TD0Value::Slice(_) => Self::Bytes,
-                Impl_TD0Value::I8(_) | Impl_TD0Value::I16(_) => Self::Int,
-                Impl_TD0Value::U8(_) | Impl_TD0Value::U16(_) | Impl_TD0Value::U32(_) => Self::Int,
+                Impl_TD0Value::I8(_)
+                | Impl_TD0Value::I16(_)
+                | Impl_TD0Value::U8(_)
+                | Impl_TD0Value::U16(_)
+                | Impl_TD0Value::U32(_) => Self::Int,
             }
         }
     }
@@ -250,8 +256,11 @@ mod libtd0 {
                 FieldType::Decimal { .. } => Self::Decimal,
                 FieldType::AsciiText { .. } | FieldType::EnumText { .. } => Self::String,
                 FieldType::Slice { .. } => Self::Bytes,
-                FieldType::I8 { .. } | FieldType::I16 { .. } => Self::Int,
-                FieldType::U8 { .. } | FieldType::U16 { .. } | FieldType::U32 { .. } => Self::Int,
+                FieldType::I8 { .. }
+                | FieldType::I16 { .. }
+                | FieldType::U8 { .. }
+                | FieldType::U16 { .. }
+                | FieldType::U32 { .. } => Self::Int,
             }
         }
     }
@@ -266,12 +275,9 @@ mod libtd0 {
         fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
             match self.0 {
                 Impl_TD0Value::Decimal(val) => {
-                    let dec_value = rust_decimal::Decimal::from_f32(val).ok_or(PyErr::new::<
-                        PyValueError,
-                        _,
-                    >(
-                        "Unable to convert native value to Decimal.",
-                    ))?;
+                    let dec_value = rust_decimal::Decimal::from_f32(val).ok_or_else(|| {
+                        PyErr::new::<PyValueError, _>("Unable to convert native value to Decimal.")
+                    })?;
                     Ok(dec_value.into_pyobject(py)?.into_any())
                 }
                 Impl_TD0Value::Text(val) => Ok(val.into_pyobject(py)?.into_any()),
@@ -310,10 +316,9 @@ mod libtd0 {
             match s {
                 // These match the enum libtd0-derive::TD0FieldType .
                 "Text" => Ok(Self::String),
-                "I8" | "I16" => Ok(Self::Int),
+                "I8" | "I16" | "U8" | "U16" | "U32" => Ok(Self::Int),
                 "Slice" => Ok(Self::Bytes),
                 "Decimal" => Ok(Self::Decimal),
-                "U8" | "U16" | "U32" => Ok(Self::Int),
                 _ => Err(PyErr::new::<PyValueError, _>(format!(
                     "invalid value type: '{s}'"
                 ))),
@@ -332,49 +337,45 @@ mod libtd0 {
     }
 
     #[pyclass]
-    struct TD0ChunkItem {
-        pub _impl: Box<dyn Impl_TD0ChunkItem>,
-    }
+    struct TD0ChunkItem(Box<dyn Impl_TD0ChunkItem>);
 
     #[pymethods]
     impl TD0ChunkItem {
         fn field_options(&self, field: &str) -> Option<Vec<String>> {
-            self._impl
+            self.0
                 .field_options(field)
-                .map(|slice| slice.iter().map(|fld_name| fld_name.to_string()).collect())
+                .map(|slice| slice.iter().map(std::string::ToString::to_string).collect())
         }
 
         fn field_value(&self, field: &str) -> PyResult<TD0Value> {
-            let val: Impl_TD0Value = self._impl.field_value(field).ok_or(PyErr::new::<
-                PyKeyError,
-                _,
-            >(format!(
-                "unknown field '{field}'"
-            )))?;
+            let val: Impl_TD0Value = self
+                .0
+                .field_value(field)
+                .ok_or_else(|| PyErr::new::<PyKeyError, _>(format!("unknown field '{field}'")))?;
             Ok(TD0Value(val))
         }
 
         fn field_value_raw(&self, field: &str) -> PyResult<TD0ValueRaw> {
-            let val: Impl_TD0ValueRaw =
-                self._impl
-                    .field_value_raw(field)
-                    .ok_or(PyErr::new::<PyKeyError, _>(format!(
-                        "unknown field '{field}'"
-                    )))?;
+            let val: Impl_TD0ValueRaw = self
+                .0
+                .field_value_raw(field)
+                .ok_or_else(|| PyErr::new::<PyKeyError, _>(format!("unknown field '{field}'")))?;
             Ok(TD0ValueRaw(val))
         }
 
         fn field_type(&self, field: &str) -> Option<TD0ValueType> {
-            self._impl.field_type(field).map(TD0ValueType::from)
+            self.0.field_type(field).map(TD0ValueType::from)
         }
 
         fn list_fields(&self) -> &'static [&'static str] {
-            self._impl.list_fields()
+            self.0.list_fields()
         }
 
+        #[expect(clippy::needless_pass_by_value, reason = "pyo3's API")]
+        #[expect(clippy::elidable_lifetime_names, reason = "pyo3's API")]
         fn set_field_value<'py>(&mut self, field: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
-            let val: Impl_TD0Value = match self._impl.field_type(field) {
-                Some(FieldType::AsciiText { .. }) | Some(FieldType::EnumText { .. }) => {
+            let val: Impl_TD0Value = match self.0.field_type(field) {
+                Some(FieldType::AsciiText { .. } | FieldType::EnumText { .. }) => {
                     Impl_TD0Value::Text(value.extract::<String>()?)
                 }
                 Some(FieldType::I8 { .. }) => Impl_TD0Value::I8(value.extract::<i8>()?),
@@ -397,25 +398,28 @@ mod libtd0 {
                     )));
                 }
             };
-            self._impl
+            self.0
                 .set_field_value(field, val)
                 .map_err(|err| PyErr::new::<PyValueError, _>(format!("{err}")))
         }
 
+        #[expect(clippy::needless_pass_by_value, reason = "pyo3's API")]
+        #[expect(clippy::elidable_lifetime_names, reason = "pyo3's API")]
         fn set_field_value_raw<'py>(
             &mut self,
             field: &str,
             value: Bound<'py, PyAny>,
         ) -> PyResult<()> {
-            let val: Impl_TD0ValueRaw = match self._impl.field_type(field) {
-                Some(FieldType::Slice { .. })
-                | Some(FieldType::AsciiText { .. })
-                | Some(FieldType::EnumText { .. }) => {
-                    Impl_TD0ValueRaw::Slice(value.extract::<Vec<u8>>()?.into_boxed_slice())
-                }
+            let val: Impl_TD0ValueRaw = match self.0.field_type(field) {
+                Some(
+                    FieldType::Slice { .. }
+                    | FieldType::AsciiText { .. }
+                    | FieldType::EnumText { .. },
+                ) => Impl_TD0ValueRaw::Slice(value.extract::<Vec<u8>>()?.into_boxed_slice()),
                 Some(FieldType::I8 { .. }) => Impl_TD0ValueRaw::I8(value.extract::<i8>()?),
-                Some(FieldType::I16 { .. }) => Impl_TD0ValueRaw::I16(value.extract::<i16>()?),
-                Some(FieldType::Decimal { .. }) => Impl_TD0ValueRaw::I16(value.extract::<i16>()?),
+                Some(FieldType::I16 { .. } | FieldType::Decimal { .. }) => {
+                    Impl_TD0ValueRaw::I16(value.extract::<i16>()?)
+                }
                 Some(FieldType::U8 { .. }) => Impl_TD0ValueRaw::U8(value.extract::<u8>()?),
                 Some(FieldType::U16 { .. }) => Impl_TD0ValueRaw::U16(value.extract::<u16>()?),
                 Some(FieldType::U32 { .. }) => Impl_TD0ValueRaw::U32(value.extract::<u32>()?),
@@ -425,16 +429,14 @@ mod libtd0 {
                     )));
                 }
             };
-            self._impl
+            self.0
                 .set_field_value_raw(field, val)
                 .map_err(|err| PyErr::new::<PyValueError, _>(format!("{err}")))
         }
     }
 
     #[pyclass]
-    struct TD0File {
-        _impl: Impl_TD0File,
-    }
+    struct TD0File(Impl_TD0File);
 
     #[pymethods]
     impl TD0File {
@@ -452,31 +454,32 @@ mod libtd0 {
                 })?,
             };
 
-            Ok(Self { _impl: td0file })
+            Ok(Self(td0file))
         }
 
-        // TODO: Add the concept of TD0Chunk to Python libtd0, then return the value from _impl.add_chunk.
+        // TODO: Add the concept of TD0Chunk to Python libtd0, then return the value from 0.add_chunk.
         pub fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> PyResult<()> {
             let chunk_name: &ChunkTagStr = chunk_name
                 .try_into()
                 .map_err(|err: TD0Error| PyErr::new::<PyValueError, _>(err.to_string()))?;
             _ = self
-                ._impl
+                .0
                 .add_chunk(chunk_name, num_items)
                 .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
             Ok(())
         }
 
+        #[expect(clippy::needless_pass_by_value, reason = "pyo3's API")]
         pub fn chunk_item_replace(
             &mut self,
             chunk_name: &str,
             item_index: usize,
             source: Bound<'_, TD0ChunkItem>,
         ) -> PyResult<()> {
-            let chunk = chunk_mut(&mut self._impl, chunk_name)
+            let chunk = chunk_mut(&mut self.0, chunk_name)
                 .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
             chunk
-                .item_replace(item_index, &*(source.borrow()._impl))
+                .item_replace(item_index, &*(source.borrow().0))
                 .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))
         }
 
@@ -486,7 +489,7 @@ mod libtd0 {
             source_index: usize,
             dest_index: usize,
         ) -> PyResult<()> {
-            let chunk = chunk_mut(&mut self._impl, chunk_name)
+            let chunk = chunk_mut(&mut self.0, chunk_name)
                 .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
             chunk
                 .item_copy(source_index, dest_index)
@@ -499,19 +502,20 @@ mod libtd0 {
             index_1: usize,
             index_2: usize,
         ) -> PyResult<()> {
-            let chunk = chunk_mut(&mut self._impl, chunk_name)
+            let chunk = chunk_mut(&mut self.0, chunk_name)
                 .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
             chunk
                 .items_swap(index_1, index_2)
                 .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))
         }
 
+        #[expect(clippy::needless_pass_by_value, reason = "pyo3's API")]
         pub fn chunk_items_reorder(
             &mut self,
             chunk_name: &str,
             new_order: Vec<usize>,
         ) -> PyResult<()> {
-            let chunk = chunk_mut(&mut self._impl, chunk_name)
+            let chunk = chunk_mut(&mut self.0, chunk_name)
                 .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
             chunk
                 .items_reorder(&new_order)
@@ -519,7 +523,7 @@ mod libtd0 {
         }
 
         pub fn to_bytes(&self) -> Vec<u8> {
-            std::convert::Into::<Vec<u8>>::into(self._impl.clone())
+            std::convert::Into::<Vec<u8>>::into(self.0.clone())
         }
 
         pub fn get_chunk_item(
@@ -527,34 +531,30 @@ mod libtd0 {
             chunk_name: &str,
             item_index: usize,
         ) -> PyResult<TD0ChunkItem> {
-            let chunk = chunk(&self._impl, chunk_name)
+            let chunk = chunk(&self.0, chunk_name)
                 .map_err(|err| PyErr::new::<PyRuntimeError, _>(err.to_string()))?;
 
             chunk
                 .item_at(item_index)
-                .map(|item| TD0ChunkItem { _impl: item })
+                .map(TD0ChunkItem)
                 .map_err(map_chunk_item_error)
         }
 
         fn get_chunk_item_default(&self, chunk_name: &str) -> Option<TD0ChunkItem> {
-            let chunk = chunk(&self._impl, chunk_name).ok()?;
-            Some(TD0ChunkItem {
-                _impl: chunk.default_item(),
-            })
+            let chunk = chunk(&self.0, chunk_name).ok()?;
+            Some(TD0ChunkItem(chunk.default_item()))
         }
 
         pub fn list_chunks(&self) -> Vec<String> {
-            self._impl
+            self.0
                 .list_chunks()
                 .iter()
-                .map(|tag_str| tag_str.to_string())
+                .map(std::string::ToString::to_string)
                 .collect()
         }
 
-        pub fn manifest(&self) -> PyResult<TD0Manifest> {
-            Ok(TD0Manifest(self._impl.manifest().map_err(|err| {
-                PyErr::new::<PyRuntimeError, _>(format!("{err}"))
-            })?))
+        pub fn manifest(&self) -> TD0Manifest {
+            TD0Manifest(self.0.manifest())
         }
     }
 }

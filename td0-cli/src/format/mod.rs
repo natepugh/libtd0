@@ -24,9 +24,8 @@ pub fn fmt_hex_dump(bytes: &[u8], hexout_settings: &HexOutSettings) -> String {
 }
 
 pub fn create_hexout_settings(td0file: &TD0File, chunk_name: &str) -> HexOutSettings {
-    let chunk_name = match ChunkTagString::try_from(chunk_name) {
-        Ok(name) => name,
-        Err(_) => return HexOutSettings::default(),
+    let Ok(chunk_name) = ChunkTagString::try_from(chunk_name) else {
+        return HexOutSettings::default();
     };
 
     let Some(tag) = td0file.tag(&chunk_name) else {

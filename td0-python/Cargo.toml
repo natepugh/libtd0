@@ -20,6 +20,9 @@ crate-type = ["cdylib"]
 # doctests aren't supported for "cdylib" crates.
 doctest = false
 
+[lints]
+workspace = true
+
 [dependencies]
 td0-core = { path = "../td0-core", version = "0.1.2" }
 td0 = { path = "../td0", version = "0.1.2" }

@@ -13,8 +13,8 @@ pub fn td0_struct_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 
 #[proc_macro_attribute]
 pub fn repeat_fields(
-    _args: proc_macro::TokenStream,
+    args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    repeat::repeat_fields(_args, input)
+    repeat::repeat_fields(args, input)
 }

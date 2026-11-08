@@ -5,11 +5,9 @@
 use zerocopy::{LittleEndian, U16, U32};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
-use super::helpers::{
-    copy_ascii_str_to_u8_slice, text_from_u8_array, try_u32_le_from_usize, usize_from_u32,
-};
+use super::helpers::{copy_ascii_str_to_u8_slice, text_from_u8_array, try_u32_le_from_usize};
 
-use super::ascii_string::AsciiPrintableString;
+use super::ascii_string::{AsciiPrintableString, is_ascii_printable};
 use super::result::{TD0Error, TD0Result};
 use td0_derive::TD0ChunkItemDerive;
 
@@ -50,8 +48,8 @@ impl core::fmt::Display for TD0IdChunk {
 }
 
 impl TD0IdChunk {
-    pub fn bytes_remaining(&self) -> usize {
-        usize_from_u32(self.bytes_remaining.get().into())
+    pub const fn bytes_remaining(&self) -> usize {
+        self.bytes_remaining.get() as usize
     }
 
     pub const fn magic_raw(&self) -> &[u8; 4] {
@@ -66,7 +64,7 @@ impl TD0IdChunk {
         self.bytes_remaining = U16::from(remaining);
     }
 
-    pub fn set_magic(&mut self, magic: &[u8; 4]) {
+    pub const fn set_magic(&mut self, magic: &[u8; 4]) {
         self.magic.copy_from_slice(magic);
     }
 
@@ -74,15 +72,27 @@ impl TD0IdChunk {
         &self.unknown
     }
 
+    /// Attempt to read create a `&TD0IDChunk` reference to the `TD0IDChunk`-sized
+    /// prefix of the underlying `buf`.
+    ///
+    /// # Errors
+    /// [`TD0Error::FileParse`] - Returned if `buf` isn't large enough or if the first `TD0IDChunk`
+    /// worth of bytes can't be recast to a `TD0IDChunk`.
     pub fn try_ref_from_buf(buf: &[u8]) -> TD0Result<&Self> {
         use zerocopy::TryFromBytes;
 
-        Self::try_ref_from_bytes(buf.get(..size_of::<Self>()).ok_or(TD0Error::FileParse(
-            "unable to read TD0 ID chunk.".to_string(),
-        ))?)
+        Self::try_ref_from_bytes(
+            buf.get(..size_of::<Self>())
+                .ok_or_else(|| TD0Error::file_parse_error("unable to read TD0 ID chunk."))?,
+        )
         .map_err(|_| TD0Error::FileParse("unable to parse TD0 ID chunk.".to_string()))
     }
 
+    /// Validate this instance.
+    ///
+    /// # Errors
+    /// [`TD0Error::FileParse`] - Returned if this instance is invalid, e.g.
+    /// the magic bytes are incorrect.
     pub fn validate(&self) -> TD0Result<()> {
         if self.magic == TD0_MAGIC {
             Ok(())
@@ -118,28 +128,34 @@ impl TD0ManifestTag {
         &self.tag
     }
 
-    pub fn chunk_pos(&self) -> usize {
-        usize_from_u32(self.chunk_pos.get())
+    pub const fn chunk_pos(&self) -> usize {
+        self.chunk_pos.get() as usize
     }
 
-    pub fn chunk_size(&self) -> usize {
-        usize_from_u32(self.chunk_size.get())
+    pub const fn chunk_size(&self) -> usize {
+        self.chunk_size.get() as usize
     }
 
-    pub fn chunk_range(&self) -> ::core::ops::Range<usize> {
+    pub const fn chunk_range(&self) -> ::core::ops::Range<usize> {
         self.chunk_pos()..self.chunk_pos() + self.chunk_size()
     }
 
+    /// Set the shorthand device model specifier string for this tag.
+    ///
+    /// # Errors
+    /// [`TD0Error::InvalidInput`] - Returned if
+    ///     - `model` isn't composed entirely of ASCII printable characters.
+    ///     - `model` isn't the correct length (4 characters.)
     pub fn set_model(&mut self, model: &str) -> TD0Result<()> {
-        if !model.is_ascii() {
+        if !is_ascii_printable(model) {
             return Err(TD0Error::InvalidInput(
-                "model must be ASCII only.".to_string(),
+                "model must be printable ASCII characters only.".to_string(),
             ));
         }
 
-        if model.len() != 4 {
+        if model.chars().count() != 4 {
             return Err(TD0Error::InvalidInput(
-                "model must be exactly 4 ASCII characters long.".to_string(),
+                "model must be exactly 4 characters long.".to_string(),
             ));
         }
 
@@ -147,16 +163,22 @@ impl TD0ManifestTag {
         Ok(())
     }
 
+    /// Set the tag name (e.g. `HDRa` or `KITa`)
+    ///
+    /// # Errors
+    /// [`TD0Error::InvalidInput`] - Returned if
+    ///     - `tag` isn't composed entirely of ASCII printable characters.
+    ///     - `tag` isn't the correct length (4 characters.)
     pub fn set_tag(&mut self, tag: &str) -> TD0Result<()> {
-        if !tag.is_ascii() {
+        if !is_ascii_printable(tag) {
             return Err(TD0Error::InvalidInput(
-                "tag must be ASCII only.".to_string(),
+                "model must be printable ASCII characters only.".to_string(),
             ));
         }
 
         if tag.len() != 4 {
             return Err(TD0Error::InvalidInput(
-                "model must be exactly 4 ASCII characters long.".to_string(),
+                "model must be exactly 4 characters long.".to_string(),
             ));
         }
 
@@ -164,42 +186,63 @@ impl TD0ManifestTag {
         Ok(())
     }
 
+    /// Set the file position in bytes for this tag's corresponding [`TD0Chunk`](crate::TD0Chunk).
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - Returned if `pos` is greater than the file
+    /// format allows.
     pub fn set_chunk_pos(&mut self, pos: usize) -> TD0Result<()> {
         self.chunk_pos = try_u32_le_from_usize(pos)?;
         Ok(())
     }
 
+    /// Set the size in bytes of this tag's corresponding [`TD0Chunk`](crate::TD0Chunk).
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - Returned if `size` is greater than the file
+    /// format allows.
     pub fn set_chunk_size(&mut self, size: usize) -> TD0Result<()> {
         self.chunk_size = try_u32_le_from_usize(size)?;
         Ok(())
     }
 
+    /// Attempt to create a `&TD0ManifestTag` reference from `buf` at position `pos`.
+    ///
+    /// # Errors
+    /// [`TD0Error::FileParse`] - Returned if `buf` isn't large enough or if
+    /// the specified bytes can't be recast to a `TD0ManifestTag`.
     pub fn try_read_from_buf_at(buf: &[u8], pos: usize) -> TD0Result<Self> {
         use zerocopy::TryFromBytes;
 
         let bytes = buf
-            .get(pos..pos + size_of::<TD0ManifestTag>())
-            .ok_or(TD0Error::FileParse(
-                "unable to read manifest tag.".to_string(),
-            ))?;
+            .get(pos..pos + size_of::<Self>())
+            .ok_or_else(|| TD0Error::file_parse_error("unable to read manifest tag."))?;
 
-        TD0ManifestTag::try_read_from_bytes(bytes)
+        Self::try_read_from_bytes(bytes)
             .map_err(|_| TD0Error::FileParse("invalid manifest tag.".to_string()))
     }
 
+    /// Attempt to create a `&mut TD0ManifestTag` reference from `buf` at position `pos`.
+    ///
+    /// # Errors
+    /// [`TD0Error::FileParse`] - Returned if `buf` isn't large enough or if
+    /// the specified bytes can't be recast to a `TD0ManifestTag`.
     pub fn try_mut_from_buf_at(buf: &mut [u8], pos: usize) -> TD0Result<&mut Self> {
         use zerocopy::TryFromBytes;
 
-        let bytes =
-            buf.get_mut(pos..pos + size_of::<TD0ManifestTag>())
-                .ok_or(TD0Error::FileParse(
-                    "unable to read manifest tag.".to_string(),
-                ))?;
+        let bytes = buf
+            .get_mut(pos..pos + size_of::<Self>())
+            .ok_or_else(|| TD0Error::file_parse_error("unable to read manifest tag."))?;
 
-        TD0ManifestTag::try_mut_from_bytes(bytes)
+        Self::try_mut_from_bytes(bytes)
             .map_err(|_| TD0Error::FileParse("invalid manifest tag.".to_string()))
     }
 
+    /// Validate this `TD0ManifestTag`.
+    ///
+    /// # Errors
+    /// [`TD0Error::ValidationFailed`] - (Various reasons) This tag is not valid. The error's
+    /// `message` member contains more detail.
     pub fn validate(&self, file_size: usize) -> TD0Result<()> {
         if self.chunk_pos() + self.chunk_size() > file_size {
             return Err(TD0Error::validation_error(
@@ -288,52 +331,96 @@ impl HDRaItem {
     const DEFAULT_SUFFIX: [u8; 16] = [0xFFu8; 16];
     const DEFAULT_TAG: [u8; 8] = *b"SSXPROKT";
 
+    /// Retrieve the backup tag.
     pub fn tag(&self) -> String {
         text_from_u8_array(&self.tag, 0)
     }
 
+    /// Set the backup tag, which describes the scope of this backup
+    /// (whole-system or individual kit, for example.)
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - If the length of `tag` is incorrect.
+    /// (Should be 8 characters.)
+    /// [`TD0Error::InvalidInput`] - If `tag` is not composed of printable
+    /// ASCII characters.
     pub fn set_tag(&mut self, tag: &str) -> TD0Result<()> {
         copy_ascii_str_to_u8_slice(tag, &mut self.tag, 0)?;
         Ok(())
     }
 
+    /// Retrieve the backup name.
     pub fn name(&self) -> String {
         text_from_u8_array(&self.name, 0)
     }
 
+    /// Set the backup name.
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - If the length of `tag` is incorrect.
+    /// (Should be 8 characters.)
+    /// [`TD0Error::InvalidInput`] - If `tag` is not composed of printable
+    /// ASCII characters.
     pub fn set_name(&mut self, name: &str) -> TD0Result<()> {
         copy_ascii_str_to_u8_slice(name, &mut self.name, 0)?;
         Ok(())
     }
 
+    /// Retrieve the firmware version.
     pub fn firmware(&self) -> String {
         text_from_u8_array(&self.firmware, b' ')
     }
 
+    /// Set the firmware version.
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - If the length of `firmware` is incorrect.
+    /// (Should be 4 characters.)
+    /// [`TD0Error::InvalidInput`] - If `firmware` is not in the format "N.NN"
+    /// where N is an ASCII digit (0-9).
     pub fn set_firmware(&mut self, firmware: &str) -> TD0Result<()> {
         copy_ascii_str_to_u8_slice(firmware, &mut self.firmware, b' ')?;
         Ok(())
     }
 
+    /// Retrieve the firmware build.
     pub fn build(&self) -> String {
         text_from_u8_array(&self.build, b' ')
     }
 
+    /// Set the firmware build.
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - If the length of `build` is incorrect.
+    /// (Should be 4 characters.)
+    /// [`TD0Error::InvalidInput`] - If `build` is not in the format "NNNN"
+    /// where N is an ASCII digit (0-9).
     pub fn set_build(&mut self, build: &str) -> TD0Result<()> {
         copy_ascii_str_to_u8_slice(build, &mut self.build, b' ')?;
         Ok(())
     }
 
+    /// Retrieve the serial number of the device that created the backup.
     pub fn device_serial(&self) -> String {
         text_from_u8_array(&self.device_serial, b' ')
     }
 
+    /// Set the backup device serial number.
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - If the length of `device_serial` is incorrect.
+    /// (Should be 4 characters.)
+    /// [`TD0Error::InvalidInput`] - If `device_serial` is not in the format "XXXXXXX"
+    /// where X is an ASCII digit or uppercase letter.
     pub fn set_device_serial(&mut self, device_serial: &str) -> TD0Result<()> {
         copy_ascii_str_to_u8_slice(device_serial, &mut self.device_serial, b' ')?;
         Ok(())
     }
 
-    pub fn default_usable() -> Self {
+    /// Return a default version of Self that results in a parsable file.
+    /// (`::default()` is already taken by the `TD0ChunkItemDerive`
+    /// implementation, which returns a zeroed-out (thus invalid) item.
+    pub const fn default_parsable() -> Self {
         Self {
             tag: Self::DEFAULT_TAG,
             data: Self::DEFAULT_HEADER_DATA,
@@ -345,6 +432,11 @@ impl HDRaItem {
         }
     }
 
+    /// Validate this `HDRaItem`.
+    ///
+    /// # Errors
+    /// [`TD0Error::ValidationFailed`] - (Various reasons) This tag is not valid. The error's
+    /// `message` member contains more detail.
     pub fn validate(&self) -> TD0Result<()> {
         let tag = self.tag();
         if AsciiPrintableString::try_from(tag.clone()).is_err() {
@@ -357,7 +449,7 @@ impl HDRaItem {
         }
 
         let name = self.name();
-        if AsciiPrintableString::try_from(name.clone()).is_err() {
+        if AsciiPrintableString::try_from(name).is_err() {
             return Err(TD0Error::validation_error("invalid backup header name."));
         }
 

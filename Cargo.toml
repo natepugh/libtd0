@@ -20,11 +20,9 @@ nursery = { level = "warn", priority = -1 }
 
 # Avoid panics
 string_slice = "warn"
-indexing_slicing = "warn"
 panic = "warn"
 todo = "warn"
 unimplemented = "warn"
-unreachable = "warn"
 unchecked_time_subtraction = "warn"
 panic_in_result_fn = "warn"
 
@@ -49,3 +47,8 @@ iter_not_returning_iterator = "warn"
 expl_impl_clone_on_copy = "warn"
 infallible_try_from = "warn"
 dbg_macro = "warn"
+
+# Tame some annoying things
+must_use_candidate = "allow"
+missing_panics_doc = "allow"
+indexing_slicing = "allow"

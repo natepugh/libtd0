@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub(crate) mod common;
 pub(crate) mod rev;
 pub(crate) mod strings;
 
@@ -17,5 +16,4 @@ pub(crate) mod strings;
 //      [SemVer Compatibility] https://doc.rust-lang.org/cargo/reference/semver.html
 //      guidelines.
 //
-pub use common::parse_firmware_version;
 pub use rev::{select_chunk_callbacks, valid_chunk_names_by_firmware_version};

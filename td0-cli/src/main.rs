@@ -45,27 +45,21 @@ fn parse_td0_file_or_exit(file_path: &PathBuf) -> TD0File {
 }
 
 fn get_chunk_or_exit<'a>(td0file: &'a TD0File, chunk_name: &str) -> &'a TD0Chunk {
-    let chunk_name: ChunkTagString = match ChunkTagString::try_from(chunk_name) {
-        Ok(name) => name,
-        Err(_) => exit_err("invalid chunk name", ERR_INVALID_CHUNK),
-    };
+    let chunk_name = ChunkTagString::try_from(chunk_name)
+        .unwrap_or_else(|_| exit_err("invalid chunk name", ERR_INVALID_CHUNK));
 
-    match td0file.chunk(&chunk_name) {
-        Some(chunk) => chunk,
-        None => exit_err("invalid chunk", ERR_INVALID_CHUNK),
-    }
+    td0file
+        .chunk(&chunk_name)
+        .unwrap_or_else(|| exit_err("invalid chunk", ERR_INVALID_CHUNK))
 }
 
 fn get_chunk_or_exit_mut<'a>(td0file: &'a mut TD0File, chunk_name: &str) -> &'a mut TD0Chunk {
-    let chunk_name: ChunkTagString = match ChunkTagString::try_from(chunk_name) {
-        Ok(name) => name,
-        Err(_) => exit_err("invalid chunk name", ERR_INVALID_CHUNK),
-    };
+    let chunk_name: ChunkTagString = ChunkTagString::try_from(chunk_name)
+        .unwrap_or_else(|_| exit_err("invalid chunk name", ERR_INVALID_CHUNK));
 
-    match td0file.chunk_mut(&chunk_name) {
-        Some(chunk) => chunk,
-        None => exit_err("invalid chunk", ERR_INVALID_CHUNK),
-    }
+    td0file
+        .chunk_mut(&chunk_name)
+        .unwrap_or_else(|| exit_err("invalid chunk", ERR_INVALID_CHUNK))
 }
 
 fn reindex_item_num_or_exit(val: usize) -> usize {
@@ -179,10 +173,7 @@ fn main() {
                 );
             }
             let td0file = parse_td0_file_or_exit(&cli.file);
-            let manifest_data = match td0file.manifest() {
-                Ok(val) => val,
-                Err(err) => exit_td0_err(&err, ERR_UNKNOWN),
-            };
+            let manifest_data = td0file.manifest();
             let text_output = match cli.output_format {
                 OutputFormat::Json => {
                     serde_json::to_string(&manifest_data).expect("Could not serialize output.")
@@ -258,7 +249,7 @@ fn main() {
                         );
                     };
                     command_dump_chunk_item(&td0file, chunk_name, inum_reindexed)
-                        .map(|it| it.to_vec())
+                        .map(<[u8]>::to_vec)
                 },
             );
 
@@ -322,11 +313,8 @@ fn main() {
 
             println!("{output}");
 
-            // Finalize before write, always.
-            match write_td0_file(&td0file, output_file) {
-                Ok(_) => (),
-                Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
-            }
+            write_td0_file(&td0file, output_file)
+                .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
             println!("Modified data written to file: {}", output_file.display());
         }
         Commands::ChunkItemsReorder {
@@ -347,10 +335,8 @@ fn main() {
 
             println!("{output}");
 
-            match write_td0_file(&td0file, output_file) {
-                Ok(_) => (),
-                Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
-            }
+            write_td0_file(&td0file, output_file)
+                .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
             println!("Modified data written to file: {}", output_file.display());
         }
         Commands::ChunkItemsSwap {
@@ -364,15 +350,12 @@ fn main() {
             let inum_1_reindexed = reindex_item_num_or_exit(*item_1);
             let inum_2_reindexed = reindex_item_num_or_exit(*item_2);
 
-            match chunk.items_swap(inum_1_reindexed, inum_2_reindexed) {
-                Ok(_) => (),
-                Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
-            }
+            chunk
+                .items_swap(inum_1_reindexed, inum_2_reindexed)
+                .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
 
-            match write_td0_file(&td0file, output_file) {
-                Ok(_) => (),
-                Err(err) => exit_td0_err(&err, ERR_INVALID_TD0_FILE),
-            }
+            write_td0_file(&td0file, output_file)
+                .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
             println!("Modified data written to file: {}", output_file.display());
         }
     }

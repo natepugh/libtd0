@@ -79,7 +79,45 @@ impl TD0File {
     const DEFAULT_HDR_TAG: &str = "HDRa";
     const DEFAULT_MODEL: &str = "SSXP";
 
-    pub fn add_chunk_arbitrary(
+    /// Add a chunk of `chunk_name` type to the file, without verifying that it is appropriate for the file.
+    ///
+    /// A mutable reference to the newly added chunk is returned.
+    ///
+    /// A default [`TD0ChunkItem`] must be supplied, which will be copied `num_items` times to create the
+    /// chunk buffer.
+    ///
+    /// # Errors
+    /// Errors may vary based on model/firmware-specific [`TD0ChunkItem`] implementation.
+    /// Expected errors include:
+    /// - [`TD0Error::FileTooLarge`](crate::result::TD0Error::OutOfRange)
+    ///   - if the supplied `default_item`'s size is larger than the file's native
+    ///     representation allows.
+    ///   - if the new chunk offset would be larger than the file format
+    ///     allows.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, ChunkTagStr, TD0Chunk, TD0ChunkItem, TD0File};
+    ///
+    /// // Load the initial file, which contains a single chunk: `HDRa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let mut target_file : TD0File = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// // Load another file to get a chunk item from. This file contains a `TGLa` chunk.
+    /// const CHUNK_SOURCE_BYTES: &[u8] = include_bytes!("../example/data/example_tgl_items.TD0");
+    /// let source_file : TD0File = parse_td0_file(CHUNK_SOURCE_BYTES)?;
+    /// let source_chunk : &TD0Chunk = source_file.chunk("TGLa").ok_or(TD0Error::unknown_chunk_error("TGLa"))?;
+    /// let default_item : &dyn TD0ChunkItem = source_chunk.item_at_ref(0)?;
+    ///
+    /// // Add a new chunk with five items, and verify that it was added.
+    /// let chunk_name : &ChunkTagStr = "FOOa".try_into()?;
+    /// target_file.add_chunk_unchecked(chunk_name, 5, default_item)?;
+    /// assert_eq!(target_file.list_chunks(), vec!["HDRa", "FOOa"]);
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
+    pub fn add_chunk_unchecked(
         &mut self,
         chunk_name: &ChunkTagStr,
         num_items: usize,
@@ -97,11 +135,71 @@ impl TD0File {
             .expect("just added this"))
     }
 
+    /// Return the valid chunk names for this `TD0File`, based on its device model and firmware revision.
+    ///
+    /// ## Note
+    /// All possible valid chunk names are returned, regardless of their presence or absence in the current file.
+    /// To retrieve only the chunks found in the current file, use the [`TD0File::list_chunks`] method.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{new_td0_file, TD0File, TD0DeviceModel, TD0BackupType};
+    ///
+    /// let file_v1_10 : TD0File = new_td0_file(TD0DeviceModel::SPDSXPro, "1.10")?;
+    /// assert_eq!(file_v1_10.valid_chunks(), &[
+    ///     "HDRa", "KITa", "CURa", "STLa", "STPa", "TGLa", "TRGa", "WVPa",
+    /// ]);
+    ///
+    /// let file_v2_00 : TD0File = new_td0_file(TD0DeviceModel::SPDSXPro, "2.00")?;
+    /// assert_eq!(file_v2_00.valid_chunks(), &[
+    ///     "HDRa", "KITa", "KITb", "CURa", "PVRa", "STLa", "STPa", "STPb", "TGLa", "TRGa", "WVPa",
+    /// ]);
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
     pub fn valid_chunks(&self) -> &'static [&'static str] {
         let firmware = self.firmware_version();
         (self.valid_chunk_names_callback)(firmware).unwrap_or(&DEFAULT_VALID_CHUNKS)
     }
 
+    /// Add a chunk of `chunk_name` type to the file, containing `num_items` [`TD0ChunkItem`] items of the
+    /// appropriate type.
+    ///
+    /// The newly created items will be default [`TD0ChunkItem`] items of the expected type for `chunk_name`.
+    ///
+    /// # Errors
+    /// Errors may vary based on model/firmware-specific [`TD0ChunkItem`] implementation.
+    /// Expected errors include:
+    /// - [`TD0Error::InvalidChunk`](crate::result::TD0Error::InvalidChunk)
+    ///   - if `chunk_name` is not a valid chunk name. (This can differ per
+    ///     device model and per firmware revision.)
+    ///   - if a valid chunk header tag was unable to be created.
+    /// - [`TD0Error::FileParse`](crate::result::TD0Error::FileParse) if this
+    ///   file's firmware version and/or model can't be determined.
+    /// - [`TD0Error::FileTooLarge`](crate::result::TD0Error::OutOfRange)
+    ///   - if the supplied `item_size` is larger than the file's native
+    ///     representation allows.
+    ///   - if the new chunk offset would be larger than the file format
+    ///     allows.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, ChunkTagStr, TD0File};
+    ///
+    /// // Load the initial file, which contains a single chunk: `HDRa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let mut td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// // Add a `TGLa` chunk with five items, and verify that it was added.
+    /// let chunk_name : &ChunkTagStr = "TGLa".try_into()?;
+    /// td0file.add_chunk(chunk_name, 5)?;
+    /// assert_eq!(td0file.list_chunks(), vec!["HDRa", "TGLa"]);
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
     pub fn add_chunk(
         &mut self,
         chunk_name: &ChunkTagStr,
@@ -133,46 +231,117 @@ impl TD0File {
         }
     }
 
+    /// Calculate the checksum for this file's data.
+    ///
+    /// The file's data in this case means the entirety of the file *except* the included
+    /// checksum. The calculated checksum should match the included checksum if the file
+    /// hasn't been modified.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0File};
+    ///
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let expected : Vec<u8> = TD0_BYTES[TD0_BYTES.len() - 16..].to_vec();
+    /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// assert_eq!(td0file.calc_checksum(), expected);
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
     pub fn calc_checksum(&self) -> Vec<u8> {
         let mut all_bufs: Vec<&[u8]> = self
             .collect_buffers()
             .into_iter()
-            .map(|bytes| bytes.as_ref())
+            .map(core::convert::AsRef::as_ref)
             .collect();
         all_bufs.pop(); // Remove the existing checksum before calculating.
 
         calc_md5_checksum(&all_bufs).into()
     }
 
+    /// Retrieve a reference to [`TD0Chunk`] `chunk_name`, or None if no such chunk exists.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0Chunk, TD0File};
+    /// use std::assert_matches;
+    ///
+    /// // Load the example file, which contains a single chunk: `HDRa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// // Retrieve a chunk and verify that it worked.
+    /// let result = td0file.chunk("HDRa");
+    /// assert_matches!(result, Some(TD0Chunk{..}));
+    ///
+    /// // An invalid chunk name will return None:
+    /// let result = td0file.chunk("ZZZa");
+    /// assert_eq!(result, None);
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
     pub fn chunk(&self, chunk_name: &str) -> Option<&TD0Chunk> {
         self.chunks.get(chunk_name)
     }
 
     pub fn chunk_info(&self, chunk_name: &str) -> Option<ChunkManifest> {
         let chunk_name: &ChunkTagStr = chunk_name.try_into().ok()?;
-        if let Some(tag) = self.tag(chunk_name) {
+
+        self.tag(chunk_name).map(|tag| {
             let chunk_header = self
                 .chunk(chunk_name)
                 .expect("file manifest and chunks are in sync.")
                 .header();
 
-            Some(ChunkManifest {
+            ChunkManifest {
                 name: chunk_name.to_string(),
                 item_size: chunk_header.item_size(),
                 num_items: chunk_header.num_items(),
                 pos: tag.chunk_pos(),
                 size: tag.chunk_size(),
-            })
-        } else {
-            None
+            }
+        })
+    }
+
+    /// Retrieve a mutable reference to [`TD0Chunk`] `chunk_name`, or None if no such chunk exists.
+    ///
+    /// # Example
+    /// ```
+    /// use td0::{parse_td0_file, TD0Chunk, TD0ChunkItem, TD0Error, TD0File};
+    /// use std::assert_matches;
+    ///
+    /// // Load the example file, which contains a single chunk: `HDRa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let mut td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// let chunk : &mut TD0Chunk = td0file.chunk_mut("HDRa").ok_or(TD0Error::unknown_chunk_error("HDRa"))?;
+    /// let _chunk_item : &mut dyn TD0ChunkItem = chunk.item_at_mut(0)?;
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
+    pub fn chunk_mut(&mut self, chunk_name: &str) -> Option<&mut TD0Chunk> {
+        match self.chunks.get_mut(chunk_name) {
+            Some(chunk) => {
+                self.is_dirty = true;
+                Some(chunk)
+            }
+            None => None,
         }
     }
 
-    pub fn chunk_mut(&mut self, chunk_name: &str) -> Option<&mut TD0Chunk> {
-        self.is_dirty = true;
-        self.chunks.get_mut(chunk_name)
-    }
-
+    /// Return an Option containing the [`TD0FileDiff`] of this file and `other`.
+    ///
+    /// Ok(None) is returned if there are no differences.
+    ///
+    /// # Errors
+    /// - [`TD0Error::FileParse`] if chunks in either file can't be parsed.
+    /// - [`TD0Error::ChunksNotComparable`] if identically named chunks have differing
+    ///   item types.
     pub fn diff(&self, other: &Self) -> TD0Result<Option<TD0FileDiff>> {
         use zerocopy::FromBytes;
 
@@ -201,7 +370,7 @@ impl TD0File {
         // Manifest Tags + Chunks
         let mut manifest_tag_diffs: Vec<Diff<TD0ManifestTag>> = Vec::new();
         let mut chunk_diffs: Vec<TD0ChunkDiff> = Vec::new();
-        for chunk_name in self.tag_order.iter() {
+        for chunk_name in &self.tag_order {
             if !other.tags.contains_key(chunk_name) {
                 continue;
             }
@@ -215,7 +384,7 @@ impl TD0File {
                 manifest_tag_diffs.push(Diff {
                     left: *left,
                     right: *right,
-                })
+                });
             }
 
             let (left, right) = (
@@ -254,9 +423,17 @@ impl TD0File {
         // Chunk Order
         if self.tag_order != other.tag_order {
             chunk_order = Some(Diff::<Vec<String>> {
-                left: self.tag_order.iter().map(|tag| tag.to_string()).collect(),
-                right: other.tag_order.iter().map(|tag| tag.to_string()).collect(),
-            })
+                left: self
+                    .tag_order
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect(),
+                right: other
+                    .tag_order
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect(),
+            });
         }
 
         // Checksum
@@ -283,14 +460,36 @@ impl TD0File {
         }
     }
 
-    pub fn firmware_version(&self) -> &str {
+    /// Return the firmware version of this file.
+    pub const fn firmware_version(&self) -> &str {
         self.firmware_version.as_str()
     }
 
+    /// Return true if this file contains a chunk named `chunk_name`.
     pub fn has_chunk(&self, chunk_name: &str) -> bool {
         self.chunks.contains_key(chunk_name)
     }
 
+    /// Return a list of the names of the chunks present in this file.
+    ///
+    /// ## Note
+    /// This does not list all possible valid chunk names, only those that exist in this file.
+    /// To retrieve all valid chunk names for this type of file, use the [`TD0File::valid_chunks`] method.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0File};
+    ///
+    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
+    /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// assert_eq!(td0file.list_chunks(), vec!["HDRa", "TGLa"]);
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
     pub fn list_chunks(&self) -> Vec<&ChunkTagString> {
         self.tag_order.iter().collect()
     }
@@ -305,7 +504,35 @@ impl TD0File {
         TD0DeviceModel::try_from(model_str.as_str()).unwrap_or(TD0DeviceModel::Unknown)
     }
 
-    pub fn manifest(&self) -> TD0Result<TD0Manifest> {
+    /// Return a [`TD0Manifest`] containing metadata about the file an its data chunks.
+    ///
+    /// # Errors:
+    /// - [`TD0Error::FileParse`](crate::result::TD0Error::FileParse)
+    ///   - if the file header cannot be parsed.
+    ///   - if the file manifest tags can't be parsed.
+    ///   - if the file backup manifest chunk (`HDRa`) isn't present or can't be parsed.
+    /// - [`TD0Error::InvalidChunk`](crate::result::TD0Error::InvalidChunk) if chunk header data in the file can't
+    ///   be parsed.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0BackupType, TD0DeviceModel, TD0File, TD0Manifest};
+    ///
+    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
+    /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// let manifest : TD0Manifest = td0file.manifest();
+    ///
+    /// // Test that the manifest has retrievable data.
+    /// assert_eq!(manifest.backup_name(), "USER KIT        ");
+    /// assert_eq!(manifest.backup_type(), TD0BackupType::Kit);
+    /// assert_eq!(manifest.device_model(), TD0DeviceModel::SPDSXPro);
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    pub fn manifest(&self) -> TD0Manifest {
         let backup_header: &HDRaItem = self.backup_manifest();
         let backup_type: TD0BackupType = match backup_header.tag().as_str() {
             Self::BACKUP_TAG_KIT => TD0BackupType::Kit,
@@ -319,7 +546,7 @@ impl TD0File {
             .map(|tag_name| self.chunk_info(tag_name).unwrap())
             .collect();
 
-        Ok(TD0Manifest {
+        TD0Manifest {
             backup_name: backup_header.name(),
             backup_type,
             checksum_actual: self.read_checksum(),
@@ -331,9 +558,10 @@ impl TD0File {
             size_actual: self.size(),
             size_calculated: self.calc_size(),
             chunks,
-        })
+        }
     }
 
+    /// Return a new file with defaults for model and firmware revision.
     pub fn new() -> Self {
         use zerocopy::IntoBytes;
 
@@ -360,7 +588,7 @@ impl TD0File {
         backup_chunk_header.set_num_items(1);
 
         // Create backup chunk item.
-        let backup_item: HDRaItem = HDRaItem::default_usable();
+        let backup_item: HDRaItem = HDRaItem::default_parsable();
 
         let tag_name: ChunkTagString = ChunkTagString::from_string_unchecked("HDRa".to_string());
 
@@ -405,13 +633,20 @@ impl TD0File {
     fn update_chunk_callbacks(&mut self) {
         let firmware = &self.firmware_version().to_string();
 
-        for (chunk_name, chunk) in self.chunks.iter_mut() {
+        for (chunk_name, chunk) in &mut self.chunks {
             let callbacks_obj =
                 (self.chunk_callbacks_factory)(chunk_name, firmware).unwrap_or_default();
             chunk.set_item_callbacks(callbacks_obj);
         }
     }
 
+    /// Set the firmware version of this file.
+    ///
+    /// # Errors
+    /// [`TD0Error::OutOfRange`] - If the length of `firmware` is incorrect.
+    /// (Should be 4 characters.)
+    /// [`TD0Error::InvalidInput`] - If `firmware` is not in the format "N.NN"
+    /// where N is an ASCII digit (0-9).
     pub fn set_firmware_version(&mut self, version: &str) -> TD0Result<()> {
         self.backup_manifest_mut().set_firmware(version)?;
         self.firmware_version = self.backup_manifest().firmware();
@@ -420,6 +655,10 @@ impl TD0File {
         Ok(())
     }
 
+    /// Create a new `TD0File` with a specific firmware version and chunk item callbacks.
+    ///
+    /// # Errors
+    /// See [`TD0File::set_firmware_version`].
     pub fn new_with(
         firmware_version: &str,
         chunk_callbacks_factory: fn(
@@ -441,26 +680,23 @@ impl TD0File {
         Ok(newobj)
     }
 
+    /// Parse the firmware version from a `HDRaItem` file backup header.
+    ///
+    /// # Errors
+    ///
     pub fn parse_firmware_version(backup_header: &HDRaItem) -> TD0Result<String> {
         let declared = backup_header.firmware();
 
         if declared.as_str() == Self::FACTORY_BACKUP_FIRMWARE {
-            if !(backup_header.build().as_str() == Self::FACTORY_BACKUP_BUILD
+            if backup_header.build().as_str() == Self::FACTORY_BACKUP_BUILD
                 && backup_header.device_serial() == Self::FACTORY_BACKUP_SERIAL
-                && backup_header.tag() == Self::DEFAULT_BACKUP_TAG)
+                && backup_header.tag() == Self::DEFAULT_BACKUP_TAG
             {
-                Err(TD0Error::FileParse(
-                    "unable to parse firmware version.".to_string(),
-                ))
-            } else {
                 // Extract actual firmware version from the 'name' field.
                 let val = backup_header.name();
-                let val = val
-                    .trim()
-                    .strip_prefix("Contents_V")
-                    .ok_or(TD0Error::FileParse(
-                        "uanble to parse firmware version.".to_string(),
-                    ))?;
+                let val = val.trim().strip_prefix("Contents_V").ok_or_else(|| {
+                    TD0Error::file_parse_error("uanble to parse firmware version.")
+                })?;
 
                 for char in val.chars() {
                     if !char.is_ascii_digit() {
@@ -474,10 +710,12 @@ impl TD0File {
 
                 Ok(val
                     .get(0..4)
-                    .ok_or(TD0Error::FileParse(
-                        "unable to parse firmware version.".to_string(),
-                    ))?
+                    .ok_or_else(|| TD0Error::file_parse_error("unable to parse firmware version."))?
                     .to_string())
+            } else {
+                Err(TD0Error::FileParse(
+                    "unable to parse firmware version.".to_string(),
+                ))
             }
         } else {
             Ok(declared)
@@ -491,16 +729,12 @@ impl TD0File {
             .fold(0usize, |acc, buf| acc + buf.len())
     }
 
-    //
-    //
-    //
-
     fn add_tag(&mut self, chunk_name: &ChunkTagString, chunk_size: usize) -> TD0Result<()> {
         // Update the offsets in the manifest tags. Because the chunk is pushed onto the back
         // of all the chunks, each chunk is offset by +16 bytes (the size of a TD0ManifestTag.)
         let tag_order = { self.tag_order.clone() };
         let chunks_offset = i64::try_from(size_of::<TD0ManifestTag>()).unwrap();
-        for tag_name in tag_order.iter() {
+        for tag_name in &tag_order {
             self.update_chunk_offset(tag_name, chunks_offset)?;
         }
 
@@ -606,11 +840,11 @@ impl TD0File {
         //  - Chunk data
         //  - File Checksum
         all_bufs.push(&self.id_chunk);
-        for tag_name in self.tag_order.iter() {
-            all_bufs.push(&self.tags[tag_name])
+        for tag_name in &self.tag_order {
+            all_bufs.push(&self.tags[tag_name]);
         }
 
-        for tag_name in self.tag_order.iter() {
+        for tag_name in &self.tag_order {
             let chunk = self
                 .chunks
                 .get(&tag_name.to_string())
@@ -632,7 +866,7 @@ impl TD0File {
 
         let mut chunks: HashMap<String, TD0Chunk> = HashMap::new();
 
-        for tag_name in tag_order.iter() {
+        for tag_name in tag_order {
             let tag = TD0ManifestTag::ref_from_bytes(
                 tags.get(tag_name).expect("tag_order and tags are in sync."),
             )
@@ -683,10 +917,10 @@ impl TD0File {
             tag.validate(file_size)
                 .map_err(|_| TD0Error::file_parse_error(ERR_MANIFEST_TAG_INVALID))?;
             // Ensure that each chunk in the manifest is in order and contiguous in the file.
-            if tag.chunk_pos() != expected_next_chunk_pos {
-                return Err(TD0Error::file_parse_error(ERR_MANIFEST_CHUNK_OUT_OF_ORDER));
-            } else {
+            if tag.chunk_pos() == expected_next_chunk_pos {
                 expected_next_chunk_pos = tag.chunk_pos() + tag.chunk_size();
+            } else {
+                return Err(TD0Error::file_parse_error(ERR_MANIFEST_CHUNK_OUT_OF_ORDER));
             }
 
             // Fill manifest and tag_order containers.
@@ -702,6 +936,36 @@ impl TD0File {
         Ok((manifest, tag_order))
     }
 
+    /// Parse the model and firmware version from `raw` bytes.
+    ///
+    /// Returns a tuple (`TD0DeviceModel`, `firmware_version`).
+    ///
+    /// This should be used as the first step of the file parsing process, so that
+    /// the appropriate `TD0Chunk` callbacks may be chosen based on model and firmware.
+    ///
+    /// # Errors
+    /// Expected errors include:
+    /// - [`TD0Error::FileParse`] if
+    ///     - The file is not a TD0 file.
+    ///     - A manifest tag is invalid.
+    ///     - The backup header is missing or not parsable (this header contains the
+    ///       firmware version.)
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{TD0DeviceModel, TD0File};
+    ///
+    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
+    /// let (model, firmware) : (TD0DeviceModel, String) = TD0File::parse_model_and_firmware(TD0_BYTES)?;
+    ///
+    /// assert_eq!(model, TD0DeviceModel::SPDSXPro);
+    /// assert_eq!(firmware, "1.10");
+    ///
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
     pub fn parse_model_and_firmware(raw: &[u8]) -> TD0Result<(TD0DeviceModel, String)> {
         let (id_chunk, mut rem) = TD0IdChunk::ref_from_prefix(raw)
             .map_err(|_| TD0Error::file_parse_error(ERR_TD0_CHUNK_READ))?;
@@ -737,6 +1001,21 @@ impl TD0File {
         ))
     }
 
+    /// Parse bytes into a `TD0File` with a specific chunk item callbacks.
+    ///
+    /// This is the correct way to parse a file while getting useful information from the chunk items.
+    ///
+    /// # Errors
+    /// Expected errors include:
+    /// - [`TD0Error::FileParse`] if
+    ///     - The file is not a TD0 file.
+    ///     - A manifest tag is invalid.
+    ///     - The file backup chunk is missing or invalid.
+    ///     - The firmware version is not parsable.
+    ///     - The file is missing a checksum.
+    ///     - The file contains unexpected data not described in the file manifest.
+    /// - [`TD0Error::InvalidChunk`](crate::result::TD0Error::InvalidChunk) if a data chunk or its header is invalid.
+    ///
     pub fn parse_with(
         bytes: &[u8],
         callbacks_factory: fn(
@@ -750,7 +1029,7 @@ impl TD0File {
         fileobj.valid_chunk_names_callback = valid_chunks_callback;
         let firmware = &fileobj.firmware_version().to_string();
 
-        for (chunk_name, chunk) in fileobj.chunks.iter_mut() {
+        for (chunk_name, chunk) in &mut fileobj.chunks {
             chunk.set_item_callbacks(
                 (fileobj.chunk_callbacks_factory)(chunk_name, firmware).unwrap_or_default(),
             );
@@ -758,6 +1037,7 @@ impl TD0File {
         Ok(fileobj)
     }
 
+    /// Read the checksum from the file.
     pub fn read_checksum(&self) -> Vec<u8> {
         self.checksum.to_vec()
     }
@@ -770,7 +1050,34 @@ impl TD0File {
         }
     }
 
-    pub fn remove_chunk(&mut self, chunk_name: &ChunkTagStr) -> TD0Result<()> {
+    /// Remove the chunk `chunk_name` from the file.
+    ///
+    /// # Errors
+    /// Expected errors include:
+    /// - [`TD0Error::InvalidChunk`](crate::result::TD0Error::InvalidChunk)
+    ///   - if `chunk_name` is not a valid chunk name.
+    ///   - if the chunk size in the file metadata is invalid.
+    ///
+    /// # Example
+    /// ```
+    /// # use td0::TD0Error;
+    /// use td0::{parse_td0_file, TD0File};
+    ///
+    /// // Load the initial file, which contains two chunks: `HDRa` and `TGLa`.
+    /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_two_chunks.TD0");
+    /// let mut td0file : TD0File = parse_td0_file(TD0_BYTES)?;
+    ///
+    /// // Remove the`TGLa` chunk, and verify the chunk was removed.
+    /// td0file.remove_chunk("TGLa")?;
+    /// assert_eq!(td0file.list_chunks(), vec!["HDRa"]);
+    /// # Ok::<(), TD0Error>(())
+    /// ```
+    ///
+    pub fn remove_chunk(&mut self, chunk_name: &str) -> TD0Result<()> {
+        let chunk_name: &ChunkTagStr = chunk_name
+            .try_into()
+            .map_err(|_| TD0Error::unknown_chunk_error(chunk_name))?;
+
         let Some(tag) = self.tag(chunk_name) else {
             return Err(TD0Error::unknown_chunk_error(chunk_name));
         };
@@ -778,13 +1085,15 @@ impl TD0File {
         // Before removing any items, calculate how much each item shifts in position and apply
         // those offsets to the existing chunks.
         let chunk_offset_changes = self.calc_remove_chunk_offsets(tag);
-        for (modify_chunk_name, offset) in chunk_offset_changes.iter() {
+        for (modify_chunk_name, offset) in &chunk_offset_changes {
             self.update_chunk_offset(modify_chunk_name, *offset)?;
         }
 
         // Remove the tag and chunk.
         self.remove_tag(chunk_name)?;
-        self.chunks.remove(chunk_name.as_ref()).unwrap();
+        self.chunks
+            .remove(chunk_name.as_ref())
+            .expect("chunk tag has a corresponding chunk.");
 
         self.is_dirty = true;
         Ok(())
@@ -808,31 +1117,27 @@ impl TD0File {
         Ok(())
     }
 
+    /// Return a reference to the [`TD0ManifestTag`] for `chunk_name` or None if that
+    /// chunk is not present.
     pub fn tag(&self, chunk_name: &ChunkTagStr) -> Option<&TD0ManifestTag> {
-        use zerocopy::FromBytes;
-
-        if let Some(tag_bytes) = self.tags.get(chunk_name) {
-            Some(TD0ManifestTag::ref_from_bytes(tag_bytes).unwrap())
-        } else {
-            None
-        }
+        self.tags
+            .get(chunk_name)
+            .map(|tag_bytes| TD0ManifestTag::ref_from_bytes(tag_bytes).unwrap())
     }
 
+    /// Return a mutable reference to the [`TD0ManifestTag`] for `chunk_name` or None
+    /// if that chunk is not present.
     pub fn tag_mut(&mut self, chunk_name: &ChunkTagStr) -> Option<&mut TD0ManifestTag> {
-        use zerocopy::FromBytes;
-
-        if let Some(tag_bytes) = self.tags.get_mut(chunk_name) {
-            Some(TD0ManifestTag::mut_from_bytes(tag_bytes).unwrap())
-        } else {
-            None
-        }
+        self.tags
+            .get_mut(chunk_name)
+            .map(|tag_bytes| TD0ManifestTag::mut_from_bytes(tag_bytes).unwrap())
     }
 
     fn update_chunk_offset(&mut self, chunk_name: &ChunkTagStr, offset: i64) -> TD0Result<()> {
         // Update the position in the manifest.
         let tag = self
             .tag_mut(chunk_name)
-            .ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
+            .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))?;
         let chunk_pos: i64 = i64::try_from(tag.chunk_pos())
             .map_err(|_| TD0Error::invalid_chunk_error(tag.tag(), "chunk offset invalid."))?;
 
@@ -843,6 +1148,11 @@ impl TD0File {
         Ok(())
     }
 
+    /// Check that the suffix of `bytes` contains a checksum of the rest of `bytes`.
+    ///
+    /// # Errors
+    /// - [`TD0Error::ChecksumMismatch`] if the included file checksum is incorrect.
+    /// - [`TD0Error::FileParse`] if the bytes isn't large enough to contain a checksum.
     pub fn verify_checksum(bytes: &[u8]) -> TD0Result<()> {
         if bytes.len() <= SZ_MD5_DIGEST {
             return Err(TD0Error::file_parse_error(
@@ -851,10 +1161,10 @@ impl TD0File {
         }
 
         let (source, checksum) = bytes.split_at(bytes.len() - SZ_MD5_DIGEST);
-        if calc_md5_checksum(&[source]) != checksum {
-            Err(TD0Error::ChecksumMismatch)
-        } else {
+        if calc_md5_checksum(&[source]) == checksum {
             Ok(())
+        } else {
+            Err(TD0Error::ChecksumMismatch)
         }
     }
 }
@@ -888,14 +1198,13 @@ impl TryFrom<Vec<u8>> for TD0File {
         let chunks: HashMap<String, TD0Chunk> = Self::parse_chunks(&mut bytes, &tags, &tag_order)?;
 
         // Get the firmware version.
-        let backup_header = match chunks
+        let Some(Ok(backup_header)) = chunks
             .get("HDRa")
             .expect("parse_chunks verifies existence.")
             .item_at_raw(0)
-            .map(|raw| HDRaItem::try_ref_from_bytes(raw))
-        {
-            Some(Ok(hdr)) => hdr,
-            _ => return Err(TD0Error::file_parse_error("unable to read backup header.")),
+            .map(HDRaItem::try_ref_from_bytes)
+        else {
+            return Err(TD0Error::file_parse_error("unable to read backup header."));
         };
         backup_header.validate()?;
 
@@ -942,7 +1251,7 @@ impl From<&TD0File> for Vec<u8> {
         for buf in bufs {
             dest.extend(buf);
         }
-        Vec::from(dest)
+        Self::from(dest)
     }
 }
 
@@ -954,6 +1263,10 @@ impl<'a> TryFrom<&'a [u8]> for TD0File {
     }
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "this matches an existing callback function."
+)]
 fn default_chunk_callbacks_factory(
     _chunk_name: &str,
     _version: &str,
@@ -961,6 +1274,10 @@ fn default_chunk_callbacks_factory(
     Some(ChunkItemAccessorCallbacks::default())
 }
 
-fn default_valid_chunks_callback(_version: &str) -> Option<&'static [&'static str]> {
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "this matches an existing callback function."
+)]
+const fn default_valid_chunks_callback(_version: &str) -> Option<&'static [&'static str]> {
     Some(&DEFAULT_VALID_CHUNKS)
 }

@@ -54,13 +54,13 @@ fn test_create_td0_file_new() {
 #[test]
 fn test_load_file_known_firmware() {
     let myfile = TD0File::try_from(KNOWN_FIRMWARE_BYTES.to_vec());
-    assert_matches!(myfile, Ok(TD0File { .. }))
+    assert_matches!(myfile, Ok(TD0File { .. }));
 }
 
 #[test]
 fn test_load_file_unknown_firmware() {
     let myfile = TD0File::try_from(UNKNOWN_FIRMWARE_BYTES.to_vec());
-    assert!(myfile.is_ok())
+    myfile.unwrap();
 }
 
 #[test]
@@ -262,9 +262,10 @@ fn update_bytes_checksum(buf: &mut [u8]) {
     const SZ_MD5_DIGEST: usize = 16;
 
     let mut hasher: md5::Md5 = md5::Md5::new();
-    hasher.update(&buf[..buf.len() - 16]);
-    let hash = hasher.finalize();
     let buflen = buf.len();
+
+    hasher.update(&buf[..buflen - 16]);
+    let hash = hasher.finalize();
     buf[buflen - SZ_MD5_DIGEST..].copy_from_slice(&hash);
 }
 
@@ -429,7 +430,7 @@ fn test_ssxp_td0file_add_chunk() {
     //
     let mut td0file = TD0File::new();
     td0file
-        .add_chunk_arbitrary(
+        .add_chunk_unchecked(
             ChunkTagStr::from_str_unchecked("TGLa"),
             NUM_ITEMS,
             &default_item,
@@ -446,7 +447,7 @@ fn test_add_chunk_and_retrieve_items() {
     let default_tgl_item = TGLaItem::default();
     let chunk_name: &ChunkTagStr = ChunkTagStr::from_str_unchecked("TGLa");
     td0file
-        .add_chunk_arbitrary(chunk_name, 3, &default_tgl_item)
+        .add_chunk_unchecked(chunk_name, 3, &default_tgl_item)
         .expect("can successfully add a chunk.");
     let new_chunk: &TD0Chunk = td0file
         .chunk(chunk_name)
@@ -475,7 +476,7 @@ fn _01_test_replace_chunk_item() {
     let default_tgl_item = TGLaItem::default();
     let chunk_name: &ChunkTagStr = ChunkTagStr::from_str_unchecked("TGLa");
     td0file
-        .add_chunk_arbitrary(chunk_name, 3, &default_tgl_item)
+        .add_chunk_unchecked(chunk_name, 3, &default_tgl_item)
         .unwrap();
 
     let file_bytes: Vec<u8> = td0file.clone().into();
@@ -487,7 +488,9 @@ fn _01_test_replace_chunk_item() {
 
     let chunk = td0file.chunk_mut(chunk_name).unwrap();
     let mut new_tag = default_tgl_item;
-    let _ = new_tag.set_field_value("name", TD0Value::new_text_value("This is a test !"));
+    new_tag
+        .set_field_value("name", TD0Value::new_text_value("This is a test !"))
+        .unwrap();
     assert_eq!(
         new_tag.field_value("name"),
         Some(TD0Value::Text("This is a test !".to_string()))
@@ -528,7 +531,7 @@ fn test_remove_chunk() {
 fn test_manifest() {
     let td0file = TD0File::try_from(get_test_data(PathBuf::from("new_v2_00.TD0")))
         .expect("or test is broken");
-    let manifest: TD0Manifest = td0file.manifest().unwrap();
+    let manifest: TD0Manifest = td0file.manifest();
     assert_eq!(manifest.backup_name().trim_end(), "USER KIT");
     assert_eq!(manifest.backup_type(), TD0BackupType::Kit);
     assert_eq!(manifest.checksum_actual(), manifest.checksum_calculated());
