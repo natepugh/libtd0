@@ -36,7 +36,7 @@ pub struct TD0FileDiff {
 
 type ChunkTagMap = HashMap<ChunkTagString, BytesMut>;
 
-#[derive(Clone, Eq, Debug)]
+#[derive(Clone, Eq)]
 pub struct TD0File {
     firmware_version: String,
     id_chunk: BytesMut,
@@ -49,6 +49,12 @@ pub struct TD0File {
         fn(chunk_name: &str, firmware_version: &str) -> Option<ChunkItemAccessorCallbacks>,
     valid_chunk_names_callback: fn(firmware_version: &str) -> Option<&'static [&'static str]>,
     is_dirty: bool,
+}
+
+impl std::fmt::Debug for TD0File {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.manifest())
+    }
 }
 
 impl Default for TD0File {

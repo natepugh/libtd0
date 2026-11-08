@@ -58,7 +58,7 @@ use crate::strings::{
 // The struct immediately below this comment is the complete, slow compiling version.
 #[cfg(not(faster_incomplete_compile))]
 #[repeat_fields]
-#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
+#[derive(Clone, Copy, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
 pub struct KITbItem {
     #[td0_field(field_type = "Text", pad_byte = 0x20)]
@@ -1283,6 +1283,20 @@ pub struct KITbItem {
     kit_b_unknown: [u8; 72],
 }
 
+// A custom Debug impl is required because KITb has too many fields to safely use the derived impl.
+impl core::fmt::Debug for KITbItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use td0_core::TD0ChunkItem;
+
+        write!(
+            f,
+            "KITbItem{{name: \"{}\", ...{} more fields...}}",
+            String::from_utf8_lossy(&self.name),
+            self.list_fields().len()
+        )
+    }
+}
+
 // WARNING !! WARNING !! WARNING !! WARNING !!
 // There are TWO (2) versions of this struct in this file, one has all (2200+) of the fields and one that compiles quickly.
 // At the moment these two options are mutually exclusive.
@@ -1292,7 +1306,7 @@ pub struct KITbItem {
 // Please see the WARNING near the top of this file for a more detailed explanation.
 #[cfg(faster_incomplete_compile)]
 #[repeat_fields]
-#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
+#[derive(Clone, Copy, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
 #[repr(C, packed)]
 pub struct KITbItem {
     #[td0_field(field_type = "Text", pad_byte = 0x20)]
