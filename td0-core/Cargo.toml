@@ -4,7 +4,7 @@
 
 [package]
 name = "td0-core"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 
 authors = ["Nathan Pugh <natepugh@gmail.com>"]
@@ -23,7 +23,7 @@ document-features = { version = "0.2.12" }
 num-traits = "0.2.19"
 zerocopy = { version = "0.8.60", features = ["derive"] }
 zerocopy-derive = "0.8.60"
-td0-derive = { version = "0.1.2", path = "../td0-derive" }
+td0-derive = { version = "0.1.3", path = "../td0-derive" }
 
 #! ### Optional dependencies
 ## Enable this feature to enable serde serialization of [`TD0Manifest`] objects.

@@ -155,6 +155,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - TD0File revamp
+
+- Added: `TD0Chunk`. `TD0File` chunks are now represented directly as this struct.
+- Added: `TD0File::chunk()` and `::chunk_mut()` methods retrieve references to TD0Chunk instances.
+- Added: `TD0ChunkItem::field_types()` which returns type and constraint information for all fields.
+- Added: `TD0File::diff` compare with another TD0File.
+
+### Breaking Changes
+
+- Changed: TD0File is now a struct, not a trait.
+- Changed: TD0File chunk_item_\* and chunk_items_\* methods removed, replaced with
+  equivalent TD0Chunk methods.
+- Changed: `TD0ChunkItem::field_type()` now returns a `FieldDef`.
+
+NOTE: libtd0 (Python bindings) still lags behind- the chunk_item_\* and chunk_items_\* methods
+of TD0File are still how this library access chunk items. It will be brought into sync in an
+upcoming release.
+
 ## [0.1.2] - Bugfix, libtd0 (python)
 
 - Fixed: libtd0 (python) ValueError "unknown field 'Decimal'" when setting a Decimal value.
