@@ -4,6 +4,8 @@
 
 /target
 */target/
+**/__pycache__/
+*.pyc
 src/pytd0
 Cargo.lock
 .vscode/

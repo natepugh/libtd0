@@ -19,7 +19,7 @@ const ERR_CHUNK_HEADER_READ: &str = "unable to read chunk header bytes.";
 const ERR_CHUNK_READ: &str = "unable to read chunk item(s).";
 
 pub type FieldsDiff = Vec<(String, Diff<TD0Value>)>;
-type ChunkItemsDiff = Vec<(usize, FieldsDiff)>;
+pub type ChunkItemsDiff = Vec<(usize, FieldsDiff)>;
 
 /// The header of a `TD0Chunk` in a `TD0File`.
 #[derive(Copy, Clone, Debug, Eq, FromBytes, PartialEq, Immutable, IntoBytes, KnownLayout)]
@@ -131,7 +131,7 @@ pub struct TD0ChunkDiff {
 
 #[derive(TryFromBytes, KnownLayout, IntoBytes, Immutable, Debug, Unaligned)]
 #[repr(transparent)]
-struct DefaultChunkItem {
+pub struct DefaultChunkItem {
     data: [u8; 16],
 }
 
@@ -200,6 +200,18 @@ impl TD0ChunkItem for DefaultChunkItem {
     }
 }
 
+impl DefaultChunkItem {
+    pub const fn new() -> Self {
+        Self { data: [0; 16] }
+    }
+}
+
+impl Default for DefaultChunkItem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ChunkItemAccessorCallbacks {
     pub chunk_item_ref_from_bytes_cb: for<'b> fn(&'b [u8]) -> TD0Result<&'b dyn TD0ChunkItem>,
@@ -249,6 +261,16 @@ impl Default for ChunkItemAccessorCallbacks {
     }
 }
 
+/// A data chunk within a [`TD0File`](crate::td0file::TD0File).
+///
+/// A `TD0Chunk` consists of a chunk header, and a data section containing one or more
+/// [`TD0ChunkItem`] items, which can access or modify the file data. All `TD0ChunkItem`s
+/// within a `TD0Chunk` homogenous- they contain the same fields with the same data types,
+/// and differ only in the actual values they contain.
+///
+/// [`TD0Chunk`] instances aren't created manually, instead retrieved from a `TD0File`
+/// via its [`TD0File::chunk()`](crate::td0file::TD0File::chunk) and
+/// [`TD0File::chunk_mut()`](crate::td0file::TD0File::chunk_mut) methods.
 #[derive(Default, Clone, Debug)]
 pub struct TD0Chunk {
     header: BytesMut,
@@ -305,7 +327,7 @@ impl TD0Chunk {
             .expect("only valid chunk headers are stored.")
     }
 
-    fn chunk_item_types_comparable(obj1: &dyn TD0ChunkItem, obj2: &dyn TD0ChunkItem) -> bool {
+    pub fn chunk_item_types_comparable(obj1: &dyn TD0ChunkItem, obj2: &dyn TD0ChunkItem) -> bool {
         size_of_val(obj1) == size_of_val(obj2) && obj1.field_types() == obj2.field_types()
     }
 
@@ -386,6 +408,7 @@ impl TD0Chunk {
         }
     }
 
+    /// Return the size in bytes of this `TD0Chunk`.
     pub fn size(&self) -> usize {
         self.header.len() + (self.items.first().unwrap().len() * self.items.len())
     }
@@ -407,6 +430,7 @@ impl TD0Chunk {
         Some(self.items.get_mut(index)?)
     }
 
+    /// Return a zeroed-out instance of this [`TD0Chunk`]'s [`TD0ChunkItem`] type.
     pub fn default_item(&self) -> Box<dyn TD0ChunkItem> {
         (self.callbacks.default_chunk_item_cb)()
     }
@@ -455,7 +479,7 @@ impl TD0Chunk {
     pub fn item_replace(&mut self, pos: usize, source: &dyn TD0ChunkItem) -> TD0Result<()> {
         let existing = self.item_at(pos)?;
 
-        if Self::chunk_item_types_comparable(&*existing, source) {
+        if !Self::chunk_item_types_comparable(&*existing, source) {
             return Err(TD0Error::InvalidInput("invalid item type".to_string()));
         }
 
@@ -505,6 +529,7 @@ impl TD0Chunk {
         Ok(())
     }
 
+    /// Return an array of [`FieldDef`] items describing this [`TD0Chunk`]'s fields.
     pub fn describe_fields(&self) -> &'static [FieldDef] {
         self.default_item().field_types()
     }

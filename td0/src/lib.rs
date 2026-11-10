@@ -28,7 +28,8 @@ pub(crate) mod td0;
 //
 pub use td0::{new_td0_file, parse_td0_file};
 pub use td0_core::{
-    ChunkManifest, ChunkTagStr, ChunkTagString, FieldDef, FieldType, TD0BackupType, TD0Chunk,
-    TD0ChunkItem, TD0DeviceModel, TD0File, TD0Manifest, TD0Value, TD0ValueRaw,
+    ChunkItemsDiff, ChunkManifest, ChunkTagStr, ChunkTagString, Diff, FieldDef, FieldType,
+    FieldsDiff, TD0BackupType, TD0Chunk, TD0ChunkDiff, TD0ChunkItem, TD0DeviceModel, TD0File,
+    TD0FileDiff, TD0Manifest, TD0Value, TD0ValueRaw, hex_encode,
 };
 pub use td0_core::{TD0Error, TD0Result};

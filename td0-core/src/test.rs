@@ -11,6 +11,7 @@ use super::td0file::{
     ERR_MANIFEST_SIZE, ERR_MANIFEST_TAG_DUPLICATE, ERR_MANIFEST_TAG_INVALID, TD0File,
 };
 use super::*;
+use crate::td0chunk::DefaultChunkItem;
 use crate::{TD0BackupType, TD0ChunkItem, TD0DeviceModel, TD0Manifest};
 use td0_derive::TD0ChunkItemDerive;
 
@@ -21,7 +22,7 @@ use std::assert_matches;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::LazyLock;
-use zerocopy::{IntoBytes, LittleEndian, U16, U32};
+use zerocopy::{IntoBytes, LittleEndian, TryFromBytes, U16, U32};
 use zerocopy_derive::{FromBytes, Immutable, KnownLayout};
 
 #[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout, TD0ChunkItemDerive)]
@@ -279,7 +280,7 @@ fn fmt_hex(data: &[u8]) -> String {
 }
 
 #[test]
-fn test_ssxp_td0file_new() {
+fn test_td0file_new() {
     let td0file = TD0File::new();
 
     // NOTE: The following (commented) line loads the bytes that the
@@ -367,7 +368,7 @@ fn test_ssxp_td0file_new() {
 }
 
 #[test]
-fn test_ssxp_td0file_add_chunk() {
+fn test_td0file_add_chunk() {
     const NUM_ITEMS: usize = 3;
 
     let mut expected: Vec<u8> = Vec::new();
@@ -442,6 +443,29 @@ fn test_ssxp_td0file_add_chunk() {
 }
 
 #[test]
+fn test_td0file_add_chunk_fails_on_duplicate_chunk() {
+    let mut td0file = TD0File::try_from(KNOWN_FIRMWARE_BYTES.to_vec()).unwrap();
+    let chunk_name: ChunkTagString = ChunkTagString::try_from("HDRa").unwrap();
+    let expected: Vec<&ChunkTagString> = vec![&chunk_name];
+    assert_eq!(td0file.list_chunks(), expected);
+
+    let result = td0file.add_chunk(&chunk_name, 3);
+    assert_matches!(result, Err(TD0Error::DuplicateChunk { .. }));
+}
+
+#[test]
+fn test_td0file_add_chunk_unchecked_fails_on_duplicate_chunk() {
+    let mut td0file = TD0File::try_from(KNOWN_FIRMWARE_BYTES.to_vec()).unwrap();
+    let chunk_name: ChunkTagString = ChunkTagString::try_from("HDRa").unwrap();
+    let expected: Vec<&ChunkTagString> = vec![&chunk_name];
+    assert_eq!(td0file.list_chunks(), expected);
+
+    let new_default: DefaultChunkItem = DefaultChunkItem::new();
+    let result = td0file.add_chunk_unchecked(&chunk_name, 3, &new_default);
+    assert_matches!(result, Err(TD0Error::DuplicateChunk { .. }));
+}
+
+#[test]
 fn test_add_chunk_and_retrieve_items() {
     let mut td0file = TD0File::new();
     let default_tgl_item = TGLaItem::default();
@@ -479,6 +503,23 @@ fn _01_test_replace_chunk_item() {
         .add_chunk_unchecked(chunk_name, 3, &default_tgl_item)
         .unwrap();
 
+    // The proper chunk callbacks are required to get the right item type back from
+    // chunk.item_at(). This doesn't have to be done manually in a normal situation.
+    let chunk_callbacks = ChunkItemAccessorCallbacks {
+        chunk_item_ref_from_bytes_cb: |bytes: &[u8]| {
+            Ok(TGLaItem::try_ref_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+        },
+        chunk_item_mut_from_bytes_cb: |bytes: &mut [u8]| {
+            Ok(TGLaItem::try_mut_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?)
+        },
+        chunk_item_owned_from_bytes_cb: |bytes: &[u8]| {
+            Ok(Box::new(
+                TGLaItem::try_read_from_bytes(bytes).map_err(|_| TD0Error::ChunkItemParse)?,
+            ))
+        },
+        default_chunk_item_cb: || Box::new(TGLaItem::default()),
+    };
+
     let file_bytes: Vec<u8> = td0file.clone().into();
     assert_eq!(
         fmt_hex(&file_bytes),
@@ -487,6 +528,8 @@ fn _01_test_replace_chunk_item() {
     );
 
     let chunk = td0file.chunk_mut(chunk_name).unwrap();
+    chunk.set_item_callbacks(chunk_callbacks);
+
     let mut new_tag = default_tgl_item;
     new_tag
         .set_field_value("name", TD0Value::new_text_value("This is a test !"))
@@ -525,6 +568,23 @@ fn test_remove_chunk() {
         fmt_hex(expected.as_bytes()),
         "remove chunk produced correct output."
     );
+}
+
+#[test]
+fn test_remove_chunk_wont_remove_hdra() {
+    let initial_bytes = get_test_data(PathBuf::from("_01_after_add_chunk.TD0"));
+    let mut td0file: TD0File = TD0File::try_from(initial_bytes).unwrap();
+    let result = td0file.remove_chunk("HDRa");
+    assert_matches!(result, Err(TD0Error::OperationNotSupported));
+}
+
+#[test]
+fn test_replace_chunk_wont_replace_hdra() {
+    let initial_bytes = get_test_data(PathBuf::from("_01_after_add_chunk.TD0"));
+    let mut td0file: TD0File = TD0File::try_from(initial_bytes).unwrap();
+    let new_chunk: TD0Chunk = td0file.chunk("HDRa").unwrap().clone();
+    let result = td0file.replace_chunk("HDRa", new_chunk);
+    assert_matches!(result, Err(TD0Error::OperationNotSupported));
 }
 
 #[test]

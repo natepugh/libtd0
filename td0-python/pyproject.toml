@@ -26,3 +26,6 @@ Repository = "https://github.com/natepugh/libtd0"
 binding = "pyo3"
 features = ["pyo3/abi3-py311"]
 module-name = "libtd0"
+
+[dependency-groups]
+test = ["pytest>=9.2.0"]

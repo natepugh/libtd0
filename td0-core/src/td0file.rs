@@ -36,6 +36,14 @@ pub struct TD0FileDiff {
 
 type ChunkTagMap = HashMap<ChunkTagString, BytesMut>;
 
+/// The parsed, in-memory representation of a .TD0 backup file.
+///
+/// A `TD0File` consists of file manifest, which lists the file's data chunks
+/// as well as the data chunks themselves (represented in this library as
+/// [`TD0Chunk`] structs.) `TD0Chunk`s contain one or more items, structs that
+/// implement the [`TD0ChunkItem`] trait, which provide access to the values
+/// (e.g. Kit config data, wav file metadata, playlist items) stored within the
+/// backup file.
 #[derive(Clone, Eq)]
 pub struct TD0File {
     firmware_version: String,
@@ -510,7 +518,7 @@ impl TD0File {
         TD0DeviceModel::try_from(model_str.as_str()).unwrap_or(TD0DeviceModel::Unknown)
     }
 
-    /// Return a [`TD0Manifest`] containing metadata about the file an its data chunks.
+    /// Return a [`TD0Manifest`] containing metadata about the file and its data chunks.
     ///
     /// # Errors:
     /// - [`TD0Error::FileParse`](crate::result::TD0Error::FileParse)
@@ -736,6 +744,10 @@ impl TD0File {
     }
 
     fn add_tag(&mut self, chunk_name: &ChunkTagString, chunk_size: usize) -> TD0Result<()> {
+        if self.tags.contains_key(chunk_name) {
+            return Err(TD0Error::DuplicateChunk(chunk_name.to_string()));
+        }
+
         // Update the offsets in the manifest tags. Because the chunk is pushed onto the back
         // of all the chunks, each chunk is offset by +16 bytes (the size of a TD0ManifestTag.)
         let tag_order = { self.tag_order.clone() };
@@ -1088,6 +1100,11 @@ impl TD0File {
             return Err(TD0Error::unknown_chunk_error(chunk_name));
         };
 
+        if chunk_name == "HDRa" {
+            // We may not remove the HDRa chunk from a file.
+            return Err(TD0Error::OperationNotSupported);
+        }
+
         // Before removing any items, calculate how much each item shifts in position and apply
         // those offsets to the existing chunks.
         let chunk_offset_changes = self.calc_remove_chunk_offsets(tag);
@@ -1105,11 +1122,53 @@ impl TD0File {
         Ok(())
     }
 
+    /// Replace the chunk `chunk_name` with the new chunk `new_chunk`.
+    ///
+    /// # Errors
+    /// Expected errors include:
+    /// - [`TD0Error::InvalidChunk`](crate::result::TD0Error::InvalidChunk)
+    ///   - if `chunk_name` is not a valid chunk name.
+    /// - [`TD0Error::InvalidInput`](crate::result::TD0Error::InvalidChunk)
+    ///   - if `new_chunk` is a different size in bytes from the existing chunk `chunk_name`.
+    ///   - if `new_chunk` does not consist of the same item type as chunk `chunk_name`.
+    ///
+    pub fn replace_chunk(&mut self, chunk_name: &str, new_chunk: TD0Chunk) -> TD0Result<()> {
+        if !self.has_chunk(chunk_name) {
+            return Err(TD0Error::unknown_chunk_error(chunk_name));
+        }
+
+        if chunk_name == "HDRa" {
+            // We may not remove the HDRa chunk from a file.
+            return Err(TD0Error::OperationNotSupported);
+        }
+
+        let dest_chunk = self.chunk(chunk_name).unwrap();
+        if !dest_chunk.size() == new_chunk.size() {
+            return Err(TD0Error::InvalidInput(
+                "new_chunk size does not match destination chunk.".to_string(),
+            ));
+        }
+
+        let dest_item = dest_chunk.item_at(0)?;
+        let src_item = new_chunk.item_at(0)?;
+        if !TD0Chunk::chunk_item_types_comparable(&*dest_item, &*src_item) {
+            return Err(TD0Error::InvalidInput(
+                "new_chunk item type does not match destination chunk.".to_string(),
+            ));
+        }
+
+        self.chunks.remove(chunk_name);
+        self.chunks.insert(chunk_name.to_string(), new_chunk);
+        Ok(())
+    }
+
+    fn tag_index(&self, chunk_name: &ChunkTagStr) -> Option<usize> {
+        self.tag_order.iter().position(|val| val == chunk_name)
+    }
+
     fn remove_tag(&mut self, chunk_name: &ChunkTagStr) -> TD0Result<()> {
         let remove_tag_idx: usize = self
-            .tag_order
-            .iter()
-            .position(|val| val == chunk_name)
+            .tag_index(chunk_name)
             .expect("tag_order and tags are in sync.");
 
         self.tags

@@ -31,13 +31,16 @@ pub use ascii_string::{ChunkTagStr, ChunkTagString};
 pub use header::{HDRaItem, OFFSET_BYTES_REMAINING, TD0_MAGIC, TD0IdChunk, TD0ManifestTag};
 pub use helpers::{
     calc_range_overlap, clamp_optional, copy_ascii_str_to_u8_slice, copy_slice_to_native,
-    copy_slice_to_native_padded, in_range_inclusive, try_u32_from_usize,
+    copy_slice_to_native_padded, hex_encode, in_range_inclusive, try_u32_from_usize,
 };
 pub use result::{TD0Error, TD0Result};
-pub use td0chunk::{ChunkItemAccessorCallbacks, TD0Chunk, TD0ChunkDiff};
+pub use td0chunk::{
+    ChunkItemAccessorCallbacks, ChunkItemsDiff, DefaultChunkItem, FieldsDiff, TD0Chunk,
+    TD0ChunkDiff,
+};
 pub use td0file::{TD0File, TD0FileDiff};
 pub use types::{
-    ChunkManifest, FieldDef, FieldType, IntEncodedDecimal, TD0BackupType, TD0ChunkItem,
+    ChunkManifest, Diff, FieldDef, FieldType, IntEncodedDecimal, TD0BackupType, TD0ChunkItem,
     TD0DeviceModel, TD0Manifest, TD0Value, TD0ValueRaw, Volume,
 };
 

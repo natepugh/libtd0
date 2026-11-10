@@ -66,7 +66,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     fn field_options(&self, field: &str) -> Option<&'static [&'static str]>;
 
-    /// Return the name of the [`TD0Value`] data type of `field`. Return None if the `field` is not valid for this item.
+    /// Return the [`FieldType`] `field`. Return None if the `field` is not valid for this item.
     ///
     /// # Example
     /// ```
