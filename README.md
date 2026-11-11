@@ -155,6 +155,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - Python libtd0 update and methods renamed
+
+- Added: Chunk class added to libtd0 (Python).
+
+### Breaking changes
+
+- Changed: Method names changed across the board.
+
+  - '_at' removed from all item_at* methods.
+  - `num_items` members and methods are now `item_count`.
+  - `chunk.reorder_items` and `.swap_items` are now `items_reorder` and `items_swap`.
+  - `chunk.item_copy`, `item_replace` is now `chunk.copy_item`, `replace_item`.
+
+- Changed: libtd0 (Python): TD0File chunk_item_\* and chunk_items_\* methods removed, replaced with
+  equivalent TD0Chunk methods.
+
 ## [0.1.3] - TD0File revamp
 
 - Added: `TD0Chunk`. `TD0File` chunks are now represented directly as this struct.

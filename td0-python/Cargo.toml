@@ -4,7 +4,7 @@
 
 [package]
 name = "td0-python"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 
 authors = ["Nathan Pugh <natepugh@gmail.com>"]
@@ -24,8 +24,8 @@ doctest = false
 workspace = true
 
 [dependencies]
-td0-core = { path = "../td0-core", version = "0.1.3" }
-td0 = { path = "../td0", version = "0.1.3" }
+td0-core = { path = "../td0-core", version = "0.1.4" }
+td0 = { path = "../td0", version = "0.1.4" }
 
 pyo3 = { version = "0.30.1", features = ["abi3-py311", "experimental-inspect", "rust_decimal"] }
 rust_decimal = "1.43.0"
