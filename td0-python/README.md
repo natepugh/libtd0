@@ -4,11 +4,9 @@ SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
 SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
-# libtd0: A parsing and editing library for the .TD0 e-kit/sample pad backup file format
+# libtd0: A parsing library for the .TD0 e-kit/sample pad backup file format
 
-This library provides the ability to extract configuration (but not audio) data from .TD0 format backup files (used by
-some Roland Sample Pads and e-kits.) It can also edit some data in those files and rearrange
-items (such as Kits) within a backup file without the device being connected to the computer.
+This library provides the ability to extract configuration (but not audio) data from .TD0 format backup files (used by some Roland Sample Pads and e-kits.)
 
 ## Features
 
@@ -26,7 +24,7 @@ Should you choose to do so,
 - Create a whole system backup first, and save it somewhere where you won't accidentally edit it.
 - Download the Factory Reset firmware from Roland ahead of time, in case you need to reset your configuration.
 - After loading an experimental backup onto your device, be sure to test all features you want to use well ahead
-  of any kind of performance. The author(s) are NOT RESPONSBLE for any damage caused to your device, career,
+  of any kind of performance. The author(s) are NOT RESPONSIBLE for any damage caused to your device, career,
   or reputation.
 
 ## Installation
