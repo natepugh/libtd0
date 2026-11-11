@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests for libtd0.TD0Chunk"""
 from decimal import Decimal
 from pathlib import Path
@@ -86,14 +90,14 @@ def test_size(td0_bytes_minimal_w_kit: bytes) -> None:
     assert kit_chunk.size() == 3472
 
 
-def test_item_at(td0_bytes_exampl_tgl_items: bytes) -> None:
+def test_item(td0_bytes_exampl_tgl_items: bytes) -> None:
     """Does it retrieve an item at a specific index?"""
     td0file : TD0File = TD0File(td0_bytes_exampl_tgl_items)
     tgl_chunk : TD0Chunk|None = td0file.chunk('TGLa')
     assert isinstance(tgl_chunk, TD0Chunk)
 
-    assert tgl_chunk.item_at(1).field_value('name') == 'Kick'
-    assert tgl_chunk.item_at(9).field_value('name') == 'HiHat'
+    assert tgl_chunk.item(1).field_value('name') == 'Kick'
+    assert tgl_chunk.item(9).field_value('name') == 'HiHat'
 
 
 def test_item_size(td0_bytes_minimal_w_kit: bytes) -> None:
@@ -105,21 +109,21 @@ def test_item_size(td0_bytes_minimal_w_kit: bytes) -> None:
     assert kit_chunk.item_size() == 3456
 
 
-def test_item_copy(td0_bytes_exampl_tgl_items: bytes) -> None:
+def test_copy_item(td0_bytes_exampl_tgl_items: bytes) -> None:
     """Does it copy an item to a new index, overwriting it?"""
     td0file : TD0File = TD0File(td0_bytes_exampl_tgl_items)
     tgl_chunk : TD0Chunk|None = td0file.chunk('TGLa')
     assert isinstance(tgl_chunk, TD0Chunk)
 
-    assert tgl_chunk.item_at(0).field_value('name') == 'OFF'
-    assert tgl_chunk.item_at(7).field_value('name') == 'Tom'
+    assert tgl_chunk.item(0).field_value('name') == 'OFF'
+    assert tgl_chunk.item(7).field_value('name') == 'Tom'
 
-    tgl_chunk.item_copy(0, 7)
-    assert tgl_chunk.item_at(0).field_value('name') == 'OFF'
-    assert tgl_chunk.item_at(7).field_value('name') == 'OFF'
+    tgl_chunk.copy_item(0, 7)
+    assert tgl_chunk.item(0).field_value('name') == 'OFF'
+    assert tgl_chunk.item(7).field_value('name') == 'OFF'
 
 
-def test_item_copy_raises_on_invalid_index(td0_bytes_exampl_tgl_items: bytes) -> None:
+def test_copy_item_raises_on_invalid_index(td0_bytes_exampl_tgl_items: bytes) -> None:
     """Does it raise when given in invalid source or target index?"""
     td0file : TD0File = TD0File(td0_bytes_exampl_tgl_items)
     tgl_chunk : TD0Chunk|None = td0file.chunk('TGLa')
@@ -127,62 +131,62 @@ def test_item_copy_raises_on_invalid_index(td0_bytes_exampl_tgl_items: bytes) ->
 
     # This file has 10 TGLa items, the last valid index is 9.
     with pytest.raises(IndexError):
-        tgl_chunk.item_copy(0, 10)
+        tgl_chunk.copy_item(0, 10)
 
     with pytest.raises(OverflowError):
-        tgl_chunk.item_copy(0, -1)
+        tgl_chunk.copy_item(0, -1)
 
     with pytest.raises(OverflowError):
-        tgl_chunk.item_copy(-1, 5)
+        tgl_chunk.copy_item(-1, 5)
 
     with pytest.raises(IndexError):
-        tgl_chunk.item_copy(10, 5)
+        tgl_chunk.copy_item(10, 5)
 
 
-def test_item_replace(td0_bytes_exampl_tgl_items: bytes) -> None:
+def test_replace_item(td0_bytes_exampl_tgl_items: bytes) -> None:
     """Does it replace an item at the specified index?"""
     td0file : TD0File = TD0File(td0_bytes_exampl_tgl_items)
     tgl_chunk : TD0Chunk|None = td0file.chunk('TGLa')
     assert isinstance(tgl_chunk, TD0Chunk)
 
-    assert tgl_chunk.item_at(5).field_value('name') == 'Cross Stick'
+    assert tgl_chunk.item(5).field_value('name') == 'Cross Stick'
     default_item = tgl_chunk.default_item()
     default_item.set_field_value('name', 'Triangle')
 
-    tgl_chunk.item_replace(5, default_item)
-    assert tgl_chunk.item_at(5).field_value('name') == 'Triangle'
+    tgl_chunk.replace_item(5, default_item)
+    assert tgl_chunk.item(5).field_value('name') == 'Triangle'
 
 
-def test_items_swap(td0_bytes_exampl_tgl_items: bytes) -> None:
+def test_swap_items(td0_bytes_exampl_tgl_items: bytes) -> None:
     """Does it swap the items?"""
     td0file : TD0File = TD0File(td0_bytes_exampl_tgl_items)
     tgl_chunk : TD0Chunk|None = td0file.chunk('TGLa')
     assert isinstance(tgl_chunk, TD0Chunk)
 
-    assert tgl_chunk.item_at(0).field_value('name') == 'OFF'
-    assert tgl_chunk.item_at(7).field_value('name') == 'Tom'
+    assert tgl_chunk.item(0).field_value('name') == 'OFF'
+    assert tgl_chunk.item(7).field_value('name') == 'Tom'
 
-    tgl_chunk.items_swap(0, 7)
-    assert tgl_chunk.item_at(0).field_value('name') == 'Tom'
-    assert tgl_chunk.item_at(7).field_value('name') == 'OFF'
+    tgl_chunk.swap_items(0, 7)
+    assert tgl_chunk.item(0).field_value('name') == 'Tom'
+    assert tgl_chunk.item(7).field_value('name') == 'OFF'
 
 
-def test_items_swap_only_affects_selected_items(td0_bytes_exampl_tgl_items: bytes) -> None:
+def test_swap_items_only_affects_selected_items(td0_bytes_exampl_tgl_items: bytes) -> None:
     """Does it swap the items without affecting the other items?"""
     td0file : TD0File = TD0File(td0_bytes_exampl_tgl_items)
     tgl_chunk : TD0Chunk|None = td0file.chunk('TGLa')
     assert isinstance(tgl_chunk, TD0Chunk)
 
-    orig_items = [tgl_chunk.item_at(idx).field_value('name') for idx in range(tgl_chunk.num_items())]
+    orig_items = [tgl_chunk.item(idx).field_value('name') for idx in range(tgl_chunk.item_count())]
     expected_items = orig_items[:]
     expected_items[0], expected_items[7] = expected_items[7], expected_items[0]
 
-    tgl_chunk.items_swap(0, 7)
-    actual_items = [tgl_chunk.item_at(idx).field_value('name') for idx in range(tgl_chunk.num_items())]
+    tgl_chunk.swap_items(0, 7)
+    actual_items = [tgl_chunk.item(idx).field_value('name') for idx in range(tgl_chunk.item_count())]
     assert actual_items == expected_items
 
 
-def test_items_reorder(td0_bytes_exampl_tgl_items: bytes) -> None:
+def test_reorder_items(td0_bytes_exampl_tgl_items: bytes) -> None:
     """Does it swap the items?"""
     td0file : TD0File = TD0File(td0_bytes_exampl_tgl_items)
     tgl_chunk : TD0Chunk|None = td0file.chunk('TGLa')
@@ -203,7 +207,7 @@ def test_items_reorder(td0_bytes_exampl_tgl_items: bytes) -> None:
 
     # Ensure that the existing order matches expectations:
     for idx, expected in existing_order:
-        assert tgl_chunk.item_at(idx).field_value('name') == expected
+        assert tgl_chunk.item(idx).field_value('name') == expected
 
     desired_order = [
         # old index, expected value
@@ -219,18 +223,18 @@ def test_items_reorder(td0_bytes_exampl_tgl_items: bytes) -> None:
         (7, 'Tom'),
     ]
 
-    tgl_chunk.items_reorder(tuple(item[0] for item in desired_order))
+    tgl_chunk.reorder_items(tuple(item[0] for item in desired_order))
 
     for idx, expected_idx_and_name in enumerate(desired_order):
         _, expected_name = expected_idx_and_name
-        assert tgl_chunk.item_at(idx).field_value('name') == expected_name
+        assert tgl_chunk.item(idx).field_value('name') == expected_name
 
 
-def test_num_items(td0_bytes_exampl_tgl_items: bytes) -> None:
+def test_item_count(td0_bytes_exampl_tgl_items: bytes) -> None:
     """Does it swap the items?"""
     td0file : TD0File = TD0File(td0_bytes_exampl_tgl_items)
     tgl_chunk : TD0Chunk|None = td0file.chunk('TGLa')
     assert isinstance(tgl_chunk, TD0Chunk)
 
     # tgl_chunk in this file has 10 items.
-    assert tgl_chunk.num_items() == 10
+    assert tgl_chunk.item_count() == 10

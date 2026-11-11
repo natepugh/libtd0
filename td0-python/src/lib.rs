@@ -49,26 +49,6 @@ mod libtd0 {
         clippy::needless_pass_by_value,
         reason = "simplicity. The error is not needed any longer."
     )]
-    // Least informative default case: Create a RuntimeError. This should be used when
-    // there's nothing else/better, but eventually replaced by more helpful error types.
-    fn map_to_runtime_error(err: TD0Error) -> PyErr {
-        PyErr::new::<PyRuntimeError, _>(format!("{err}"))
-    }
-
-    fn map_chunk_item_error(err: TD0Error) -> PyErr {
-        match err {
-            TD0Error::InvalidChunk(chunk_err) => {
-                PyErr::new::<PyValueError, _>(chunk_err.to_string())
-            }
-            TD0Error::ChunkItemParse => PyErr::new::<PyValueError, _>("Invalid chunk item index"),
-            _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
-        }
-    }
-
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "simplicity. The error is not needed any longer."
-    )]
     fn map_change_error(err: TD0Error) -> PyErr {
         let message: String = format!("{err}");
         match err {
@@ -85,7 +65,36 @@ mod libtd0 {
             TD0Error::InvalidChunk(_) | TD0Error::InvalidField(_) => {
                 PyErr::new::<PyKeyError, _>(message)
             }
-            TD0Error::OutOfRange(_) => PyErr::new::<PyIndexError, _>(message),
+            TD0Error::OutOfRange(_) | TD0Error::InvalidIndex => {
+                PyErr::new::<PyIndexError, _>(message)
+            }
+            _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
+        }
+    }
+
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "simplicity. The error is not needed any longer."
+    )]
+    fn map_read_error(err: TD0Error) -> PyErr {
+        let message: String = format!("{err}");
+        match err {
+            TD0Error::DataType(_) => PyErr::new::<PyTypeError, _>(message),
+            TD0Error::ChecksumMismatch
+            | TD0Error::ChunksNotComparable
+            | TD0Error::DuplicateChunk(_)
+            | TD0Error::InvalidChunkName
+            | TD0Error::InvalidInput(_)
+            | TD0Error::NotAsciiPrintable
+            | TD0Error::UnsupportedDeviceFirmwareVersion(_)
+            | TD0Error::UnsupportedDeviceModel(_)
+            | TD0Error::OutOfRangeDecimal(_) => PyErr::new::<PyValueError, _>(message),
+            TD0Error::InvalidChunk(_) | TD0Error::InvalidField(_) => {
+                PyErr::new::<PyKeyError, _>(message)
+            }
+            TD0Error::OutOfRange(_) | TD0Error::InvalidIndex => {
+                PyErr::new::<PyIndexError, _>(message)
+            }
             _ => PyErr::new::<PyRuntimeError, _>(format!("{err}")),
         }
     }
@@ -98,7 +107,7 @@ mod libtd0 {
     fn parse_model_and_firmware(raw: &[u8]) -> PyResult<(TD0DeviceModel, String)> {
         Impl_TD0File::parse_model_and_firmware(raw)
             .map(|(impl_model, firmware)| (impl_model.into(), firmware))
-            .map_err(map_to_runtime_error)
+            .map_err(map_read_error)
     }
 
     /// The type of backup a `TD0File` contains.
@@ -187,8 +196,8 @@ mod libtd0 {
 
         /// Retrieve the number of `TD0ChunkItem` items the chunk contains.
         #[getter]
-        const fn num_items(&self) -> usize {
-            self.0.num_items()
+        const fn item_count(&self) -> usize {
+            self.0.item_count()
         }
 
         /// Retrieve the item size of this chunk's `TD0ChunkItem` items.
@@ -207,7 +216,7 @@ mod libtd0 {
                 self.0.name(),
                 self.0.pos(),
                 self.0.size(),
-                self.0.num_items(),
+                self.0.item_count(),
                 self.0.item_size()
             )
         }
@@ -578,6 +587,15 @@ mod libtd0 {
 
     #[pymethods]
     impl TD0Chunk {
+        /// Copy the `TD0ChunkItem` at `source_index` to `dest_index`.
+        ///
+        /// The `TD0ChunkItem` previously at `dest_index` is overwritten.
+        pub fn copy_item(&mut self, source_index: usize, dest_index: usize) -> PyResult<()> {
+            self.0
+                .copy_item(source_index, dest_index)
+                .map_err(map_change_error)
+        }
+
         /// Return a zeroed-out instance of this `TD0Chunk`'s `TD0ChunkItem` type.
         pub fn default_item(&self) -> TD0ChunkItem {
             TD0ChunkItem(self.0.default_item())
@@ -610,11 +628,16 @@ mod libtd0 {
         /// underlying data itself. In  order to write changes made to a
         /// chunk's items back to the chunk, the `TD0Chunk::item_replace`
         /// method must be called.
-        pub fn item_at(&self, index: usize) -> PyResult<TD0ChunkItem> {
-            self.0
-                .item_at(index)
-                .map(TD0ChunkItem)
-                .map_err(map_chunk_item_error)
+        pub fn item(&self, index: usize) -> PyResult<TD0ChunkItem> {
+            self.0.item(index).map_or_else(
+                || Err(map_change_error(TD0Error::InvalidIndex)),
+                |result| result.map(TD0ChunkItem).map_err(map_read_error),
+            )
+        }
+
+        /// Return the number of `TD0ChunkItems` this chunk contains.
+        fn item_count(&self) -> usize {
+            self.0.item_count()
         }
 
         /// Return the size in bytes of of an individual `TD0ChunkItem`
@@ -623,48 +646,34 @@ mod libtd0 {
             self.0.item_size()
         }
 
-        /// Copy the `TD0ChunkItem` at `source_index` to `dest_index`.
+        /// Swap the `TD0ChunkItem`s at `index_1` and `index_2`.
+        /// Reorder all items in this chunk.
         ///
-        /// The `TD0ChunkItem` previously at `dest_index` is overwritten.
-        pub fn item_copy(&mut self, source_index: usize, dest_index: usize) -> PyResult<()> {
-            self.0
-                .item_copy(source_index, dest_index)
-                .map_err(map_change_error)
+        /// `new_order` must:
+        /// - Contain all indexes from `0..[self.item_count() - 1]` inclusive,
+        /// - No index may be repeated,
+        /// - Must be of length `self.item_count()`
+        #[expect(clippy::needless_pass_by_value, reason = "pyo3's API")]
+        pub fn reorder_items(&mut self, new_order: Vec<usize>) -> PyResult<()> {
+            self.0.reorder_items(&new_order).map_err(map_change_error)
         }
 
         /// Replace the `TD0ChunkItem` at `item_index` with another of the same type.
         #[expect(clippy::needless_pass_by_value, reason = "pyo3's API")]
-        pub fn item_replace(
+        pub fn replace_item(
             &mut self,
             item_index: usize,
             source: Bound<'_, TD0ChunkItem>,
         ) -> PyResult<()> {
             self.0
-                .item_replace(item_index, &*(source.borrow().0))
+                .replace_item(item_index, &*(source.borrow().0))
                 .map_err(map_change_error)
         }
 
-        /// Swap the `TD0ChunkItem`s at `index_1` and `index_2`.
-        pub fn items_swap(&mut self, index_1: usize, index_2: usize) -> PyResult<()> {
+        pub fn swap_items(&mut self, index_1: usize, index_2: usize) -> PyResult<()> {
             self.0
-                .items_swap(index_1, index_2)
+                .swap_items(index_1, index_2)
                 .map_err(map_change_error)
-        }
-
-        /// Reorder all items in this chunk.
-        ///
-        /// `new_order` must:
-        /// - Contain all indexes from `0..[self.num_items() - 1]` inclusive,
-        /// - No index may be repeated,
-        /// - Must be of length `self.num_items()`
-        #[expect(clippy::needless_pass_by_value, reason = "pyo3's API")]
-        pub fn items_reorder(&mut self, new_order: Vec<usize>) -> PyResult<()> {
-            self.0.items_reorder(&new_order).map_err(map_change_error)
-        }
-
-        /// Return the number of `TD0ChunkItems` this chunk contains.
-        fn num_items(&self) -> usize {
-            self.0.num_items()
         }
     }
 
@@ -677,7 +686,7 @@ mod libtd0 {
     /// `TD0ChunkItem` instances aren't created directly, but rather retrieved from
     /// a `TD0Chunk` instance.
     #[pyclass]
-    struct TD0ChunkItem(Box<dyn Impl_TD0ChunkItem>);
+    struct TD0ChunkItem(Box<dyn Impl_TD0ChunkItem + Send + Sync>);
 
     #[pymethods]
     impl TD0ChunkItem {
@@ -780,7 +789,7 @@ mod libtd0 {
             };
             self.0
                 .set_field_value_raw(field, val)
-                .map_err(|err| PyErr::new::<PyValueError, _>(format!("{err}")))
+                .map_err(map_change_error)
         }
     }
 
@@ -818,18 +827,18 @@ mod libtd0 {
             Ok(Self(td0file))
         }
 
-        /// Add a chunk of `chunk_name` type to the file, containing `num_items`
+        /// Add a chunk of `chunk_name` type to the file, containing `item_count`
         /// `TD0ChunkItem` items of the appropriate type.
         ///
         /// The newly created items will be default `TD0ChunkItem` items of the
         /// expected type for `chunk_name`.
-        pub fn add_chunk(&mut self, chunk_name: &str, num_items: usize) -> PyResult<TD0Chunk> {
+        pub fn add_chunk(&mut self, chunk_name: &str, item_count: usize) -> PyResult<TD0Chunk> {
             let chunk_name: &ChunkTagStr = chunk_name
                 .try_into()
                 .map_err(|err: TD0Error| PyErr::new::<PyValueError, _>(err.to_string()))?;
             let impl_chunk = self
                 .0
-                .add_chunk(chunk_name, num_items)
+                .add_chunk(chunk_name, item_count)
                 .map_err(map_change_error)?;
             Ok(TD0Chunk::from(impl_chunk))
         }
@@ -838,12 +847,12 @@ mod libtd0 {
         /// that it is appropriate for the file.
         ///
         /// A default `TD0ChunkItem` must be supplied, which will be copied
-        /// `num_items` times to create the chunk buffer.
+        /// `item_count` times to create the chunk buffer.
         #[expect(clippy::needless_pass_by_value, reason = "pyo3's API")]
         pub fn add_chunk_unchecked(
             &mut self,
             chunk_name: &str,
-            num_items: usize,
+            item_count: usize,
             default_item: Bound<'_, TD0ChunkItem>,
         ) -> PyResult<TD0Chunk> {
             let chunk_name: &ChunkTagStr = chunk_name
@@ -851,7 +860,7 @@ mod libtd0 {
                 .map_err(|err: TD0Error| PyErr::new::<PyValueError, _>(err.to_string()))?;
             let impl_chunk = self
                 .0
-                .add_chunk_unchecked(chunk_name, num_items, &*(default_item.borrow()).0)
+                .add_chunk_unchecked(chunk_name, item_count, &*(default_item.borrow()).0)
                 .map_err(map_change_error)?;
             Ok(TD0Chunk::from(impl_chunk))
         }

@@ -69,14 +69,14 @@ After installing the binary:
     Actual Size: 3983408
     Calculated Size: 3983408
     Chunks:
-        HDRa:  pos: 144  size: 80  num_items: 1  item_size: 64
-        KITa:  pos: 224  size: 691216  num_items: 200  item_size: 3456
-        STLa:  pos: 691440  size: 8720  num_items: 32  item_size: 272
-        WVPa:  pos: 700160  size: 3280180  num_items: 20001  item_size: 164
-        TGLa:  pos: 3980340  size: 2064  num_items: 128  item_size: 16
-        STPa:  pos: 3982404  size: 648  num_items: 1  item_size: 632
-        TRGa:  pos: 3983052  size: 316  num_items: 1  item_size: 300
-        CURa:  pos: 3983368  size: 24  num_items: 1  item_size: 8
+        HDRa:  pos: 144  size: 80  item_count: 1  item_size: 64
+        KITa:  pos: 224  size: 691216  item_count: 200  item_size: 3456
+        STLa:  pos: 691440  size: 8720  item_count: 32  item_size: 272
+        WVPa:  pos: 700160  size: 3280180  item_count: 20001  item_size: 164
+        TGLa:  pos: 3980340  size: 2064  item_count: 128  item_size: 16
+        STPa:  pos: 3982404  size: 648  item_count: 1  item_size: 632
+        TRGa:  pos: 3983052  size: 316  item_count: 1  item_size: 300
+        CURa:  pos: 3983368  size: 24  item_count: 1  item_size: 8
     ```
 
     JSON output is also supported for most operations:

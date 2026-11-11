@@ -28,7 +28,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// let chunk_name : &ChunkTagStr = "TGLa".try_into()?;
     /// let chunk : &TD0Chunk = td0file.chunk(chunk_name).ok_or(TD0Error::unknown_chunk_error(chunk_name))?;
     ///
-    /// let chunk_item = chunk.item_at(2)?;
+    /// let chunk_item = chunk.item(2).ok_or(TD0Error::InvalidIndex)??;
     /// assert_eq!(chunk_item.as_bytes(), b"Kick Proc/Elec  ");
     ///
     /// # Ok::<(), TD0Error>(())
@@ -70,12 +70,12 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     /// # Example
     /// ```
-    /// use td0::{parse_td0_file, FieldType, TD0Error, TD0Chunk, TD0ChunkItem, TD0File};
+    /// use td0::{parse_td0_file, FieldType, TD0Chunk, TD0ChunkItem, TD0Error, TD0File};
     ///
     /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_kit.TD0");
     /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
     /// let chunk : &TD0Chunk = td0file.chunk("KITa").ok_or(TD0Error::unknown_chunk_error("KITa"))?;
-    /// let kit : &dyn TD0ChunkItem = chunk.item_at_ref(0)?;
+    /// let kit : &dyn TD0ChunkItem = chunk.item_ref(0).ok_or(TD0Error::InvalidIndex)??;
     ///
     /// // Get a default KITa `TDOChunkItem` and call its field_type.
     /// assert_eq!(kit.field_type("name"), Some(&FieldType::AsciiText{ max_len: 16 }));
@@ -96,15 +96,14 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     ///
     /// # Example
     /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{FieldDef, FieldType, TD0Chunk, TD0ChunkItem, TD0File, parse_td0_file};
+    /// use td0::{FieldDef, FieldType, TD0Chunk, TD0ChunkItem, TD0File, TD0Error, parse_td0_file};
     ///
     /// // This file contains a WVPa chunk with a single item. WVPa items describe the
     /// // sample files stored on the device.
     /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_wvp.TD0");
     /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
     /// let chunk : &TD0Chunk = td0file.chunk("WVPa").ok_or(TD0Error::unknown_chunk_error("WVPa"))?;
-    /// let wvp : &dyn TD0ChunkItem = chunk.item_at_ref(0)?;
+    /// let wvp : &dyn TD0ChunkItem = chunk.item_ref(0).ok_or(TD0Error::InvalidIndex)??;
     /// // WVPa contains eleven fields, of four different types, U32, U8, Slice, and AsciiText.
     /// let defs : &[FieldDef] = wvp.field_types();
     ///
@@ -143,7 +142,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/example_tgl_items.TD0");
     /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
     /// let tgl_chunk : &TD0Chunk = td0file.chunk("TGLa").ok_or(TD0Error::unknown_chunk_error("TGLa"))?;
-    /// let chunk_item : &dyn TD0ChunkItem = tgl_chunk.item_at_ref(9)?;
+    /// let chunk_item : &dyn TD0ChunkItem = tgl_chunk.item_ref(9).ok_or(TD0Error::InvalidIndex)??;
     /// assert_eq!(chunk_item.field_value("name"), Some(TD0Value::new_text_value("HiHat")));
     ///
     /// # Ok::<(), TD0Error>(())
@@ -161,7 +160,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/example_tgl_items.TD0");
     /// let td0file : TD0File = parse_td0_file(TD0_BYTES)?;
     /// let tgl_chunk : &TD0Chunk = td0file.chunk("TGLa").ok_or(TD0Error::unknown_chunk_error("TGLa"))?;
-    /// let chunk_item : &dyn TD0ChunkItem = tgl_chunk.item_at_ref(4)?;
+    /// let chunk_item : &dyn TD0ChunkItem = tgl_chunk.item_ref(4).ok_or(TD0Error::InvalidIndex)??;
     ///
     /// // The raw value of a TD0Value::Text field (such as "name") is a boxed [`u8`] array.
     /// assert_eq!(
@@ -228,7 +227,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// let chunk : &mut TD0Chunk = td0file.chunk_mut("KITa").ok_or(TD0Error::unknown_chunk_error("KITa"))?;
     ///
     /// // Get the kit item from the example file. Its name field is currently set to "Dance".
-    /// let mut kit : &mut dyn TD0ChunkItem = chunk.item_at_mut(0)?;
+    /// let mut kit : &mut dyn TD0ChunkItem = chunk.item_mut(0).ok_or(TD0Error::InvalidIndex)??;
     /// assert_eq!(kit.field_value("name"), Some(TD0Value::new_text_value("Dance")));
     ///
     /// // Change its name field and verify the value was changed.
@@ -250,7 +249,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// # const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_kit.TD0");
     /// # let mut td0file : TD0File = parse_td0_file(TD0_BYTES)?;
     /// # let chunk : &mut TD0Chunk = td0file.chunk_mut("KITa").ok_or(TD0Error::unknown_chunk_error("KITa"))?;
-    /// # let mut kit : &mut dyn TD0ChunkItem = chunk.item_at_mut(0)?;
+    /// # let mut kit : &mut dyn TD0ChunkItem = chunk.item_mut(0).ok_or(TD0Error::InvalidIndex)??;
     /// // (Identical test setup as "Setting a Text field section." omitted here.)
     /// let set_result = kit.set_field_value(
     ///     "click_pan",
@@ -271,7 +270,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// # const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_w_kit.TD0");
     /// # let mut td0file : TD0File = parse_td0_file(TD0_BYTES)?;
     /// # let chunk : &mut TD0Chunk = td0file.chunk_mut("KITa").ok_or(TD0Error::unknown_chunk_error("KITa"))?;
-    /// # let mut kit : &mut dyn TD0ChunkItem = chunk.item_at_mut(0)?;
+    /// # let mut kit : &mut dyn TD0ChunkItem = chunk.item_mut(0).ok_or(TD0Error::InvalidIndex)??;
     /// // (Identical test setup as "Setting a Text field section." omitted here.)
     ///
     /// let my_tempo : f32 = 125.5_f32;
@@ -317,7 +316,7 @@ pub trait TD0ChunkItem: Send + Sync + core::fmt::Debug {
     /// let chunk : &mut TD0Chunk = td0file.chunk_mut("KITa").ok_or(TD0Error::unknown_chunk_error("KITa"))?;
     ///
     /// // Get the kit item from the example file. Its name field is currently set to "Dance".
-    /// let mut kit : &mut dyn TD0ChunkItem = chunk.item_at_mut(0)?;
+    /// let mut kit : &mut dyn TD0ChunkItem = chunk.item_mut(0).ok_or(TD0Error::InvalidIndex)??;
     ///
     /// // Set its "name" field, a Text field. Note the spaces used to pad the str
     /// // to 16 characters- the "name" field is 16 bytes in size.
@@ -340,7 +339,7 @@ pub struct ChunkManifest {
     pub(crate) name: String,
     pub(crate) pos: usize,
     pub(crate) size: usize,
-    pub(crate) num_items: usize,
+    pub(crate) item_count: usize,
     pub(crate) item_size: usize,
 }
 
@@ -357,8 +356,8 @@ impl ChunkManifest {
         self.size
     }
 
-    pub const fn num_items(&self) -> usize {
-        self.num_items
+    pub const fn item_count(&self) -> usize {
+        self.item_count
     }
 
     pub const fn item_size(&self) -> usize {
@@ -372,21 +371,21 @@ impl ChunkManifest {
     /// use td0::ChunkManifest;
     ///
     /// let chunk_manifest : ChunkManifest = ChunkManifest::new("FOOa", 16, 96, 5, 16);
-    /// assert_eq!(chunk_manifest.to_string().as_str(), "FOOa:  pos: 16  size: 96  num_items: 5  item_size: 16");
+    /// assert_eq!(chunk_manifest.to_string().as_str(), "FOOa:  pos: 16  size: 96  item_count: 5  item_size: 16");
     /// ```
     ///
     pub fn new(
         name: impl Into<String>,
         pos: usize,
         size: usize,
-        num_items: usize,
+        item_count: usize,
         item_size: usize,
     ) -> Self {
         Self {
             name: name.into(),
             pos,
             size,
-            num_items,
+            item_count,
             item_size,
         }
     }

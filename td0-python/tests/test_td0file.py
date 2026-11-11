@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: © 2026 Nathan Pugh <natepugh@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests for libtd0.TD0File"""
 from pathlib import Path
 
@@ -110,7 +114,7 @@ def test_chunk_info(td0_bytes_minimal_w_two_chunks: bytes) -> None:
     assert isinstance(chunk_info, ChunkManifest)
     assert chunk_info.name == 'TGLa'
     assert chunk_info.item_size == 16
-    assert chunk_info.num_items == 3
+    assert chunk_info.item_count == 3
     assert chunk_info.pos == 128
 
 
@@ -176,14 +180,14 @@ def test_replace_chunk(td0_bytes_minimal_w_two_chunks: bytes) -> None:
     td0file : TD0File = TD0File(td0_bytes_minimal_w_two_chunks)
     chunk : TD0Chunk|None = td0file.chunk('TGLa')
     assert isinstance(chunk, TD0Chunk)
-    tgl_item : TD0ChunkItem = chunk.item_at(0)
+    tgl_item : TD0ChunkItem = chunk.item(0)
     tgl_item.set_field_value('name', 'This is a test')
-    chunk.item_replace(0, tgl_item)
+    chunk.replace_item(0, tgl_item)
     td0file.replace_chunk('TGLa', chunk)
 
     chunk_again : TD0Chunk|None = td0file.chunk('TGLa')
     assert isinstance(chunk_again, TD0Chunk)
-    tgl_item_again : TD0ChunkItem = chunk_again.item_at(0)
+    tgl_item_again : TD0ChunkItem = chunk_again.item(0)
     assert tgl_item_again.field_value('name') == 'This is a test'
 
 

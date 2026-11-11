@@ -477,18 +477,18 @@ fn test_add_chunk_and_retrieve_items() {
         .chunk(chunk_name)
         .expect("can retrieve newly added chunk.");
     assert_matches!(
-        new_chunk.item_at_ref(0),
-        Ok(_),
+        new_chunk.item_ref(0),
+        Some(Ok(_)),
         "can retrieve a chunk item after add_chunk."
     );
     assert_matches!(
-        new_chunk.item_at_ref(2),
-        Ok(_),
+        new_chunk.item_ref(2),
+        Some(Ok(_)),
         "can retrieve the last chunk item after add_chunk."
     );
     assert_matches!(
-        new_chunk.item_at_ref(3),
-        Err(TD0Error::OutOfRange(..)),
+        new_chunk.item_ref(3),
+        None,
         "can't retrieve spurious chunk items."
     );
 }
@@ -538,7 +538,7 @@ fn _01_test_replace_chunk_item() {
         new_tag.field_value("name"),
         Some(TD0Value::Text("This is a test !".to_string()))
     );
-    assert_eq!(chunk.item_replace(1, &new_tag), Ok(()));
+    assert_eq!(chunk.replace_item(1, &new_tag), Ok(()));
 
     let expected2 = get_test_data(PathBuf::from("_01_after_replace_item.TD0"));
     let actual: Vec<u8> = td0file.into();

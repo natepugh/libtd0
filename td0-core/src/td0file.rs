@@ -97,7 +97,7 @@ impl TD0File {
     ///
     /// A mutable reference to the newly added chunk is returned.
     ///
-    /// A default [`TD0ChunkItem`] must be supplied, which will be copied `num_items` times to create the
+    /// A default [`TD0ChunkItem`] must be supplied, which will be copied `item_count` times to create the
     /// chunk buffer.
     ///
     /// # Errors
@@ -111,8 +111,7 @@ impl TD0File {
     ///
     /// # Example
     /// ```
-    /// # use td0::TD0Error;
-    /// use td0::{parse_td0_file, ChunkTagStr, TD0Chunk, TD0ChunkItem, TD0File};
+    /// use td0::{parse_td0_file, ChunkTagStr, TD0Chunk, TD0ChunkItem, TD0Error, TD0File};
     ///
     /// // Load the initial file, which contains a single chunk: `HDRa`.
     /// const TD0_BYTES : &[u8] = include_bytes!("../example/data/minimal_v1_10.TD0");
@@ -122,7 +121,7 @@ impl TD0File {
     /// const CHUNK_SOURCE_BYTES: &[u8] = include_bytes!("../example/data/example_tgl_items.TD0");
     /// let source_file : TD0File = parse_td0_file(CHUNK_SOURCE_BYTES)?;
     /// let source_chunk : &TD0Chunk = source_file.chunk("TGLa").ok_or(TD0Error::unknown_chunk_error("TGLa"))?;
-    /// let default_item : &dyn TD0ChunkItem = source_chunk.item_at_ref(0)?;
+    /// let default_item : &dyn TD0ChunkItem = source_chunk.item_ref(0).ok_or(TD0Error::InvalidIndex)??;
     ///
     /// // Add a new chunk with five items, and verify that it was added.
     /// let chunk_name : &ChunkTagStr = "FOOa".try_into()?;
@@ -134,11 +133,11 @@ impl TD0File {
     pub fn add_chunk_unchecked(
         &mut self,
         chunk_name: &ChunkTagStr,
-        num_items: usize,
+        item_count: usize,
         default_item: &dyn TD0ChunkItem,
     ) -> TD0Result<&mut TD0Chunk> {
         let chunk_name: ChunkTagString = chunk_name.into();
-        let chunk = TD0Chunk::new_with(num_items, default_item)?;
+        let chunk = TD0Chunk::new_with(item_count, default_item)?;
         self.add_tag(&chunk_name, chunk.size())?;
         self.chunks.insert(chunk_name.to_string(), chunk);
 
@@ -178,7 +177,7 @@ impl TD0File {
         (self.valid_chunk_names_callback)(firmware).unwrap_or(&DEFAULT_VALID_CHUNKS)
     }
 
-    /// Add a chunk of `chunk_name` type to the file, containing `num_items` [`TD0ChunkItem`] items of the
+    /// Add a chunk of `chunk_name` type to the file, containing `item_count` [`TD0ChunkItem`] items of the
     /// appropriate type.
     ///
     /// The newly created items will be default [`TD0ChunkItem`] items of the expected type for `chunk_name`.
@@ -217,7 +216,7 @@ impl TD0File {
     pub fn add_chunk(
         &mut self,
         chunk_name: &ChunkTagStr,
-        num_items: usize,
+        item_count: usize,
     ) -> TD0Result<&mut TD0Chunk> {
         if self.valid_chunks().contains(&chunk_name.as_ref()) {
             let Some(chunk_callbacks) =
@@ -230,7 +229,7 @@ impl TD0File {
             };
 
             let default_item = (chunk_callbacks.default_chunk_item_cb)();
-            let mut chunk = TD0Chunk::new_with(num_items, &*default_item)?;
+            let mut chunk = TD0Chunk::new_with(item_count, &*default_item)?;
             chunk.set_item_callbacks(chunk_callbacks);
 
             self.add_tag(&chunk_name.into(), chunk.size())?;
@@ -243,6 +242,45 @@ impl TD0File {
         } else {
             Err(TD0Error::unknown_chunk_error(chunk_name))
         }
+    }
+
+    fn add_tag(&mut self, chunk_name: &ChunkTagString, chunk_size: usize) -> TD0Result<()> {
+        if self.tags.contains_key(chunk_name) {
+            return Err(TD0Error::DuplicateChunk(chunk_name.to_string()));
+        }
+
+        // Update the offsets in the manifest tags. Because the chunk is pushed onto the back
+        // of all the chunks, each chunk is offset by +16 bytes (the size of a TD0ManifestTag.)
+        let tag_order = { self.tag_order.clone() };
+        let chunks_offset = i64::try_from(size_of::<TD0ManifestTag>()).unwrap();
+        for tag_name in &tag_order {
+            self.update_chunk_offset(tag_name, chunks_offset)?;
+        }
+
+        let next_chunk_pos: usize = tag_order
+            .last()
+            .map(|tag_name| {
+                let tag = self.tag(tag_name).unwrap();
+                tag.chunk_pos() + tag.chunk_size()
+            })
+            .expect("there is already at least one tag.");
+
+        let mut manifest_tag: TD0ManifestTag = TD0ManifestTag::default();
+        manifest_tag.set_chunk_pos(next_chunk_pos)?;
+        manifest_tag.set_chunk_size(chunk_size)?;
+        manifest_tag.set_model(self.model().as_str())?;
+        manifest_tag.set_tag(chunk_name)?;
+
+        self.tags
+            .insert(chunk_name.clone(), BytesMut::from(manifest_tag.as_bytes()));
+        self.tag_order.push(chunk_name.clone());
+        let id_tag = TD0IdChunk::mut_from_bytes(&mut self.id_chunk).unwrap();
+        id_tag.set_bytes_remaining(
+            u16::try_from(id_tag.bytes_remaining() + size_of::<TD0ManifestTag>())
+                .map_err(|_| TD0Error::FileTooLarge)?,
+        );
+
+        Ok(())
     }
 
     /// Calculate the checksum for this file's data.
@@ -314,7 +352,7 @@ impl TD0File {
             ChunkManifest {
                 name: chunk_name.to_string(),
                 item_size: chunk_header.item_size(),
-                num_items: chunk_header.num_items(),
+                item_count: chunk_header.item_count(),
                 pos: tag.chunk_pos(),
                 size: tag.chunk_size(),
             }
@@ -333,7 +371,7 @@ impl TD0File {
     /// let mut td0file : TD0File = parse_td0_file(TD0_BYTES)?;
     ///
     /// let chunk : &mut TD0Chunk = td0file.chunk_mut("HDRa").ok_or(TD0Error::unknown_chunk_error("HDRa"))?;
-    /// let _chunk_item : &mut dyn TD0ChunkItem = chunk.item_at_mut(0)?;
+    /// let _chunk_item : &mut dyn TD0ChunkItem = chunk.item_mut(0).ok_or(TD0Error::InvalidIndex)??;
     ///
     /// # Ok::<(), TD0Error>(())
     /// ```
@@ -599,7 +637,7 @@ impl TD0File {
         let mut backup_chunk_header: ChunkHeader = ChunkHeader::default();
         backup_chunk_header.set_first_item_offset(u32::try_from(size_of::<ChunkHeader>()).unwrap());
         backup_chunk_header.set_item_size(u32::try_from(size_of::<HDRaItem>()).unwrap());
-        backup_chunk_header.set_num_items(1);
+        backup_chunk_header.set_item_count(1);
 
         // Create backup chunk item.
         let backup_item: HDRaItem = HDRaItem::default_parsable();
@@ -743,49 +781,10 @@ impl TD0File {
             .fold(0usize, |acc, buf| acc + buf.len())
     }
 
-    fn add_tag(&mut self, chunk_name: &ChunkTagString, chunk_size: usize) -> TD0Result<()> {
-        if self.tags.contains_key(chunk_name) {
-            return Err(TD0Error::DuplicateChunk(chunk_name.to_string()));
-        }
-
-        // Update the offsets in the manifest tags. Because the chunk is pushed onto the back
-        // of all the chunks, each chunk is offset by +16 bytes (the size of a TD0ManifestTag.)
-        let tag_order = { self.tag_order.clone() };
-        let chunks_offset = i64::try_from(size_of::<TD0ManifestTag>()).unwrap();
-        for tag_name in &tag_order {
-            self.update_chunk_offset(tag_name, chunks_offset)?;
-        }
-
-        let next_chunk_pos: usize = tag_order
-            .last()
-            .map(|tag_name| {
-                let tag = self.tag(tag_name).unwrap();
-                tag.chunk_pos() + tag.chunk_size()
-            })
-            .expect("there is already at least one tag.");
-
-        let mut manifest_tag: TD0ManifestTag = TD0ManifestTag::default();
-        manifest_tag.set_chunk_pos(next_chunk_pos)?;
-        manifest_tag.set_chunk_size(chunk_size)?;
-        manifest_tag.set_model(self.model().as_str())?;
-        manifest_tag.set_tag(chunk_name)?;
-
-        self.tags
-            .insert(chunk_name.clone(), BytesMut::from(manifest_tag.as_bytes()));
-        self.tag_order.push(chunk_name.clone());
-        let id_tag = TD0IdChunk::mut_from_bytes(&mut self.id_chunk).unwrap();
-        id_tag.set_bytes_remaining(
-            u16::try_from(id_tag.bytes_remaining() + size_of::<TD0ManifestTag>())
-                .map_err(|_| TD0Error::FileTooLarge)?,
-        );
-
-        Ok(())
-    }
-
     fn backup_manifest(&self) -> &HDRaItem {
         use zerocopy::FromBytes;
 
-        HDRaItem::ref_from_bytes(self.chunks["HDRa"].item_at_raw(0).unwrap()).unwrap()
+        HDRaItem::ref_from_bytes(self.chunks["HDRa"].item_raw_ref(0).unwrap()).unwrap()
     }
 
     fn backup_manifest_mut(&mut self) -> &mut HDRaItem {
@@ -794,7 +793,7 @@ impl TD0File {
         HDRaItem::mut_from_bytes(
             self.chunk_mut("HDRa")
                 .expect("no file gets created without HDR.")
-                .item_at_raw_mut(0)
+                .item_raw_mut(0)
                 .expect("HDR has at least one item."),
         )
         .expect("can convert existing HDRaItem bytes to HDRaItem.")
@@ -1149,8 +1148,9 @@ impl TD0File {
             ));
         }
 
-        let dest_item = dest_chunk.item_at(0)?;
-        let src_item = new_chunk.item_at(0)?;
+        let dest_item = dest_chunk.item(0).ok_or(TD0Error::InvalidIndex)??;
+        let src_item = new_chunk.item(0).ok_or(TD0Error::InvalidIndex)??;
+
         if !TD0Chunk::chunk_item_types_comparable(&*dest_item, &*src_item) {
             return Err(TD0Error::InvalidInput(
                 "new_chunk item type does not match destination chunk.".to_string(),
@@ -1266,7 +1266,7 @@ impl TryFrom<Vec<u8>> for TD0File {
         let Some(Ok(backup_header)) = chunks
             .get("HDRa")
             .expect("parse_chunks verifies existence.")
-            .item_at_raw(0)
+            .item_raw_ref(0)
             .map(HDRaItem::try_ref_from_bytes)
         else {
             return Err(TD0Error::file_parse_error("unable to read backup header."));

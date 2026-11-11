@@ -20,7 +20,7 @@ fn validate_chunk_item_range(
     let chunk = td0file
         .chunk(chunk_name)
         .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))?;
-    let num_items = chunk.num_items();
+    let num_items = chunk.item_count();
     if range.end > num_items {
         Err(TD0Error::out_of_range_error(
             0,
@@ -81,7 +81,10 @@ pub fn command_dump_chunk_item<'a>(
     let chunk = td0file
         .chunk(chunk_name)
         .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))?;
-    chunk.item_at_ref(item_num).map(td0::TD0ChunkItem::as_bytes)
+    chunk
+        .item_ref(item_num)
+        .ok_or(TD0Error::InvalidIndex)?
+        .map(td0::TD0ChunkItem::as_bytes)
 }
 
 pub fn command_dump_chunk(td0file: &TD0File, chunk_name: &str) -> TD0Result<Vec<u8>> {
@@ -107,13 +110,13 @@ pub fn command_dump_chunk_values(
         .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))?;
     //let chunk = get_chunk_or_error(&*td0file, chunk_name)?;
     let fields: Vec<&str> = requested_fields_or_all(&td0file, chunk_name, fields)?;
-    let item_range = item_range.unwrap_or_else(|| 0..chunk.num_items());
+    let item_range = item_range.unwrap_or_else(|| 0..chunk.item_count());
     validate_chunk_item_range(&td0file, &item_range, chunk_name)?;
 
     let mut output: IndexedItemValues = IndexedItemValues::new();
 
     for idx in item_range {
-        if let Ok(item) = chunk.item_at_ref(idx) {
+        if let Some(Ok(item)) = chunk.item_ref(idx) {
             let mut vals: ItemValues = ItemValues::new();
             for field in &fields {
                 vals.insert(
@@ -196,7 +199,7 @@ pub fn command_set_chunk_item_values(
         .chunk_mut(chunk_name)
         .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))?;
     //let Some(chunk) = td0file.chunk_mut(&chunk_name);
-    let chunk_item = chunk.item_at_mut(item_num)?;
+    let chunk_item = chunk.item_mut(item_num).ok_or(TD0Error::InvalidIndex)??;
     let mut diffs: Vec<ChunkFieldDiffItem> = Vec::new();
     for (field, value) in values {
         let parsed_value = parse_chunk_item_field_value(&*chunk_item, field, value)?;
@@ -229,24 +232,26 @@ pub fn command_reorder_chunk_items(
         .chunk_mut(chunk_name)
         .ok_or_else(|| TD0Error::unknown_chunk_error(chunk_name))?;
     let mut before: Vec<TD0Value> = Vec::new();
-    let num_items = chunk.num_items();
+    let num_items = chunk.item_count();
 
     for idx in 0..num_items {
         before.push(
             chunk
-                .item_at_ref(idx)?
+                .item_ref(idx)
+                .ok_or(TD0Error::InvalidIndex)??
                 .field_value(display_field)
                 .ok_or_else(|| TD0Error::InvalidField(display_field.to_string()))?,
         );
     }
 
-    chunk.items_reorder(new_order)?;
+    chunk.reorder_items(new_order)?;
 
     let mut after: Vec<TD0Value> = Vec::new();
     for idx in 0..num_items {
         after.push(
             chunk
-                .item_at_ref(idx)?
+                .item_ref(idx)
+                .ok_or(TD0Error::InvalidIndex)??
                 .field_value(display_field)
                 .ok_or_else(|| TD0Error::InvalidField(display_field.to_string()))?,
         );

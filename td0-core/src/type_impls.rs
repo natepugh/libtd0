@@ -17,8 +17,8 @@ impl core::fmt::Display for ChunkManifest {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "{}:  pos: {}  size: {}  num_items: {}  item_size: {}",
-            self.name, self.pos, self.size, self.num_items, self.item_size
+            "{}:  pos: {}  size: {}  item_count: {}  item_size: {}",
+            self.name, self.pos, self.size, self.item_count, self.item_size
         )
     }
 }

@@ -351,7 +351,7 @@ fn main() {
             let inum_2_reindexed = reindex_item_num_or_exit(*item_2);
 
             chunk
-                .items_swap(inum_1_reindexed, inum_2_reindexed)
+                .swap_items(inum_1_reindexed, inum_2_reindexed)
                 .map_err(|err| exit_td0_err(&err, ERR_INVALID_TD0_FILE));
 
             write_td0_file(&td0file, output_file)

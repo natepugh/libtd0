@@ -93,6 +93,8 @@ pub enum TD0Error {
     InvalidChunkName,
     /// The requested [`TD0ChunkItem`](super::TD0ChunkItem) field doesn't exist.
     InvalidField(String),
+    /// The requested index isn't valid.
+    InvalidIndex,
     /// The supplied input isn't valid.
     InvalidInput(String),
     /// The string provided isn't entirely ASCII printable characters.
@@ -123,6 +125,7 @@ impl Display for TD0Error {
             Self::DuplicateChunk(chunk_name) => format!("duplicate chunk '{chunk_name}'"),
             Self::FileParse(err) => err.clone(),
             Self::FileTooLarge => "the file is too large to complete this operation.".to_string(),
+            Self::InvalidIndex => "invalid index.".to_string(),
             Self::InvalidChunk(val) => val.to_string(),
             Self::InvalidChunkName => "invalid chunk name.".to_string(),
             Self::InvalidField(field) => format!("unknown field '{field:.128}'"),

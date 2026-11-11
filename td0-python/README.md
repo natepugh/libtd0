@@ -84,14 +84,14 @@ import libtd0
 with open('my_backup.TD0', 'rb') as infile:
     td0file = libtd0.TD0File(infile.read())
 
-# Get the number of kits:
-num_kits = [chunk for chunk in td0file.manifest().chunks if chunk.name == "KITa"][0].num_items
+# Get the chunk that contains kits:
+chunk = td0file.chunk("KITa")
 
 # Use TD0File.get_chunk_item() to retrieve each kit, and .field_value()
 # on each kit to get the values.
 kit_data = []
-for idx in range(num_kits):
-    kit = td0file.get_chunk_item("KITa", idx)
+for idx in range(chunk.item_count()):
+    kit = chunk.item(idx)
     kit_data.append((kit.field_value("name"), kit.field_value("tempo")))
 
 # Print the values, with indexes matching how the device displays them.
@@ -124,31 +124,30 @@ from libtd0 import TD0File
 with open('my_backup.TD0', 'rb') as infile:
     td0file = TD0File(infile.read())
 
+## Get the chunk that contains kits:
+chunk = td0file.chunk('KITa')
+
 ## Get the kit item.
-kit = td0file.get_chunk_item("KITa", 0)
+kit = chunk.item(0)
 print(kit.field_value("name"))
-# prints: "Dance"
 
+# Modify the kit.
 kit.set_field_value("name", "Safety Dance")
-# NOTE: The original td0file has not changed at this point. get_chunk_item()
-# returns a *copy* of the chunk item (kit), not a reference to it.
-# chunk_item_replace() must be called with the modified item to update the
-# TD0File object.
-
 print(kit.field_value("name"))
 # prints: "Safety Dance"
 
-## Update the TD0File.
-td0file.chunk_item_replace("KITa", 0, kit)
-print(td0.get_chunk_item("KITa", 0).field_value("name"))
-# prints: "Safety Dance"
+# NOTE: The original chunk has not changed at this point. chunk.get_item()
+# returns a *copy* of the chunk item (kit), not a reference to it.
+# chunk.replace_item() must be called with the modified item to update the
+# chunk object.
+chunk.replace_item(0, kit)
+
+# NOTE: Likewise, the original td0file has not changed at this point.
+# td0file.chunk() returns a *copy* of the chunk. TD0File.replace_chunk() must
+# be called with the modified chunk to update the original TD0File.
+td0file.replace_chunk("KITa", chunk)
 
 ## Write the modified bytes to a file.
-
-# NOTE: .finalize() must be called before calling to_bytes() on a TD0File that
-# has been modified. A ValueError will be raised otherwise.
-td0file.finalize()
-
 with open('my_backup.edited.TD0', 'wb') as outfile:
     outfile.write(td0file.to_bytes())
 
